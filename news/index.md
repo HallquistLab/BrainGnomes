@@ -2,6 +2,16 @@
 
 ## BrainGnomes 0.8-2
 
+- Preserve source FD in notch-filtered calculated confounds and write
+  the recomputed series immediately beside it as
+  `framewise_displacement_filtered`. The output respects the configured
+  header setting and logs column order when headers are disabled;
+  filtering-based scrubbing and confound regression use the filtered FD.
+  Clearly reversed notch bounds are repaired automatically; skipped
+  filters are logged and never produce a misleading filtered-FD label.
+  When FD is selected as a processed confound, both the source-derived
+  and notch-derived FD columns retain all configured BOLD-matched
+  confound processing.
 - Add a `voxel_psc` intensity-normalization mode that uses the existing
   robust reference-core and eligible-frame policy and applies
   denominator-guarded baseline-to-100 scaling after spatial processing.
@@ -134,9 +144,10 @@ Released 2026-02-17
   external paths) instead of always resetting to
   `<project_directory>/logs`.
 - During postprocess setup, `confound_calculate` now offers guided
-  prompts to add `framewise_displacement` when omitted, including
-  whether to use motion-filtered FD and whether FD should be processed
-  vs kept as `noproc` for QC/exclusion workflows.
+  prompts to add `framewise_displacement` when omitted and to choose
+  BOLD-matched processing vs `noproc` output for QC/exclusion workflows.
+  When motion filtering is enabled, FD is recomputed from the filtered
+  motion automatically.
 - Increase consistency of instructions and formatting in
   [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
 - bugfix: avoid spurious “Already disconnected” warnings on exit from

@@ -74,7 +74,7 @@ postprocessing stream.</p>
 <span>  bandstop_min_bpm <span class="op">=</span> <span class="fl">12</span>,</span>
 <span>  bandstop_max_bpm <span class="op">=</span> <span class="fl">18</span>,</span>
 <span>  low_pass_hz <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  filter_order <span class="op">=</span> <span class="fl">2L</span>,</span>
+<span>  filter_order <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  motion_cols <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rot_x"</span>, <span class="st">"rot_y"</span>, <span class="st">"rot_z"</span>, <span class="st">"trans_x"</span>, <span class="st">"trans_y"</span>, <span class="st">"trans_z"</span><span class="op">)</span>,</span>
 <span>  rot_units <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rad"</span>, <span class="st">"deg"</span><span class="op">)</span>,</span>
 <span>  output_file <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -109,7 +109,9 @@ returned for each threshold with column names like <code>fd_gt_0p5</code>.</p></
 <dt id="arg-include-filtered">include_filtered<a class="anchor" aria-label="anchor" href="#arg-include-filtered"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, recompute FD after filtering the
 motion parameters and include filtered outlier percentages (columns prefixed
-with <code>fd_filt_</code>).</p></dd>
+with <code>fd_filt_</code>). If the requested filter cannot be applied, these columns
+are retained and filled with <code>NA</code> so unavailable results cannot be mistaken
+for filtered measurements.</p></dd>
 
 
 <dt id="arg-filter-method">filter_method<a class="anchor" aria-label="anchor" href="#arg-filter-method"></a></dt>
@@ -137,7 +139,8 @@ Either <code>"notch"</code> (band-stop, in breaths per minute) or <code>"lowpass
 
 
 <dt id="arg-filter-order">filter_order<a class="anchor" aria-label="anchor" href="#arg-filter-order"></a></dt>
-<dd><p>Integer filter order for low-pass filtering (default 2).</p></dd>
+<dd><p>Optional integer filter order. Defaults to 4 for notch
+filtering and 2 for low-pass filtering.</p></dd>
 
 
 <dt id="arg-motion-cols">motion_cols<a class="anchor" aria-label="anchor" href="#arg-motion-cols"></a></dt>
@@ -157,7 +160,8 @@ If provided, results are written using <code><a href="https://rdrr.io/pkg/data.t
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data.frame with subject, session, task, run, confounds file location,
 max FD, mean FD, and outlier percentages for each threshold (filtered columns
-are included when requested).</p>
+are included when requested). Filtered summary values are <code>NA</code> when motion
+filtering was requested but could not be applied.</p>
     </div>
 
     <div class="section level2">

@@ -604,6 +604,30 @@ temporal filtering as the BOLD data, while unfiltered confounds (listed
 in <code>noproc_columns</code>) are appended without processing. Typical
 unfiltered regressors include binary spike regressors from
 scrubbing.</p>
+<p>When notch filtering is used and <code>framewise_displacement</code>
+is included in the calculated confounds, the output TSV retains the
+source-derived FD lineage as <code>framewise_displacement</code> and
+writes the FD recomputed from notch-filtered motion parameters
+immediately beside it as
+<code>framewise_displacement_filtered</code>.</p>
+<ul>
+<li>In <code>columns</code>, both FD lineages receive the same enabled
+confound processing as the BOLD data, including AROMA, temporal
+filtering, and demeaning.</li>
+<li>In <code>noproc_columns</code>, <code>framewise_displacement</code>
+remains the raw source FD and
+<code>framewise_displacement_filtered</code> receives motion filtering
+only. This is the appropriate choice for screening, quality control, or
+run exclusion.</li>
+</ul>
+<p>If the notch filter cannot be applied, BrainGnomes logs the reason,
+retains the source FD, and does not write a misleading filtered-FD
+column. The TSV header follows the user’s <code>include_header</code>
+setting. When headers are disabled, the run log records the exact column
+order. By default, the notch-derived FD remains the series used for
+motion-based scrubbing and regression; hand-written legacy
+configurations that explicitly request
+<code>framewise_displacement_unfiltered</code> remain supported.</p>
 <p>Confound selection accepts regular expressions and numeric ranges.
 For instance <code>^trans_</code> matches all six translational motion
 parameters and <code>a_comp_cor_&lt;1-6&gt;</code> expands to the first

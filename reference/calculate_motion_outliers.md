@@ -21,7 +21,7 @@ calculate_motion_outliers(
   bandstop_min_bpm = 12,
   bandstop_max_bpm = 18,
   low_pass_hz = NULL,
-  filter_order = 2L,
+  filter_order = NULL,
   motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
   rot_units = c("rad", "deg"),
   output_file = NULL
@@ -58,7 +58,9 @@ calculate_motion_outliers(
 
   Logical; if `TRUE`, recompute FD after filtering the motion parameters
   and include filtered outlier percentages (columns prefixed with
-  `fd_filt_`).
+  `fd_filt_`). If the requested filter cannot be applied, these columns
+  are retained and filled with `NA` so unavailable results cannot be
+  mistaken for filtered measurements.
 
 - filter_method:
 
@@ -85,7 +87,8 @@ calculate_motion_outliers(
 
 - filter_order:
 
-  Integer filter order for low-pass filtering (default 2).
+  Optional integer filter order. Defaults to 4 for notch filtering and 2
+  for low-pass filtering.
 
 - motion_cols:
 
@@ -105,7 +108,8 @@ calculate_motion_outliers(
 
 A data.frame with subject, session, task, run, confounds file location,
 max FD, mean FD, and outlier percentages for each threshold (filtered
-columns are included when requested).
+columns are included when requested). Filtered summary values are `NA`
+when motion filtering was requested but could not be applied.
 
 ## Examples
 
