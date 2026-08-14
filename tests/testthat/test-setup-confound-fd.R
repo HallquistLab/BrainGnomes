@@ -1,4 +1,4 @@
-test_that("maybe_add_framewise_displacement can add unfiltered FD to noproc columns", {
+test_that("maybe_add_framewise_displacement adds FD to noproc columns", {
   ppcfg <- list(
     confound_calculate = list(
       enable = TRUE,
@@ -8,7 +8,7 @@ test_that("maybe_add_framewise_displacement can add unfiltered FD to noproc colu
     motion_filter = list(enable = TRUE)
   )
 
-  responses <- c(TRUE, FALSE, FALSE)
+  responses <- c(TRUE, FALSE)
   idx <- 0L
   local_mocked_bindings(
     prompt_input = function(...) {
@@ -19,13 +19,13 @@ test_that("maybe_add_framewise_displacement can add unfiltered FD to noproc colu
   )
 
   out <- maybe_add_framewise_displacement(ppcfg)
-  expect_equal(idx, 3L)
+  expect_equal(idx, 2L)
   expect_true("white_matter" %in% out$confound_calculate$columns)
-  expect_true("framewise_displacement_unfiltered" %in% out$confound_calculate$noproc_columns)
-  expect_false("framewise_displacement" %in% out$confound_calculate$noproc_columns)
+  expect_true("framewise_displacement" %in% out$confound_calculate$noproc_columns)
+  expect_false("framewise_displacement_unfiltered" %in% out$confound_calculate$noproc_columns)
 })
 
-test_that("maybe_add_framewise_displacement can add filtered FD to processed columns", {
+test_that("maybe_add_framewise_displacement can add FD to processed columns", {
   ppcfg <- list(
     confound_calculate = list(
       enable = TRUE,
@@ -35,7 +35,7 @@ test_that("maybe_add_framewise_displacement can add filtered FD to processed col
     motion_filter = list(enable = TRUE)
   )
 
-  responses <- c(TRUE, TRUE, TRUE)
+  responses <- c(TRUE, TRUE)
   idx <- 0L
   local_mocked_bindings(
     prompt_input = function(...) {
@@ -46,7 +46,7 @@ test_that("maybe_add_framewise_displacement can add filtered FD to processed col
   )
 
   out <- maybe_add_framewise_displacement(ppcfg)
-  expect_equal(idx, 3L)
+  expect_equal(idx, 2L)
   expect_true("framewise_displacement" %in% out$confound_calculate$columns)
   expect_false("framewise_displacement_unfiltered" %in% out$confound_calculate$columns)
   expect_null(out$confound_calculate$noproc_columns)

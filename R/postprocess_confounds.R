@@ -32,6 +32,14 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   confounds <- data.table::fread(proc_files$confounds,
                                  na.strings = c("n/a", "NA", "."),
                                  data.table = FALSE)
+  source_fd <- if ("framewise_displacement" %in% names(confounds)) {
+    confounds$framewise_displacement
+  } else {
+    NULL
+  }
+  motion_filtered_fd <- NULL
+  motion_filter_type <- NULL
+  processed_source_fd_col <- ".bg_source_framewise_displacement"
 
   requested_confound_cols <- unlist(list(
     cfg$confound_regression$columns,
@@ -88,6 +96,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       }
       motion_filter_cfg$filter_type <- filter_type
     }
+    motion_filter_type <- filter_type
     lowpass_hz <- NULL
     if (!is.null(motion_filter_cfg$lowpass_bpm)) {
       lowpass_hz <- motion_filter_cfg$lowpass_bpm / 60
@@ -105,7 +114,9 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       lg = lg,
       fun_label = "motion_filter"
     )
-    if (all(motion_cols %in% names(confounds))) {
+    motion_filter_status <- attr(confounds, "motion_filter_status", exact = TRUE)
+    motion_filter_applied <- is.list(motion_filter_status) && isTRUE(motion_filter_status$applied)
+    if (motion_filter_applied && all(motion_cols %in% names(confounds))) {
       head_radius <- cfg$scrubbing$head_radius
       if (is.null(head_radius)) head_radius <- 50
       fd <- framewise_displacement(
@@ -113,14 +124,19 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
         head_radius = head_radius,
         columns = motion_cols
       )
+      motion_filtered_fd <- fd
       confounds$framewise_displacement <- fd
       if (filter_type == "notch") {
-        to_log(lg, "info", "Updated framewise_displacement after notch filtering ({log_val(motion_filter_cfg$bandstop_min_bpm)}-{log_val(motion_filter_cfg$bandstop_max_bpm)} BPM).")
+        to_log(lg, "info", "Updated framewise_displacement after notch filtering ({log_val(motion_filter_status$bandstop_min_bpm)}-{log_val(motion_filter_status$bandstop_max_bpm)} BPM).")
       } else {
         order_label <- motion_filter_cfg$filter_order
         if (is.null(order_label)) order_label <- 2L
         to_log(lg, "info", "Updated framewise_displacement after low-pass filtering (cutoff {log_val(motion_filter_cfg$lowpass_bpm)} BPM, order {order_label}).")
       }
+    } else if (!motion_filter_applied) {
+      skip_reason <- if (is.list(motion_filter_status)) motion_filter_status$reason else NULL
+      if (is.null(skip_reason)) skip_reason <- "filter status was unavailable"
+      to_log(lg, "warn", "Motion filtering was skipped ({skip_reason}). Retaining source framewise_displacement; no filtered FD column will be written.")
     } else {
       to_log(lg, "warn", "Filtered motion parameters available but required columns are missing; cannot recompute framewise displacement.")
     }
@@ -144,6 +160,22 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
                                         cfg$confound_calculate$columns))
   noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns,
                                       cfg$confound_calculate$noproc_columns))
+
+  # When calculated FD is a processed confound, send both FD lineages through
+  # the same BOLD-matched operations. The canonical column contains FD from
+  # motion-filtered parameters; this internal companion carries source FD and
+  # is converted back to framewise_displacement only when the TSV is assembled.
+  process_source_fd <- identical(motion_filter_type, "notch") &&
+    !is.null(source_fd) &&
+    !is.null(motion_filtered_fd) &&
+    "framewise_displacement" %in% cfg$confound_calculate$columns
+  if (process_source_fd) {
+    while (processed_source_fd_col %in% names(confounds)) {
+      processed_source_fd_col <- paste0(processed_source_fd_col, "_")
+    }
+    confounds[[processed_source_fd_col]] <- source_fd
+    confound_cols <- unique(c(confound_cols, processed_source_fd_col))
+  }
   confound_cols_txt <- if (length(confound_cols) > 0L) paste(confound_cols, collapse = ", ") else "<none>"
   noproc_cols_txt <- if (length(noproc_cols) > 0L) paste(noproc_cols, collapse = ", ") else "<none>"
   to_log(lg, "debug", "Expanded confound columns: {confound_cols_txt}; noproc columns: {noproc_cols_txt}")
@@ -199,8 +231,8 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     tmp_out <- construct_bids_filename(modifyList(confounds_bids, list(description = cfg$bids_desc, directory=tempdir(), ext=NA)), full.names=TRUE)
     confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out)
 
-    # TODO: consider whether to worry about motion filtering AROMA components if motion parameters or FD are in confound regressors
-    # Regress out AROMA components, if requested (overwrites file in place)
+    # Apply the same requested AROMA operation to every processed confound,
+    # including both source-derived and notch-derived FD lineages.
     if ("apply_aroma" %in% processing_sequence) {
       if (is.null(proc_files$melodic_mix) || !checkmate::test_file_exists(proc_files$melodic_mix)) {
         to_log(lg, "warn", "Cannot locate melodic mixing file; skipping AROMA regression for confounds.")
@@ -292,6 +324,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     }
 
     calc_noproc <- cfg$confound_calculate$noproc_columns
+    calculated_filtered_fd_requested <- "framewise_displacement" %in% c(calc_cols, calc_noproc)
     has_calc_noproc <- !is.null(calc_noproc) && length(calc_noproc) > 0L && any(!is.na(calc_noproc))
     if (has_calc_noproc) {
       present_cols <- intersect(calc_noproc, names(confounds))
@@ -329,6 +362,45 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     if ("framewise_displacement_unfiltered" %in% names(df) &&
         !"framewise_displacement" %in% names(df)) {
       names(df)[names(df) == "framewise_displacement_unfiltered"] <- "framewise_displacement"
+    }
+
+    # Keep both FD lineages in calculated confounds after notch filtering.
+    # Internally, framewise_displacement remains the filtered series so existing
+    # scrubbing and regression behavior is unchanged. The written TSV instead
+    # uses explicit names for source-derived and notch-derived FD side by side.
+    write_notch_fd_pair <- identical(motion_filter_type, "notch") &&
+      !is.null(source_fd) &&
+      !is.null(motion_filtered_fd) &&
+      isTRUE(calculated_filtered_fd_requested) &&
+      "framewise_displacement" %in% names(df)
+    if (write_notch_fd_pair) {
+      fd_idx <- match("framewise_displacement", names(df))
+      if ("framewise_displacement_filtered" %in% names(df)) {
+        to_log(lg, "warn", "Not adding the automatic filtered FD column because framewise_displacement_filtered was requested explicitly.")
+      } else {
+        source_fd_for_output <- source_fd
+        if (isTRUE(process_source_fd) && processed_source_fd_col %in% names(filtered_confounds)) {
+          source_fd_for_output <- filtered_confounds[[processed_source_fd_col]]
+          if (isTRUE(cfg$confound_calculate$demean)) {
+            source_fd_for_output <- source_fd_for_output - mean(source_fd_for_output, na.rm = TRUE)
+          }
+        }
+
+        # Both values reflect the user's columns/noproc_columns choice. In
+        # columns, both lineages received BOLD-matched operations; in
+        # noproc_columns, source FD is raw and filtered FD is motion-only.
+        fd_pair <- data.frame(
+          framewise_displacement = source_fd_for_output,
+          framewise_displacement_filtered = df[[fd_idx]]
+        )
+        before_fd <- if (fd_idx > 1L) df[, seq_len(fd_idx - 1L), drop = FALSE] else df[, integer(0), drop = FALSE]
+        after_fd <- if (fd_idx < ncol(df)) df[, seq.int(fd_idx + 1L, ncol(df)), drop = FALSE] else df[, integer(0), drop = FALSE]
+        df <- cbind(
+          before_fd,
+          fd_pair,
+          after_fd
+        )
+      }
     }
 
     if (ncol(df) == 0L) {

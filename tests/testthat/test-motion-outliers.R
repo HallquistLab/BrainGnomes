@@ -11,6 +11,17 @@ create_mock_confounds <- function(dir, filename, motion_data, fd_values = NULL) 
   filepath
 }
 
+make_outlier_motion_confounds <- function(n_time = 60L) {
+  data.frame(
+    rot_x = sin(seq_len(n_time) / 4),
+    rot_y = cos(seq_len(n_time) / 5),
+    rot_z = sin(seq_len(n_time) / 6),
+    trans_x = seq(0.05, 0.15, length.out = n_time),
+    trans_y = seq(-0.1, 0.1, length.out = n_time),
+    trans_z = seq(0.2, -0.2, length.out = n_time)
+  )
+}
+
 test_that("calculate_motion_outliers computes correct FD from motion parameters", {
   skip_if_not_installed("data.table")
 
@@ -180,33 +191,62 @@ test_that("calculate_motion_outliers handles multiple files", {
   expect_equal(result$fd_max, c(0.4, 0.8), tolerance = 1e-6)
 })
 
-test_that("calculate_motion_outliers validates bandstop_max_bpm > bandstop_min_bpm", {
+test_that("calculate_motion_outliers repairs reversed notch bounds", {
   skip_if_not_installed("data.table")
 
   tmp_dir <- tempfile("motion_test")
   dir.create(tmp_dir, recursive = TRUE)
   on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
 
-  motion_data <- data.frame(
-    rot_x = c(0, 0.01), rot_y = c(0, 0), rot_z = c(0, 0),
-    trans_x = c(0, 0), trans_y = c(0, 0), trans_z = c(0, 0),
-    framewise_displacement = c(0.1, 0.2)
-  )
+  n <- 60L
+  motion_data <- make_outlier_motion_confounds(n)
+  motion_data$framewise_displacement <- seq(0.1, 0.3, length.out = n)
   confounds_file <- file.path(tmp_dir, "sub-01_task-rest_desc-confounds_timeseries.tsv")
   data.table::fwrite(motion_data, confounds_file, sep = "\t")
 
-  expect_error(
+  result <- suppressWarnings(
     calculate_motion_outliers(
       confounds_files = confounds_file,
       thresholds = 0.3,
       include_filtered = TRUE,
       filter_method = "notch",
-      tr = 2,
+      tr = 1,
       bandstop_min_bpm = 20,
       bandstop_max_bpm = 15
-    ),
-    "bandstop_max_bpm.*must be greater than bandstop_min_bpm"
+    )
   )
+  expect_equal(nrow(result), 1L)
+  expect_true(is.finite(result$fd_filt_max))
+  expect_true(is.finite(result$fd_filt_mean))
+})
+
+test_that("calculate_motion_outliers marks skipped filtered summaries unavailable", {
+  skip_if_not_installed("data.table")
+
+  tmp_dir <- tempfile("motion_test")
+  dir.create(tmp_dir, recursive = TRUE)
+  on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+  n <- 60L
+  motion_data <- make_outlier_motion_confounds(n)
+  motion_data$framewise_displacement <- seq(0.1, 0.3, length.out = n)
+  confounds_file <- file.path(tmp_dir, "sub-01_task-rest_desc-confounds_timeseries.tsv")
+  data.table::fwrite(motion_data, confounds_file, sep = "\t")
+
+  result <- suppressWarnings(
+    calculate_motion_outliers(
+      confounds_files = confounds_file,
+      thresholds = 0.3,
+      include_filtered = TRUE,
+      filter_method = "notch",
+      tr = 4,
+      bandstop_min_bpm = 12,
+      bandstop_max_bpm = 18
+    )
+  )
+  filtered_cols <- grep("^fd_filt_", names(result), value = TRUE)
+  expect_true(length(filtered_cols) > 0L)
+  expect_true(all(vapply(result[filtered_cols], function(x) all(is.na(x)), logical(1))))
 })
 
 test_that("calculate_motion_outliers lowpass filtering produces filtered FD columns", {

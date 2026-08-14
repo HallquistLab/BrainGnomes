@@ -624,6 +624,14 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       }
 
       if (!is.null(filter_type) && filter_type == "notch") {
+        if (checkmate::test_number(motion_filter_cfg$bandstop_min_bpm) &&
+            checkmate::test_number(motion_filter_cfg$bandstop_max_bpm) &&
+            motion_filter_cfg$bandstop_max_bpm < motion_filter_cfg$bandstop_min_bpm) {
+          original_min <- motion_filter_cfg$bandstop_min_bpm
+          motion_filter_cfg$bandstop_min_bpm <- motion_filter_cfg$bandstop_max_bpm
+          motion_filter_cfg$bandstop_max_bpm <- original_min
+          if (!quiet) message(glue("Reversed notch bounds for $postprocess${cfg_name}$motion_filter; using {motion_filter_cfg$bandstop_min_bpm}-{motion_filter_cfg$bandstop_max_bpm} BPM."))
+        }
         if (!checkmate::test_number(motion_filter_cfg$bandstop_min_bpm, lower = 1, upper = 80)) {
           if (!quiet) message(glue("Invalid bandstop_min_bpm in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
           gaps <- c(gaps, "postprocess/motion_filter/bandstop_min_bpm")
@@ -635,8 +643,8 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
           motion_filter_cfg$bandstop_max_bpm <- NULL
         }
         if (!is.null(motion_filter_cfg$bandstop_min_bpm) && !is.null(motion_filter_cfg$bandstop_max_bpm) &&
-            motion_filter_cfg$bandstop_max_bpm <= motion_filter_cfg$bandstop_min_bpm) {
-          if (!quiet) message(glue("bandstop_max_bpm must be greater than bandstop_min_bpm for $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+            motion_filter_cfg$bandstop_max_bpm == motion_filter_cfg$bandstop_min_bpm) {
+          if (!quiet) message(glue("Notch bounds must have nonzero bandwidth for $postprocess${cfg_name}$motion_filter. You will be asked for this."))
           gaps <- unique(c(gaps, "postprocess/motion_filter/bandstop_min_bpm", "postprocess/motion_filter/bandstop_max_bpm"))
           motion_filter_cfg$bandstop_min_bpm <- NULL
           motion_filter_cfg$bandstop_max_bpm <- NULL

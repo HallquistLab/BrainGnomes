@@ -311,10 +311,11 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
 #' Optionally add framewise displacement to confound_calculate columns
 #'
 #' If confound calculation is enabled and framewise displacement was not explicitly
-#' requested, prompt the user to add it. Users can choose whether to use FD
-#' recomputed after motion filtering (when enabled) and whether FD should be
-#' processed with the same filtering/denoising steps as the BOLD data (`columns`)
-#' or retained as an unprocessed QC covariate (`noproc_columns`).
+#' requested, prompt the user to add it. When motion filtering is enabled, FD
+#' is always recomputed from the filtered motion parameters for downstream use.
+#' Users can choose whether FD should be processed with the same
+#' filtering/denoising steps as the BOLD data (`columns`) or retained as an
+#' unprocessed QC covariate (`noproc_columns`).
 #'
 #' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields Optional vector of fields being edited.
@@ -351,7 +352,27 @@ maybe_add_framewise_displacement <- function(ppcfg = list(), fields = NULL) {
 
   cur_cols <- to_tokens(ppcfg$confound_calculate$columns)
   cur_noproc <- to_tokens(ppcfg$confound_calculate$noproc_columns)
-  if (has_fd(cur_cols) || has_fd(cur_noproc)) return(ppcfg)
+  has_standard_fd <- any(tolower(c(cur_cols, cur_noproc)) == "framewise_displacement")
+  announce_motion_filtered_fd <- function() {
+    if (!isTRUE(ppcfg$motion_filter$enable)) return(invisible(NULL))
+
+    filter_type <- ppcfg$motion_filter$filter_type
+    if (identical(filter_type, "notch")) {
+      message(
+        "Notch filtering is enabled. FD will be recomputed from the filtered motion parameters ",
+        "for downstream use. When framewise_displacement is included, the calculated ",
+        "confounds TSV will contain adjacent source-derived and notch-derived FD columns. ",
+        "Your processing choice applies to both columns."
+      )
+    } else {
+      message("Motion filtering is enabled. FD will be recomputed from the filtered motion parameters for downstream use.")
+    }
+    invisible(NULL)
+  }
+  if (has_fd(cur_cols) || has_fd(cur_noproc)) {
+    if (has_standard_fd) announce_motion_filtered_fd()
+    return(ppcfg)
+  }
 
   include_fd <- prompt_input(
     instruct = glue("\n
@@ -364,37 +385,22 @@ maybe_add_framewise_displacement <- function(ppcfg = list(), fields = NULL) {
   )
   if (!isTRUE(include_fd)) return(ppcfg)
 
-  use_filtered_fd <- TRUE
-  if (isTRUE(ppcfg$motion_filter$enable)) {
-    use_filtered_fd <- prompt_input(
-      instruct = glue("\n
-        Motion filtering is enabled. BrainGnomes can use FD recomputed from filtered motion parameters
-        (notch/low-pass) or retain the original FD from the source confounds.
-        "),
-      prompt = "Use the FD recomputed after motion filtering?",
-      type = "flag",
-      default = TRUE
-    )
-  }
+  announce_motion_filtered_fd()
 
   process_like_bold <- prompt_input(
     instruct = glue("\n
-      Should FD be processed with the same postprocessing operations applied to BOLD-derived confounds
-      (e.g., AROMA/temporal filtering)?
+      Should FD receive the same postprocessing operations as BOLD-derived confounds
+      (e.g., AROMA/temporal filtering) in the calculated confounds file?
 
       Choose 'yes' when FD will be used as a regressor in fMRI modeling.
       Choose 'no' when FD is for screening/QC or run exclusion; in that case it should stay in noproc_columns.
       "),
-    prompt = "Process framewise_displacement like BOLD-derived confounds?",
+    prompt = "Apply BOLD-matched processing to framewise_displacement?",
     type = "flag",
     default = FALSE
   )
 
-  fd_token <- if (isTRUE(ppcfg$motion_filter$enable) && !isTRUE(use_filtered_fd)) {
-    "framewise_displacement_unfiltered"
-  } else {
-    "framewise_displacement"
-  }
+  fd_token <- "framewise_displacement"
 
   if (isTRUE(process_like_bold)) {
     cur_cols <- unique(c(cur_cols, fd_token))

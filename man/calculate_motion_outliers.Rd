@@ -15,7 +15,7 @@ calculate_motion_outliers(
   bandstop_min_bpm = 12,
   bandstop_max_bpm = 18,
   low_pass_hz = NULL,
-  filter_order = 2L,
+  filter_order = NULL,
   motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
   rot_units = c("rad", "deg"),
   output_file = NULL
@@ -37,7 +37,9 @@ returned for each threshold with column names like \code{fd_gt_0p5}.}
 
 \item{include_filtered}{Logical; if \code{TRUE}, recompute FD after filtering the
 motion parameters and include filtered outlier percentages (columns prefixed
-with \code{fd_filt_}).}
+with \code{fd_filt_}). If the requested filter cannot be applied, these columns
+are retained and filled with \code{NA} so unavailable results cannot be mistaken
+for filtered measurements.}
 
 \item{filter_method}{Filtering strategy when \code{include_filtered = TRUE}.
 Either \code{"notch"} (band-stop, in breaths per minute) or \code{"lowpass"} (Hz).}
@@ -53,7 +55,8 @@ Either \code{"notch"} (band-stop, in breaths per minute) or \code{"lowpass"} (Hz
 \item{low_pass_hz}{Low-pass cutoff in Hz (required for
 \code{filter_method = "lowpass"}).}
 
-\item{filter_order}{Integer filter order for low-pass filtering (default 2).}
+\item{filter_order}{Optional integer filter order. Defaults to 4 for notch
+filtering and 2 for low-pass filtering.}
 
 \item{motion_cols}{Motion parameter columns used to recompute FD.}
 
@@ -65,7 +68,8 @@ If provided, results are written using \code{data.table::fwrite()}.}
 \value{
 A data.frame with subject, session, task, run, confounds file location,
 max FD, mean FD, and outlier percentages for each threshold (filtered columns
-are included when requested).
+are included when requested). Filtered summary values are \code{NA} when motion
+filtering was requested but could not be applied.
 }
 \description{
 Calculates the percentage of framewise displacement (FD) values that exceed

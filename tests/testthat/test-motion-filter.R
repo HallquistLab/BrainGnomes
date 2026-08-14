@@ -41,7 +41,7 @@ test_that("validate_postprocess_config_single accepts motion filter band", {
   expect_false(any(grepl("postprocess/motion_filter", res$gaps, fixed = TRUE)))
 })
 
-test_that("validate_postprocess_config_single flags inverted motion filter band", {
+test_that("validate_postprocess_config_single repairs inverted motion filter band", {
   cfg <- make_base_postprocess_cfg()
   cfg$motion_filter <- list(
     enable = TRUE,
@@ -51,8 +51,9 @@ test_that("validate_postprocess_config_single flags inverted motion filter band"
   )
 
   res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
-  expect_true("postprocess/motion_filter/bandstop_min_bpm" %in% res$gaps)
-  expect_true("postprocess/motion_filter/bandstop_max_bpm" %in% res$gaps)
+  expect_false(any(grepl("postprocess/motion_filter", res$gaps, fixed = TRUE)))
+  expect_equal(res$postprocess$motion_filter$bandstop_min_bpm, 15)
+  expect_equal(res$postprocess$motion_filter$bandstop_max_bpm, 20)
 })
 
 test_that("motion-related confounds trigger motion_filter enable gap", {
@@ -102,7 +103,60 @@ test_that("filter_confounds adjusts notch frequencies above Nyquist", {
   )
   expect_true(any(grepl("above Nyquist frequency", warns)))
   expect_false(any(grepl("skipping motion filtering", warns)))
+  expect_true(isTRUE(attr(filtered, "motion_filter_status")$applied))
   expect_false(isTRUE(all.equal(filtered$rot_x, conf_df$rot_x)))
+})
+
+test_that("filter_confounds repairs reversed notch bounds", {
+  conf_df <- make_motion_confounds(60L)
+  motion_cols <- c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z")
+  warns <- character(0)
+  filtered <- withCallingHandlers(
+    filter_confounds(
+      confounds_df = conf_df,
+      tr = 1,
+      filter_type = "notch",
+      bandstop_min_bpm = 20,
+      bandstop_max_bpm = 12,
+      columns = motion_cols,
+      lg = lgr::get_logger_glue("BrainGnomes.test.motion")
+    ),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  status <- attr(filtered, "motion_filter_status")
+  expect_true(any(grepl("bounds were reversed", warns)))
+  expect_true(isTRUE(status$applied))
+  expect_equal(status$bandstop_min_bpm, 12)
+  expect_equal(status$bandstop_max_bpm, 20)
+})
+
+test_that("filter_confounds skips identical notch bounds without a filtered label", {
+  conf_df <- make_motion_confounds(60L)
+  motion_cols <- c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z")
+  warns <- character(0)
+  filtered <- withCallingHandlers(
+    filter_confounds(
+      confounds_df = conf_df,
+      tr = 1,
+      filter_type = "notch",
+      bandstop_min_bpm = 16,
+      bandstop_max_bpm = 16,
+      columns = motion_cols,
+      lg = lgr::get_logger_glue("BrainGnomes.test.motion")
+    ),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  status <- attr(filtered, "motion_filter_status")
+  expect_true(any(grepl("bounds are identical", warns)))
+  expect_false(isTRUE(status$applied))
+  expect_equal(status$reason, "identical notch bounds")
+  expect_true(isTRUE(all.equal(filtered$rot_x, conf_df$rot_x)))
 })
 
 test_that("filter_confounds skips notch filter when adjusted band is invalid", {
@@ -125,6 +179,7 @@ test_that("filter_confounds skips notch filter when adjusted band is invalid", {
     }
   )
   expect_true(any(grepl("Adjusted notch band is invalid", warns)))
+  expect_false(isTRUE(attr(filtered, "motion_filter_status")$applied))
   expect_true(isTRUE(all.equal(filtered$rot_x, conf_df$rot_x)))
 })
 

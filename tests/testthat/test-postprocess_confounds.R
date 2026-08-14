@@ -174,7 +174,8 @@ test_that("postprocess_confounds recomputes framewise displacement when only nop
       enable = TRUE,
       columns = NULL,
       noproc_columns = c("framewise_displacement", "white_matter"),
-      demean = FALSE
+      demean = FALSE,
+      include_header = TRUE
     ),
     apply_aroma = list(enable = FALSE, nonaggressive = TRUE),
     temporal_filter = list(low_pass_hz = NULL, high_pass_hz = NULL, method = "butterworth"),
@@ -233,11 +234,96 @@ test_that("postprocess_confounds recomputes framewise displacement when only nop
   calc_dt <- data.table::fread(confound_file)
   reg_df <- as.data.frame(reg_dt)
 
-  # confound_calculate output should contain recomputed FD followed by white matter
-  expect_equal(ncol(calc_dt), 2)
-  expect_equal(calc_dt[[1]], expected_fd, tolerance = 1e-6)
-  expect_equal(calc_dt[[2]], conf_df$white_matter)
+  # Notch-filtered output preserves source FD and adds the recomputed series beside it.
+  expect_identical(
+    names(calc_dt),
+    c("framewise_displacement", "framewise_displacement_filtered", "white_matter")
+  )
+  expect_equal(calc_dt$framewise_displacement, conf_df$framewise_displacement)
+  expect_equal(calc_dt$framewise_displacement_filtered, expected_fd, tolerance = 1e-6)
+  expect_equal(calc_dt$white_matter, conf_df$white_matter)
   expect_false(isTRUE(all.equal(conf_df$framewise_displacement, expected_fd)))
+
+  # The paired FD columns retain the user's header preference.
+  cfg_no_header <- cfg
+  cfg_no_header$confound_calculate$include_header <- FALSE
+  no_header_bids_info <- modifyList(output_bids_info, list(description = "denoise-noheader"))
+  postprocess_confounds(
+    proc_files = proc_files,
+    cfg = cfg_no_header,
+    processing_sequence = character(0),
+    output_bids_info = no_header_bids_info,
+    fsl_img = NULL,
+    lg = NULL
+  )
+  no_header_confile <- construct_bids_filename(
+    modifyList(no_header_bids_info, list(suffix = "confounds", ext = ".tsv")),
+    full.names = TRUE
+  )
+  expect_false(grepl("framewise_displacement", readLines(no_header_confile, n = 1L), fixed = TRUE))
+  no_header_dt <- data.table::fread(no_header_confile, header = FALSE)
+  expect_equal(no_header_dt[[1]], conf_df$framewise_displacement)
+  expect_equal(no_header_dt[[2]], expected_fd, tolerance = 1e-6)
+
+  # Both source-derived and notch-derived FD receive the requested calculated-
+  # confound processing when FD is selected in columns.
+  cfg_processed <- cfg
+  cfg_processed$confound_regression <- list(enable = FALSE, columns = NULL, noproc_columns = NULL)
+  cfg_processed$confound_calculate$columns <- c("framewise_displacement", "white_matter")
+  cfg_processed$confound_calculate$noproc_columns <- NULL
+  cfg_processed$confound_calculate$demean <- TRUE
+  processed_bids_info <- modifyList(output_bids_info, list(description = "denoise-processed"))
+  postprocess_confounds(
+    proc_files = proc_files,
+    cfg = cfg_processed,
+    processing_sequence = character(0),
+    output_bids_info = processed_bids_info,
+    fsl_img = NULL,
+    lg = NULL
+  )
+  processed_confile <- construct_bids_filename(
+    modifyList(processed_bids_info, list(suffix = "confounds", ext = ".tsv")),
+    full.names = TRUE
+  )
+  processed_dt <- data.table::fread(processed_confile)
+  expect_equal(
+    processed_dt$framewise_displacement,
+    conf_df$framewise_displacement - mean(conf_df$framewise_displacement),
+    tolerance = 1e-6
+  )
+  expect_equal(
+    processed_dt$framewise_displacement_filtered,
+    expected_fd - mean(expected_fd),
+    tolerance = 1e-6
+  )
+  expect_equal(
+    processed_dt$white_matter,
+    conf_df$white_matter - mean(conf_df$white_matter),
+    tolerance = 1e-6
+  )
+
+  # A notch band that cannot be represented at this TR is not labeled filtered.
+  cfg_skipped <- cfg
+  cfg_skipped$tr <- 4
+  cfg_skipped$confound_regression <- list(enable = FALSE, columns = NULL, noproc_columns = NULL)
+  skipped_bids_info <- modifyList(output_bids_info, list(description = "denoise-skipped"))
+  suppressWarnings(
+    postprocess_confounds(
+      proc_files = proc_files,
+      cfg = cfg_skipped,
+      processing_sequence = character(0),
+      output_bids_info = skipped_bids_info,
+      fsl_img = NULL,
+      lg = NULL
+    )
+  )
+  skipped_confile <- construct_bids_filename(
+    modifyList(skipped_bids_info, list(suffix = "confounds", ext = ".tsv")),
+    full.names = TRUE
+  )
+  skipped_dt <- data.table::fread(skipped_confile)
+  expect_identical(names(skipped_dt), c("framewise_displacement", "white_matter"))
+  expect_equal(skipped_dt$framewise_displacement, conf_df$framewise_displacement)
 
   # regression file contains intercept + FD + csf (with NA replaced by 0)
   colnames(reg_df) <- c("intercept", "framewise_displacement", "csf")

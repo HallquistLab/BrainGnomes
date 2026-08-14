@@ -18,7 +18,9 @@
 #'   returned for each threshold with column names like `fd_gt_0p5`.
 #' @param include_filtered Logical; if `TRUE`, recompute FD after filtering the
 #'   motion parameters and include filtered outlier percentages (columns prefixed
-#'   with `fd_filt_`).
+#'   with `fd_filt_`). If the requested filter cannot be applied, these columns
+#'   are retained and filled with `NA` so unavailable results cannot be mistaken
+#'   for filtered measurements.
 #' @param filter_method Filtering strategy when `include_filtered = TRUE`.
 #'   Either `"notch"` (band-stop, in breaths per minute) or `"lowpass"` (Hz).
 #' @param tr Repetition time in seconds, required when `include_filtered = TRUE`.
@@ -28,7 +30,8 @@
 #'   (default 18; used when `filter_method = "notch"`).
 #' @param low_pass_hz Low-pass cutoff in Hz (required for
 #'   `filter_method = "lowpass"`).
-#' @param filter_order Integer filter order for low-pass filtering (default 2).
+#' @param filter_order Optional integer filter order. Defaults to 4 for notch
+#'   filtering and 2 for low-pass filtering.
 #' @param motion_cols Motion parameter columns used to recompute FD.
 #' @param rot_units Rotation unit for motion parameters (`"rad"` or `"deg"`).
 #' @param output_file Optional path to write results as a tab-separated file.
@@ -36,7 +39,8 @@
 #'
 #' @return A data.frame with subject, session, task, run, confounds file location,
 #'   max FD, mean FD, and outlier percentages for each threshold (filtered columns
-#'   are included when requested).
+#'   are included when requested). Filtered summary values are `NA` when motion
+#'   filtering was requested but could not be applied.
 #'
 #' @examples
 #' \dontrun{
@@ -69,7 +73,7 @@ calculate_motion_outliers <- function(scfg = NULL,
                                       bandstop_min_bpm = 12,
                                       bandstop_max_bpm = 18,
                                       low_pass_hz = NULL,
-                                      filter_order = 2L,
+                                      filter_order = NULL,
                                       motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
                                       rot_units = c("rad", "deg"),
                                       output_file = NULL) {
@@ -107,12 +111,13 @@ calculate_motion_outliers <- function(scfg = NULL,
   if (include_filtered) {
     filter_method <- match.arg(filter_method)
     checkmate::assert_number(tr, lower = 0.01)
+    if (is.null(filter_order)) {
+      filter_order <- if (filter_method == "notch") 4L else 2L
+    }
     if (filter_method == "notch") {
       checkmate::assert_number(bandstop_min_bpm, lower = 0)
       checkmate::assert_number(bandstop_max_bpm, lower = 0)
-      if (bandstop_max_bpm <= bandstop_min_bpm) {
-        stop("bandstop_max_bpm (", bandstop_max_bpm, ") must be greater than bandstop_min_bpm (", bandstop_min_bpm, ").")
-      }
+      checkmate::assert_integerish(filter_order, len = 1L, lower = 4L)
     } else {
       checkmate::assert_number(low_pass_hz, lower = 0.001)
       checkmate::assert_integerish(filter_order, len = 1L, lower = 2L)
@@ -228,11 +233,16 @@ calculate_motion_outliers <- function(scfg = NULL,
           use_zi = TRUE,
           lg = NULL
         )
-        filtered_fd <- framewise_displacement(
-          motion = filtered[, motion_cols, drop = FALSE],
-          columns = motion_cols,
-          rot_units = rot_units
-        )
+        filter_status <- attr(filtered, "motion_filter_status", exact = TRUE)
+        if (is.list(filter_status) && isTRUE(filter_status$applied)) {
+          filtered_fd <- framewise_displacement(
+            motion = filtered[, motion_cols, drop = FALSE],
+            columns = motion_cols,
+            rot_units = rot_units
+          )
+        } else {
+          filtered_fd <- rep(NA_real_, length(fd))
+        }
       }
 
       row[["fd_filt_max"]] <- calc_max(filtered_fd)

@@ -238,6 +238,18 @@ filter_confounds <- function(confounds_df = NULL,
     lg <- lgr::get_logger_glue("BrainGnomes")
   }
 
+  set_filter_status <- function(df, applied, reason = NULL, ...) {
+    attr(df, "motion_filter_status") <- c(
+      list(applied = isTRUE(applied), type = filter_type, reason = reason),
+      list(...)
+    )
+    df
+  }
+  skip_filter <- function(message, reason) {
+    to_log(lg, "warn", message)
+    set_filter_status(confounds_df, FALSE, reason = reason)
+  }
+
   # polynomial expansion -- first derivatives and squares
   poly_expand <- function(df, cols = NULL) {
     if (!is.null(cols)) checkmate::assert_subset(cols, names(df))
@@ -278,8 +290,16 @@ filter_confounds <- function(confounds_df = NULL,
       to_log(lg, "fatal", "filter_order must be divisible by 4 for notch filtering; received {filter_order}.")
     }
     n_filter_applications <- filter_order %/% 4L
-    if (bandstop_max_bpm <= bandstop_min_bpm) {
-      to_log(lg, "fatal", "bandstop_max_bpm ({bandstop_max_bpm}) must be greater than bandstop_min_bpm ({bandstop_min_bpm}).")
+    if (bandstop_max_bpm < bandstop_min_bpm) {
+      original_band <- c(bandstop_min_bpm, bandstop_max_bpm)
+      bandstop_min_bpm <- original_band[2]
+      bandstop_max_bpm <- original_band[1]
+      to_log(lg, "warn", "Notch filter bounds were reversed ({original_band[1]}-{original_band[2]} BPM); using {bandstop_min_bpm}-{bandstop_max_bpm} BPM.")
+    } else if (bandstop_max_bpm == bandstop_min_bpm) {
+      return(skip_filter(
+        "Notch filter bounds are identical ({bandstop_min_bpm} BPM); skipping motion filtering.",
+        "identical notch bounds"
+      ))
     }
 
     stopband_hz <- c(bandstop_min_bpm, bandstop_max_bpm) / 60
@@ -291,8 +311,10 @@ filter_confounds <- function(confounds_df = NULL,
       bandstop_max_bpm <- stopband_adjusted[2]
     }
     if (bandstop_max_bpm <= bandstop_min_bpm) {
-      to_log(lg, "warn", "Adjusted notch band is invalid after Nyquist correction; skipping motion filtering.")
-      return(confounds_df)
+      return(skip_filter(
+        "Adjusted notch band is invalid after Nyquist correction; skipping motion filtering.",
+        "invalid notch band after Nyquist correction"
+      ))
     }
 
     stopband_hz <- c(bandstop_min_bpm, bandstop_max_bpm) / 60
@@ -300,13 +322,17 @@ filter_confounds <- function(confounds_df = NULL,
     bandwidth <- abs(diff(stopband_hz))
 
     if (bandwidth <= 0) {
-      to_log(lg, "warn", "Adjusted notch band has zero bandwidth; skipping motion filtering.")
-      return(confounds_df)
+      return(skip_filter(
+        "Adjusted notch band has zero bandwidth; skipping motion filtering.",
+        "zero notch bandwidth"
+      ))
     }
 
     if (f0 >= nyquist) {
-      to_log(lg, "warn", "Adjusted notch center {round(f0, 4)} Hz exceeds the Nyquist frequency {round(nyquist, 4)} Hz for TR = {tr} s; skipping motion filtering.")
-      return(confounds_df)
+      return(skip_filter(
+        "Adjusted notch center {round(f0, 4)} Hz exceeds the Nyquist frequency {round(nyquist, 4)} Hz for TR = {tr} s; skipping motion filtering.",
+        "notch center at or above Nyquist"
+      ))
     }
 
     Q <- f0 / bandwidth
@@ -323,8 +349,10 @@ filter_confounds <- function(confounds_df = NULL,
       low_pass_hz <- low_pass_hz_adjusted
     }
     if (low_pass_hz <= 0 || low_pass_hz >= nyquist) {
-      to_log(lg, "warn", "Adjusted low-pass cutoff is invalid for TR = {tr} s; skipping motion filtering.")
-      return(confounds_df)
+      return(skip_filter(
+        "Adjusted low-pass cutoff is invalid for TR = {tr} s; skipping motion filtering.",
+        "invalid low-pass cutoff after Nyquist correction"
+      ))
     }
     checkmate::assert_integerish(filter_order, len = 1L, lower = 2L)
     if (!requireNamespace("signal", quietly = TRUE)) {
@@ -372,6 +400,16 @@ filter_confounds <- function(confounds_df = NULL,
 
   # always recompute derivatives and quadratics after filtering
   if (add_poly) confounds_df <- poly_expand(confounds_df, columns)
+
+  if (filter_type == "notch") {
+    confounds_df <- set_filter_status(
+      confounds_df, TRUE,
+      bandstop_min_bpm = bandstop_min_bpm,
+      bandstop_max_bpm = bandstop_max_bpm
+    )
+  } else {
+    confounds_df <- set_filter_status(confounds_df, TRUE, low_pass_hz = low_pass_hz)
+  }
 
   if (!is.null(out_file)) {
     data.table::fwrite(confounds_df, file = out_file, sep = "\t", na = "n/a")

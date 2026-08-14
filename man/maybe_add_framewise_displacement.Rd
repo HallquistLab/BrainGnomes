@@ -16,9 +16,10 @@ Modified \code{ppcfg}.
 }
 \description{
 If confound calculation is enabled and framewise displacement was not explicitly
-requested, prompt the user to add it. Users can choose whether to use FD
-recomputed after motion filtering (when enabled) and whether FD should be
-processed with the same filtering/denoising steps as the BOLD data (\code{columns})
-or retained as an unprocessed QC covariate (\code{noproc_columns}).
+requested, prompt the user to add it. When motion filtering is enabled, FD
+is always recomputed from the filtered motion parameters for downstream use.
+Users can choose whether FD should be processed with the same
+filtering/denoising steps as the BOLD data (\code{columns}) or retained as an
+unprocessed QC covariate (\code{noproc_columns}).
 }
 \keyword{internal}

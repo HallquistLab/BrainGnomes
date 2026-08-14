@@ -1,5 +1,14 @@
 # BrainGnomes 0.8-2
 
+* Preserve source FD in notch-filtered calculated confounds and write the
+  recomputed series immediately beside it as `framewise_displacement_filtered`.
+  The output respects the configured header setting and logs column order when
+  headers are disabled; filtering-based scrubbing and confound regression use
+  the filtered FD. Clearly reversed notch bounds are repaired automatically;
+  skipped filters are logged and never produce a misleading filtered-FD label.
+  When FD is selected as a processed confound, both the source-derived and
+  notch-derived FD columns retain all configured BOLD-matched confound
+  processing.
 * Add a `voxel_psc` intensity-normalization mode that uses the existing robust reference-core and eligible-frame policy and applies denominator-guarded baseline-to-100 scaling after spatial processing. Reliable local baselines use ordinary PSC scaling, very low positive baselines use a lower denominator bound, and invalid baselines or those with too few eligible frames use a conservative run-level fallback. The guards do not clip observations or mask voxels; the user's `apply_mask` decision is preserved, and the multiplier map and guard counts are saved for provenance. Guard counts and percentages within the conservative automask are logged at info level, with complete-grid counts at debug level.
 * Add a user-oriented intensity-normalization vignette documenting the `target` convention, robust reference-core policy, provenance outputs, QA, and limitations.
 * Replace `automask()`'s background-sensitive positive-voxel quantile interpolation with an iterative AFNI-style clip estimator and a smoothly varying local threshold field.
@@ -57,7 +66,7 @@ Released 2026-02-17
 * bugfix: Get CSF probseg image for MRIQC during prefetch
 * `run_project()` now skips TemplateFlow prefetch only when a prior successful prefetch covers requested spaces and the TemplateFlow manifest in job tracking still verifies; missing/deleted template files trigger re-prefetch.
 * bugfix: preserve user-specified `metadata/log_directory` (including external paths) instead of always resetting to `<project_directory>/logs`.
-* During postprocess setup, `confound_calculate` now offers guided prompts to add `framewise_displacement` when omitted, including whether to use motion-filtered FD and whether FD should be processed vs kept as `noproc` for QC/exclusion workflows.
+* During postprocess setup, `confound_calculate` now offers guided prompts to add `framewise_displacement` when omitted and to choose BOLD-matched processing vs `noproc` output for QC/exclusion workflows. When motion filtering is enabled, FD is recomputed from the filtered motion automatically.
 * Increase consistency of instructions and formatting in `setup_project()`
 * bugfix: avoid spurious "Already disconnected" warnings on exit from `diagnose_pipeline()`
 * bugfix: `diagnose_pipeline()` now respects configured `metadata/log_directory` instead of assuming `<project_directory>/logs`
