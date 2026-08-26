@@ -3,6 +3,12 @@
 \name{lmfit_residuals_4d}
 \alias{lmfit_residuals_4d}
 \title{Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear Models}
+\usage{
+lmfit_residuals_4d(infile, X, include_rows = NULL,
+  add_intercept = FALSE, outfile = "", internal = FALSE,
+  preserve_mean = FALSE, set_mean = 0, regress_cols = NULL,
+  exclusive = FALSE)
+}
 \arguments{
 \item{infile}{Path to a 4D NIfTI image file to denoise (e.g., functional data).}
 

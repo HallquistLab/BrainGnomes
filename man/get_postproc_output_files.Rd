@@ -2,22 +2,32 @@
 % Please edit documentation in R/setup_postprocess.R
 \name{get_postproc_output_files}
 \alias{get_postproc_output_files}
-\title{List postprocessed output files for a stream based on its input spec}
+\title{List postprocessed output files for paired input specifications}
 \usage{
 get_postproc_output_files(input_dir, input_regex, bids_desc)
 }
 \arguments{
 \item{input_dir}{Directory containing postprocessed outputs.}
 
-\item{input_regex}{Specification used to match the input files for the stream.
-May be a space-separated set of BIDS entities or a regex prefixed with "regex:".}
+\item{input_regex}{One or more specifications used to match the input files.
+Each may be a space-separated set of BIDS entities or a regex prefixed with
+\code{"regex:"}.}
 
-\item{bids_desc}{The \code{desc} value used for postprocessed outputs.}
+\item{bids_desc}{One \code{desc} value to apply to every \code{input_regex}, or a vector
+with the same length as \code{input_regex}. Equal-length vectors are paired by
+position; they are not combined as a cross-product.}
 }
 \value{
-A character vector of full paths to matching postprocessed outputs.
+A character vector of unique full paths to matching postprocessed
+outputs.
 }
 \description{
-Converts a postprocess input specification into a pattern that targets
-postprocessed outputs by ensuring the \code{desc} entity matches \code{bids_desc}.
+Converts postprocess input specifications into patterns that target
+postprocessed outputs by ensuring each \code{desc} entity matches its corresponding
+\code{bids_desc}.
+}
+\details{
+A scalar \code{bids_desc} is recycled for backward compatibility. Any
+other length mismatch is rejected because it would make the association
+between an input specification and its postprocessing stream ambiguous.
 }

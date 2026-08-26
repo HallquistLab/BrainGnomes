@@ -7,20 +7,33 @@
 
 BrainGnomes is an R package for configuring, submitting, and monitoring reproducible fMRI workflows on high-performance computing (HPC) systems. It coordinates containerized neuroimaging tools and scheduler jobs from one project configuration, while retaining logs and job-tracking information for each run.
 
-The package supports the parts of a workflow that you need: optional Flywheel synchronization, DICOM-to-BIDS conversion with HeuDiConv, BIDS validation, MRIQC, fMRIPrep, ICA-AROMA, postprocessing, and ROI time-series/connectivity extraction. You can begin with raw DICOMs or use it only for later steps when BIDS or fMRIPrep outputs already exist.
+The package supports the parts of a workflow that you need: optional Flywheel synchronization, DICOM-to-BIDS conversion with HeuDiConv, MRIQC, fMRIPrep, ICA-AROMA, postprocessing, and ROI time-series/connectivity extraction. BIDS validation is configured with the project but submitted separately through `run_bids_validation()`. You can begin with raw DICOMs or use it only for later steps when BIDS or fMRIPrep outputs already exist.
 
 ## Is BrainGnomes a good fit?
 
 BrainGnomes is designed for studies run on an HPC cluster with a SLURM or TORQUE scheduler and containerized imaging software. It is especially useful when a project needs repeatable per-subject processing, configured resource requests, dependency-aware job submission, and a clear record of what completed or failed.
 
-Before starting, make sure you have:
+Installing and loading the R package does not require a cluster. Scheduler and
+container requirements apply when you submit pipeline stages. Requirements are
+stage-specific:
 
-- R (version 4.1 or later) on the system from which you will submit jobs;
-- access to a SLURM or TORQUE cluster and appropriate filesystem locations for project data, scratch space, and logs;
-- Singularity-compatible images and any required licenses for the steps you enable (for example, fMRIPrep and its FreeSurfer license); and
-- source data, a HeuDiConv heuristic when converting DICOMs, and any site-specific scheduler requirements.
+| Capability or stage | Additional requirements |
+|---|---|
+| Configuration inspection, BIDS filename helpers, status tables, and native image helpers | R 4.1 or later and the R dependencies installed with BrainGnomes; no scheduler or container |
+| Any scheduled pipeline stage | SLURM or TORQUE/PBS, Bash, shared readable/writable project storage, and site-specific scheduler settings |
+| Flywheel synchronization | Flywheel `fw` CLI and account access |
+| DICOM-to-BIDS conversion | Singularity-compatible HeuDiConv image, source DICOMs, and a study-specific Python heuristic |
+| BIDS validation | BIDS validator executable; configured with the project but submitted separately through `run_bids_validation()` |
+| MRIQC | Singularity-compatible MRIQC image |
+| fMRIPrep | Singularity-compatible fMRIPrep image, BIDS inputs, TemplateFlow cache, and a FreeSurfer license |
+| ICA-AROMA | Singularity-compatible fMRIPost-AROMA image |
+| Postprocessing | Singularity-compatible FSL image; Python 3 with `nibabel`, `nilearn`, and `templateflow` when template-mask resampling is used |
+| ROI extraction | Postprocessed BOLD inputs and compatible atlas/mask NIfTI files; direct `extract_rois()` calls can run locally, while project-managed extraction uses the scheduler |
 
-See the [Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) for a fuller checklist and configuration guidance.
+BrainGnomes scripts invoke `singularity`; an Apptainer installation is suitable
+when it provides that compatibility command.
+
+See the [Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) for the full configuration workflow, or start with [Local onboarding and prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html) to inspect a miniature configuration and run examples without a cluster.
 
 ## Installation
 
@@ -39,7 +52,7 @@ To install a particular tagged release rather than the latest development
 version, supply its tag with `ref`. For example:
 
 ```r
-remotes::install_github("UNCDEPENdLab/BrainGnomes", ref = "0.8-1")
+remotes::install_github("UNCDEPENdLab/BrainGnomes", ref = "0.9")
 ```
 
 See the [available tags](https://github.com/UNCDEPENdLab/BrainGnomes/tags)
@@ -50,7 +63,7 @@ to choose an available tag.
 1. Create an interactive project configuration. `setup_project()` records project paths, enabled pipeline stages, container locations, scheduler settings, and resource requests in `project_config.yaml`.
 2. Review or update that configuration with `edit_project()`, or reload it later with `load_project()`.
 3. Submit the enabled stages with `run_project()`. Jobs are submitted per subject/session with their dependencies tracked automatically.
-4. Check progress with `get_project_status()` or `get_subject_status()`. Use `diagnose_pipeline()` to inspect the tracked job tree and logs when a run needs attention.
+4. Check progress with `get_project_status()` or `get_subject_status()`, including per-stream postprocessing and ROI-extraction completion. Scheduled ROI extraction records and verifies the exact files produced by each job. Use `diagnose_pipeline()` to inspect the tracked job tree and logs when a run needs attention.
 
 ```r
 library(BrainGnomes)
@@ -72,6 +85,7 @@ run_project(scfg, steps = "all")
 The [package website](https://uncdependlab.github.io/BrainGnomes/) includes function reference pages, release notes, and the following guides:
 
 - [BrainGnomes Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) — set up a project and run an end-to-end workflow.
+- [Local onboarding and prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html) — inspect an installed example configuration and run a first task without scheduler or container access.
 - [Building Singularity containers for BrainGnomes](https://uncdependlab.github.io/BrainGnomes/articles/building_containers.html) — create the container images used by pipeline stages.
 - [Postprocessing Walkthrough](https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.html) — configure masking, smoothing, AROMA, filtering, scrubbing, intensity normalization, and confound regression.
 - [Extracting ROI Timeseries and Connectivity](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.html) — configure atlas/mask ROI extraction and connectivity outputs.

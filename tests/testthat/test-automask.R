@@ -12,6 +12,23 @@ run_automask_for_test <- function(image, peels = 0L) {
   as.array(output) > 0
 }
 
+test_that("automask does not require an output file", {
+  image <- array(0.01, dim = c(10, 10, 10))
+  image[4:7, 4:7, 4:7] <- 100
+
+  result <- NULL
+  invisible(capture.output({
+    result <- automask(
+      RNifti::asNifti(image),
+      NN = 1L,
+      peels = 0L,
+      fill_holes = FALSE
+    )
+  }))
+
+  expect_identical(dim(result), c(10L, 10L, 10L))
+})
+
 test_that("automask clip estimation is not controlled by positive background", {
   image <- array(0.01, dim = c(30, 30, 30))
   expected <- array(FALSE, dim = dim(image))

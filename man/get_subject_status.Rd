@@ -15,7 +15,10 @@ get_subject_status(scfg, sub_id, ses_id = NULL)
 subject's directory are returned.}
 }
 \value{
-A data.frame with columns indicating completion status and times for each enabled step.
+A data.frame with columns indicating completion status and times for
+each enabled step. ROI-extraction streams use columns named
+\verb{extract_rois_<stream>_complete} and \verb{extract_rois_<stream>_time}, keeping
+them distinct from postprocessing streams with the same name.
 }
 \description{
 Get processing status for a single subject

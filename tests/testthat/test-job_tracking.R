@@ -142,6 +142,53 @@ test_that("capture_output_manifest handles empty directory", {
   expect_length(manifest$files, 0)
 })
 
+test_that("capture_output_manifest can record an explicit subset of shared outputs", {
+  out_dir <- tempfile("manifest_explicit_")
+  dir.create(out_dir)
+  on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
+
+  selected <- file.path(out_dir, "atlas", c("timeseries.tsv", "connectivity.tsv"))
+  dir.create(dirname(selected[[1L]]))
+  writeLines("timeseries", selected[[1L]])
+  writeLines("connectivity", selected[[2L]])
+  writeLines("another job", file.path(out_dir, "unrelated.tsv"))
+
+  manifest_json <- capture_output_manifest(out_dir, files = rev(selected))
+  manifest <- jsonlite::fromJSON(manifest_json, simplifyVector = FALSE)
+  manifest_paths <- vapply(manifest$files, `[[`, character(1), "path")
+
+  expect_identical(manifest$scope, "explicit")
+  expect_equal(manifest$file_count, 2L)
+  expect_identical(
+    manifest_paths,
+    c("atlas/connectivity.tsv", "atlas/timeseries.tsv")
+  )
+  expect_false("unrelated.tsv" %in% manifest_paths)
+
+  verification <- verify_output_manifest(out_dir, manifest_json)
+  expect_true(verification$verified)
+  expect_true("unrelated.tsv" %in% verification$extra)
+
+  unlink(selected[[1L]])
+  verification <- verify_output_manifest(out_dir, manifest_json)
+  expect_false(verification$verified)
+  expect_true("atlas/timeseries.tsv" %in% verification$missing)
+})
+
+test_that("explicit output manifests reject files outside their output root", {
+  root <- tempfile("manifest_root_")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  outside <- tempfile("manifest_outside_")
+  writeLines("outside", outside)
+  on.exit(unlink(outside), add = TRUE)
+
+  expect_error(
+    capture_output_manifest(root, files = outside),
+    "beneath output_dir"
+  )
+})
+
 test_that("verify_output_manifest returns verified=TRUE for matching files", {
   out_dir <- tempfile("verify_test_")
   dir.create(out_dir)

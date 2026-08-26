@@ -19,9 +19,12 @@ run_project(
 \arguments{
 \item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
 
-\item{steps}{Character vector of pipeline steps to execute (or \code{"all"} to run all enabled steps).
-Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois").
-If \code{NULL}, the user will be prompted for which steps to run.}
+\item{steps}{Character vector of pipeline stages to execute. Supported stages
+are \code{"flywheel_sync"}, \code{"bids_conversion"}, \code{"mriqc"}, \code{"fmriprep"},
+\code{"aroma"}, \code{"postprocess"}, and \code{"extract_rois"}. Use \code{"all"} to run all
+enabled stages. If \code{NULL}, the user will be prompted for which stages to run.
+BIDS validation is configured with the project but submitted separately
+through \code{\link[=run_bids_validation]{run_bids_validation()}}; it is not a \code{run_project()} stage.}
 
 \item{subject_filter}{Optional character vector or data.frame specifying which
 subjects (and optionally sessions) to process. When \code{NULL} and run
@@ -30,20 +33,21 @@ IDs (press ENTER to process all subjects). When a data.frame is provided, it
 must contain a \code{sub_id} column and may include a \code{ses_id} column to filter
 on specific subject/session combinations.}
 
-\item{postprocess_streams}{Optional character vector specifying which postprocessing streams should be run. If
-\verb{"postprocess"`` is included in }steps`, then this setting lets the user choose streams. If NULL, all postprocess
-streams will be run.}
+\item{postprocess_streams}{Optional character vector specifying which
+postprocessing streams should run. When \code{"postprocess"} is included in
+\code{steps}, \code{NULL} selects every configured postprocessing stream.}
 
-\item{extract_streams}{Optional character vector specifying which ROI extraction streams should be run. If
-\verb{"extract_rois"`` is included in }steps`, then this setting lets the user choose streams. If NULL, all extraction
-streams will be run.}
+\item{extract_streams}{Optional character vector specifying which ROI
+extraction streams should run. When \code{"extract_rois"} is included in
+\code{steps}, \code{NULL} selects every configured extraction stream.}
 
 \item{debug}{A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).}
 
 \item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
 
-\item{dry_run}{A logical value indicating whether to perform a dry run (validate settings and
-report planned work without submitting any jobs).}
+\item{dry_run}{A logical value indicating whether to perform a dry run. Dry
+runs validate settings and report subject/session scope plus resolved
+postprocessing and extraction stream settings without submitting any jobs.}
 
 \item{log_level}{Character string controlling log verbosity. One of
 \code{TRACE}, \code{DEBUG}, \code{INFO}, \code{WARN}, \code{ERROR}, or \code{FATAL}.}
@@ -57,6 +61,10 @@ Run the processing pipeline
 \examples{
   \dontrun{
     # Assuming you have a valid project configuration list named `study_config`
-    run_project(study_config, prompt = TRUE, force = FALSE)
+    run_project(study_config, steps = "fmriprep", force = FALSE)
   }
+}
+\seealso{
+\code{\link[=run_bids_validation]{run_bids_validation()}} to submit the BIDS validation configured
+with the project.
 }

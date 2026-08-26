@@ -178,22 +178,14 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   
   bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- extract_ids <- NULL
   
-  # BIDS conversion and postprocessing are session-specific, so we need to check for the session ID
+  # BIDS conversion, postprocessing, and ROI extraction are session-specific.
   # fmriprep, MRIQC, and AROMA are subject-level processes (sessions nested within subjects)
   
   # .*complete files should always be placed in the subject BIDS directory
   # determine status of processing -- seems like we could swap in queries from job tracker
   submit_step <- function(name, row_idx = 1L, parent_ids = NULL, pp_stream = NULL, ex_stream = NULL) {
-    session_level <- name %in% c("bids_conversion", "postprocess") # only these two are session-level
-    
-    name_tag <- name # identifier for this step used in complete file and job names
-    if (name == "postprocess") {
-      if (is.null(pp_stream)) {
-        stop("Cannot run submit_step for postprocessing without a stream specified by pp_stream")
-      } else {
-        name_tag <- glue("{name}_{pp_stream}") # modify the tag to be specific to postprocessing this stream
-      }
-    }
+    session_level <- name %in% c("bids_conversion", "postprocess", "extract_rois")
+    name_tag <- pipeline_step_name_tag(name, pp_stream, ex_stream)
     
     sub_id <- null_empty(sub_cfg$sub_id[row_idx]) # make NULL on empty to avoid env export in submit
     ses_id <- null_empty(sub_cfg$ses_id[row_idx])
@@ -895,12 +887,36 @@ submit_extract_rois <- function(
   }
   if (isTRUE(scfg$force)) ex_cfg$overwrite <- TRUE # enable overwrite of ROIs if force=TRUE
 
-  # Every extract_rois stream can pull for 1+ postprocess streams. Pass through the input spec
-  # and bids_desc for each stream so extract_cli.R can target postprocessed outputs directly.
-  ex_cfg$input_regex <- sapply(ex_cfg$input_streams, function(ss) scfg$postprocess[[ss]]$input_regex, USE.NAMES = FALSE)
+  # Every extraction stream can pull from one or more postprocessing streams.
+  # Flatten the sources into aligned vectors, repeating a stream's output
+  # description if that stream supplies more than one input specification.
+  input_sources <- lapply(ex_cfg$input_streams, function(stream) {
+    stream_cfg <- scfg$postprocess[[stream]]
+    if (is.null(stream_cfg)) {
+      stop("Cannot find postprocessing input stream: ", stream, call. = FALSE)
+    }
+    input_regex <- stream_cfg$input_regex
+    if (is.null(input_regex)) input_regex <- "desc:preproc suffix:bold"
+    if (!checkmate::test_character(input_regex, min.len = 1L, any.missing = FALSE)) {
+      stop("Postprocessing stream '", stream, "' has an invalid input_regex.", call. = FALSE)
+    }
+    if (!checkmate::test_string(stream_cfg$bids_desc)) {
+      stop("Postprocessing stream '", stream, "' has an invalid bids_desc.", call. = FALSE)
+    }
 
-  # the bids_desc of the postprocess stream is used to update the matched files (to get the outputs of postprocessing)
-  ex_cfg$bids_desc <- sapply(ex_cfg$input_streams, function(ss) scfg$postprocess[[ss]]$bids_desc, USE.NAMES = FALSE)
+    list(
+      input_regex = input_regex,
+      bids_desc = rep(stream_cfg$bids_desc, length(input_regex))
+    )
+  })
+  ex_cfg$input_regex <- unlist(
+    lapply(input_sources, `[[`, "input_regex"),
+    use.names = FALSE
+  )
+  ex_cfg$bids_desc <- unlist(
+    lapply(input_sources, `[[`, "bids_desc"),
+    use.names = FALSE
+  )
 
   # drop extraction scheduling arguments from fields before converting to cli argument string for extract_cli.R
   ex_cfg$nhours <- ex_cfg$ncores <- ex_cfg$cli_options <- ex_cfg$sched_args <- ex_cfg$memgb <- NULL

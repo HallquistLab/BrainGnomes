@@ -15,13 +15,52 @@ parse_complete_time <- function(file) {
   as.POSIXct(parsed)
 }
 
+.status_spec <- function(scfg) {
+  steps <- character()
+  if (isTRUE(scfg$bids_conversion$enable)) steps <- c(steps, "bids_conversion")
+  if (isTRUE(scfg$mriqc$enable)) steps <- c(steps, "mriqc")
+  if (isTRUE(scfg$fmriprep$enable)) steps <- c(steps, "fmriprep")
+  if (isTRUE(scfg$aroma$enable)) steps <- c(steps, "aroma")
+  if (isTRUE(scfg$postprocess$enable)) steps <- c(steps, "postprocess")
+  if (isTRUE(scfg$extract_rois$enable)) steps <- c(steps, "extract_rois")
+
+  list(
+    steps = steps,
+    postprocess_streams = if ("postprocess" %in% steps) get_postprocess_stream_names(scfg) else character(),
+    extract_streams = if ("extract_rois" %in% steps) get_extract_stream_names(scfg) else character()
+  )
+}
+
+.empty_project_status <- function(scfg) {
+  spec <- .status_spec(scfg)
+  result <- list(sub_id = character(), ses_id = character())
+
+  add_status_columns <- function(prefix) {
+    result[[paste0(prefix, "_complete")]] <<- logical()
+    result[[paste0(prefix, "_time")]] <<- as.POSIXct(character(), tz = "UTC")
+  }
+
+  for (step in setdiff(spec$steps, c("postprocess", "extract_rois"))) {
+    add_status_columns(step)
+  }
+  for (stream in spec$postprocess_streams) add_status_columns(stream)
+  for (stream in spec$extract_streams) add_status_columns(paste0("extract_rois_", stream))
+
+  result <- as.data.frame(result, stringsAsFactors = FALSE)
+  class(result) <- unique(c("bg_status_df", class(result)))
+  result
+}
+
 #' Get processing status for a single subject
 #'
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param sub_id Subject identifier.
 #' @param ses_id Optional session identifier. When `NULL`, all sessions found in the
 #'   subject's directory are returned.
-#' @return A data.frame with columns indicating completion status and times for each enabled step.
+#' @return A data.frame with columns indicating completion status and times for
+#'   each enabled step. ROI-extraction streams use columns named
+#'   `extract_rois_<stream>_complete` and `extract_rois_<stream>_time`, keeping
+#'   them distinct from postprocessing streams with the same name.
 #' @export
 #' @importFrom checkmate assert_class assert_string
 get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
@@ -29,14 +68,10 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
   checkmate::assert_string(sub_id)
   checkmate::assert_string(ses_id, null.ok = TRUE)
 
-  steps <- c()
-  if (isTRUE(scfg$bids_conversion$enable)) steps <- c(steps, "bids_conversion")
-  if (isTRUE(scfg$mriqc$enable)) steps <- c(steps, "mriqc")
-  if (isTRUE(scfg$fmriprep$enable)) steps <- c(steps, "fmriprep")
-  if (isTRUE(scfg$aroma$enable)) steps <- c(steps, "aroma")
-  if (isTRUE(scfg$postprocess$enable)) steps <- c(steps, "postprocess")
-
-  pp_streams <- if ("postprocess" %in% steps) get_postprocess_stream_names(scfg) else character(0)
+  status_spec <- .status_spec(scfg)
+  steps <- status_spec$steps
+  pp_streams <- status_spec$postprocess_streams
+  ex_streams <- status_spec$extract_streams
 
   log_dir <- scfg$metadata$log_directory
   sub_log_dir <- file.path(log_dir, paste0("sub-", sub_id))
@@ -60,18 +95,31 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
   res <- lapply(ses_ids, function(ss) {
     row <- list(sub_id = sub_id, ses_id = ifelse(is.na(ss), NA_character_, ss))
     for (st in steps) {
-      if (st != "postprocess") {
+      if (!st %in% c("postprocess", "extract_rois")) {
         chk <- is_step_complete(scfg, sub_id,
           ses_id = if (st %in% c("bids_conversion") && !is.na(ss)) ss else NULL,
           step_name = st
         )
         row[[paste0(st, "_complete")]] <- chk$complete
         row[[paste0(st, "_time")]] <- if (chk$complete) parse_complete_time(chk$complete_file) else as.POSIXct(NA)
-      } else {
+      } else if (st == "postprocess") {
         for (stream in pp_streams) {
           chk <- is_step_complete(scfg, sub_id, ses_id = if (!is.na(ss)) ss else NULL, step_name = "postprocess", pp_stream = stream)
           row[[paste0(stream, "_complete")]] <- chk$complete
           row[[paste0(stream, "_time")]] <- if (chk$complete) parse_complete_time(chk$complete_file) else as.POSIXct(NA)
+        }
+      } else {
+        for (stream in ex_streams) {
+          chk <- is_step_complete(
+            scfg,
+            sub_id,
+            ses_id = if (!is.na(ss)) ss else NULL,
+            step_name = "extract_rois",
+            ex_stream = stream
+          )
+          column_prefix <- paste0("extract_rois_", stream)
+          row[[paste0(column_prefix, "_complete")]] <- chk$complete
+          row[[paste0(column_prefix, "_time")]] <- if (chk$complete) parse_complete_time(chk$complete_file) else as.POSIXct(NA)
         }
       }
     }
@@ -79,14 +127,18 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
   })
 
   df <- do.call(rbind.data.frame, res)
-  class(df) <- c("bg_status_df", class(df))
+  class(df) <- unique(c("bg_status_df", class(df)))
   df
 }
 
 #' Get processing status for all subjects
 #'
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
-#' @return data.frame with one row per subject/session containing completion status columns.
+#' @return A data.frame with one row per subject/session containing completion
+#'   status columns for every configured stage and stream. When no subjects are
+#'   present, returns a zero-row `bg_status_df` with the same typed columns,
+#'   including character identifiers, logical completion flags, and POSIXct
+#'   completion times.
 #' @export
 #' @importFrom checkmate assert_class
 get_project_status <- function(scfg) {
@@ -94,6 +146,7 @@ get_project_status <- function(scfg) {
   log_dir <- scfg$metadata$log_directory
   sub_dirs <- list.dirs(log_dir, recursive = FALSE, full.names = FALSE)
   sub_ids <- sub("^sub-", "", sub_dirs[grepl("^sub-", sub_dirs)])
+  if (length(sub_ids) == 0L) return(.empty_project_status(scfg))
   res <- lapply(sub_ids, function(id) {
     bids_sub_dir <- file.path(scfg$metadata$bids_directory, paste0("sub-", id))
     ses_dirs <- if (dir.exists(bids_sub_dir)) {
@@ -109,7 +162,7 @@ get_project_status <- function(scfg) {
     }
   })
   df <- do.call(rbind.data.frame, res)
-  class(df) <- c("bg_status_df", class(df))
+  class(df) <- unique(c("bg_status_df", class(df)))
   df
 }
 
@@ -125,4 +178,3 @@ summary.bg_status_df <- function(object, ...) {
   counts <- vapply(step_cols, function(x) sum(object[[x]], na.rm = TRUE), numeric(1))
   data.frame(step = step_cols, n_complete = counts, row.names = NULL, stringsAsFactors = FALSE)
 }
-

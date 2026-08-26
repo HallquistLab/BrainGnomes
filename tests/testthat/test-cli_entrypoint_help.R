@@ -21,6 +21,7 @@ test_that("BrainGnomes --help prints global help", {
   expect_true(any(grepl("^Usage: BrainGnomes <command> \\[options\\]$", res$output)))
   expect_true(any(grepl("^  status <project_directory\\|config\\.yaml> \\[--sub_id=<id>\\] \\[--ses_id=<id>\\] \\[--summary\\]$", res$output)))
   expect_true(any(grepl("Use 'BrainGnomes <command> --help' for command-specific help.", res$output, fixed = TRUE)))
+  expect_false(any(grepl("--steps=.*bids_validation", res$output)))
 })
 
 test_that("BrainGnomes help run_project prints command help", {
@@ -38,6 +39,37 @@ test_that("BrainGnomes run_project --help prints command help", {
   expect_true(any(grepl("^  --debug", res$output)))
   expect_true(any(grepl("^  --force", res$output)))
   expect_true(any(grepl("^  --dry-run", res$output)))
+  expect_true(any(grepl("^  --extract_streams=<streams>", res$output)))
+  expect_true(any(grepl("BIDS validation is configured with the project but submitted separately through run_bids_validation()", res$output, fixed = TRUE)))
+  expect_false(any(grepl("--steps=.*bids_validation", res$output)))
+})
+
+test_that("run_project CLI forwards selected extraction streams", {
+  captured <- NULL
+  cfg <- structure(list(metadata = list(project_name = "cli-test")), class = "bg_project_cfg")
+
+  local_mocked_bindings(
+    load_project = function(input) {
+      expect_identical(input, "/proj/example")
+      cfg
+    },
+    run_project = function(scfg, ...) {
+      captured <<- c(list(scfg = scfg), list(...))
+      TRUE
+    },
+    .package = "BrainGnomes"
+  )
+
+  cli_args <- parse_cli_args(c(
+    "--steps=extract_rois",
+    "--extract_streams=rest task",
+    "--dry-run"
+  ))
+  expect_true(BrainGnomes:::.run_project_cli("/proj/example", cli_args))
+  expect_identical(captured$scfg, cfg)
+  expect_identical(captured$steps, "extract_rois")
+  expect_identical(captured$extract_streams, c("rest", "task"))
+  expect_true(captured$dry_run)
 })
 
 test_that("BrainGnomes status --help prints command help", {

@@ -3,6 +3,9 @@
 \name{remove_nifti_volumes}
 \alias{remove_nifti_volumes}
 \title{Remove Specified Timepoints from a 4D NIfTI Image}
+\usage{
+remove_nifti_volumes(infile, remove_tpts, outfile)
+}
 \arguments{
 \item{infile}{Character string. Path to the input 4D NIfTI file.}
 

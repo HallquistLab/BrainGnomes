@@ -14,6 +14,7 @@ extract_rois(
   mask_file = NULL,
   min_vox_per_roi = 5,
   save_ts = TRUE,
+  save_diagnostics = FALSE,
   rtoz = FALSE,
   overwrite = FALSE
 )
@@ -30,14 +31,17 @@ extract_rois(
 \item{cor_method}{Correlation method(s) to use when computing functional
 connectivity. Supported options include "pearson", "spearman",
 "kendall", and "cor.shrink". Use "none" to skip correlation
-computation. Multiple methods may be supplied.}
+computation. Multiple correlation methods may be supplied, but "none"
+must be used by itself and requires \code{save_ts = TRUE}.}
 
 \item{roi_reduce}{Method used to summarize voxel time series within each
 ROI. Options are "mean" (default), "median", "pca", or "huber".}
 
 \item{mask_file}{Optional path to a mask NIfTI file. Voxels outside of this mask
 are excluded from ROI extraction and connectivity calculation. Note that
-constant and zero voxels are always automatically removed by extract_rois.}
+constant and zero voxels are always automatically removed by extract_rois.
+All positive atlas labels remain in the outputs; fully masked ROIs have
+all-\code{NA} time series and connectivity rows and columns.}
 
 \item{min_vox_per_roi}{Minimum ROI size requirement. Supply a positive integer
 to require at least that many ROI voxels survive masking and are non-zero, or provide
@@ -45,19 +49,30 @@ a proportion (e.g., \code{0.8}) or percentage string (e.g., \verb{80\%}) to requ
 the ROI voxels to remain. ROIs failing this check are set to \code{NA}, preserving
 consistent ROI matrix size. Default: \code{5}.}
 
-\item{save_ts}{If \code{TRUE}, save the ROI time series (aggregated using \code{roi_reduce} method)
-to \verb{_timeseries.tsv}. files. Useful for running external analyses on the ROIs. Default: \code{TRUE}.}
+\item{save_ts}{If \code{TRUE}, save the ROI time series (aggregated using the
+\code{roi_reduce} method) to \verb{_timeseries.tsv} files. Useful for running
+external analyses on the ROIs. Default: \code{TRUE}.}
 
-\item{rtoz}{If \code{TRUE}, using Fisher's z (aka atanh) transformation on correlations to make them
-continuous and unbounded, rather than \verb{[0,1]}. The diagonal of the correlation matrices beccomes
-15 to approximate the 1.0 correlation, rather than making it \code{Inf}.}
+\item{save_diagnostics}{If \code{TRUE}, write a per-ROI voxel-retention table to
+\verb{_roidiagnostics.tsv}. The table distinguishes atlas voxels excluded by an
+optional spatial mask from voxels rejected because their BOLD time series
+are missing, zero, or constant. Default: \code{FALSE}.}
 
-\item{overwrite}{If \code{TRUE}, overwrite existing timeseries.tsv or connectivity.tsv files.}
+\item{rtoz}{If \code{TRUE}, apply Fisher's z (atanh) transformation to
+correlations. Untransformed correlations range from \code{-1} to \code{1}; transformed
+values are unbounded. Fisher transformation would map a diagonal correlation
+of \code{1} to \code{Inf}, so transformed output matrices use \code{NA} on the diagonal.}
+
+\item{overwrite}{If \code{TRUE}, overwrite existing time-series, connectivity,
+or ROI-diagnostics TSV files.}
 }
 \value{
 A named list. Each element corresponds to an atlas and contains
 paths to the written timeseries (\code{timeseries}) and correlation
-matrix (\code{correlation}, or \code{NULL} if not computed).
+matrix (\code{correlation}, or \code{NULL} if not computed), plus the
+voxel-retention table (\code{diagnostics}) when requested. Output ROI
+columns and connectivity dimensions include every positive atlas label,
+including labels with no usable voxels.
 }
 \description{
 Given a postprocessed BOLD NIfTI file and one or more atlas images,

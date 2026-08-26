@@ -3,6 +3,10 @@
 \name{natural_spline_4d}
 \alias{natural_spline_4d}
 \title{Interpolate fMRI Time Series with Cubic Splines in a NIfTI File}
+\usage{
+natural_spline_4d(infile, t_interpolate, edge_nn = FALSE,
+  outfile = "", internal = FALSE)
+}
 \arguments{
 \item{infile}{Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).}
 

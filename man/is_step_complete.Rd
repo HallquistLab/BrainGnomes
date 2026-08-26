@@ -10,6 +10,7 @@ is_step_complete(
   ses_id = NULL,
   step_name,
   pp_stream = NULL,
+  ex_stream = NULL,
   verify_manifest = TRUE
 )
 }
@@ -24,6 +25,9 @@ is_step_complete(
 
 \item{pp_stream}{Name of the postprocessing stream when \code{step_name} is
 "postprocess"}
+
+\item{ex_stream}{Name of the ROI-extraction stream when \code{step_name} is
+"extract_rois"}
 
 \item{verify_manifest}{Logical. If TRUE and a manifest exists in the database,
 verify that output files still exist and match (default TRUE).}

@@ -33,6 +33,7 @@ ncores=${PBS_NP:-1}
 [ ! -r "$extract_rscript" ] && echo "extract_rscript $extract_rscript not readable. Exiting" && exit 1
 [ -z "$log_file" ] && echo "log_file not set. Exiting" && exit 1
 [ -z "$R_HOME" ] && echo "R_HOME not set. Exiting" && exit 1
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting" && exit 1
 
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
@@ -61,6 +62,9 @@ else
   debug_pipeline=0
 fi
 
+output_manifest_file="${complete_file%_complete}_outputs.json"
+[[ $debug_pipeline -eq 0 ]] && rm -f "$output_manifest_file"
+
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
@@ -71,13 +75,23 @@ log_message INFO Starting ROI extraction for subject $sub_id in $out_dir with me
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
 
-rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$extract_rscript" $extract_cli &
+rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$extract_rscript" $extract_cli --output_manifest_file "$output_manifest_file" &
 cmd_pid=$!
 run_bg_and_wait "$cmd_pid" cmd_status
 
+if [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 && ! -s "$output_manifest_file" ]]; then
+  log_message ERROR "ROI extraction did not create its output manifest: $output_manifest_file"
+  cmd_status=1
+fi
+
 if [[ $cmd_status -eq 0 ]]; then
   cleanup_fail_marker "$complete_file"
-  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  if [[ $debug_pipeline -eq 0 ]]; then
+    "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_manifest_file "$output_manifest_file"
+  else
+    "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  fi
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
   log_message INFO Finished ROI extraction for subject $sub_id "(time elapsed: $(time_elapsed))"
 else
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade

@@ -126,3 +126,89 @@ test_that("run_project interactive mode prompts for dry run and honors selection
   expect_true(any(grepl("Run as dry run\\?", prompt_calls)))
   expect_true(isTRUE(submit_dry_run))
 })
+
+test_that("run_project dry_run prints resolved stream settings", {
+  root <- tempfile("run_project_stream_plan_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  scfg <- list(
+    metadata = list(
+      project_name = "stream_plan_project",
+      project_directory = root,
+      dicom_directory = file.path(root, "dicom"),
+      bids_directory = file.path(root, "bids"),
+      fmriprep_directory = file.path(root, "fmriprep"),
+      postproc_directory = file.path(root, "postproc"),
+      rois_directory = file.path(root, "rois"),
+      mriqc_directory = file.path(root, "mriqc"),
+      log_directory = file.path(root, "logs"),
+      scratch_directory = file.path(root, "scratch")
+    ),
+    flywheel_sync = list(enable = FALSE),
+    bids_conversion = list(enable = FALSE),
+    mriqc = list(enable = FALSE),
+    fmriprep = list(enable = FALSE),
+    aroma = list(enable = FALSE),
+    postprocess = list(
+      enable = TRUE,
+      clean = list(
+        input_regex = "space:MNI152NLin2009cAsym desc:preproc suffix:bold",
+        bids_desc = "clean",
+        apply_mask = list(enable = TRUE, mask_file = "template"),
+        spatial_smooth = list(enable = TRUE),
+        intensity_normalize = list(enable = FALSE),
+        apply_aroma = list(enable = FALSE),
+        scrubbing = list(enable = FALSE),
+        temporal_filter = list(enable = TRUE),
+        confound_regression = list(enable = FALSE),
+        overwrite = FALSE
+      )
+    ),
+    extract_rois = list(
+      enable = TRUE,
+      networks = list(
+        input_streams = "clean",
+        atlases = c("/atlases/network.nii.gz", "/atlases/subcortex.nii.gz"),
+        mask_file = "/masks/group-mask.nii.gz",
+        roi_reduce = "median",
+        correlation = list(method = c("pearson", "cor.shrink")),
+        min_vox_per_roi = "80%",
+        save_ts = FALSE,
+        save_diagnostics = TRUE,
+        rtoz = TRUE,
+        overwrite = FALSE
+      )
+    ),
+    compute_environment = list(
+      scheduler = "slurm",
+      fsl_container = file.path(root, "fsl.sif")
+    )
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  local_mocked_bindings(
+    setup_project_directories = function(scfg, check_cache = NULL) scfg,
+    validate_exists = function(...) TRUE,
+    submit_subjects = function(...) invisible(TRUE),
+    .package = "BrainGnomes"
+  )
+
+  output <- capture.output(run_project(
+    scfg,
+    steps = c("postprocess", "extract_rois"),
+    dry_run = TRUE
+  ))
+  output <- paste(output, collapse = "\n")
+
+  expect_match(output, "Resolved postprocess plan:", fixed = TRUE)
+  expect_match(output, "processing order: apply_mask, spatial_smooth, temporal_filter", fixed = TRUE)
+  expect_match(output, "Resolved extraction plan:", fixed = TRUE)
+  expect_match(output, "clean [space:MNI152NLin2009cAsym desc:preproc suffix:bold -> desc:clean]", fixed = TRUE)
+  expect_match(output, "atlases: /atlases/network.nii.gz, /atlases/subcortex.nii.gz", fixed = TRUE)
+  expect_match(output, "correlation methods: pearson, cor.shrink", fixed = TRUE)
+  expect_match(output, "minimum voxels per ROI: 80%", fixed = TRUE)
+  expect_match(output, "save time series: false", fixed = TRUE)
+  expect_match(output, "save ROI diagnostics: true", fixed = TRUE)
+  expect_match(output, paste0("output root: ", file.path(root, "rois")), fixed = TRUE)
+})

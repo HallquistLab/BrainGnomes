@@ -3,8 +3,13 @@
 \name{automask}
 \alias{automask}
 \title{Create an automatic brain mask from a NIfTI image (Rcpp implementation)}
+\usage{
+automask(img, outfile = "", clfrac = 0.5, NN = 2L,
+  erode_steps = 0L, dilate_steps = 0L, SIhh = 0, peels = 1L,
+  fill_holes = TRUE)
+}
 \arguments{
-\item{image}{A \code{RNifti::NiftiImage} object containing a 3D or 4D volume or
+\item{img}{A \code{RNifti::NiftiImage} object containing a 3D or 4D volume or
 file path to a NIfTI object whose mask should be calculated}
 
 \item{outfile}{Optional file path where the resulting mask should be saved as
@@ -70,7 +75,7 @@ surviving component.
 \dontrun{
   library(RNifti)
   nii <- readNifti("sub-01_task-rest_bold.nii.gz")
-  mask <- automask_rcpp(nii, outfile = "sub-01_mask.nii.gz")
+  mask <- automask(nii, outfile = "sub-01_mask.nii.gz")
 }
 
 }

@@ -35,7 +35,10 @@
 //' it is preserved. If \code{add_intercept = TRUE}, an intercept column will be added (if not present).
 //'
 //' @name lmfit_residuals_4d
-//'
+//' @usage lmfit_residuals_4d(infile, X, include_rows = NULL,
+//'   add_intercept = FALSE, outfile = "", internal = FALSE,
+//'   preserve_mean = FALSE, set_mean = 0, regress_cols = NULL,
+//'   exclusive = FALSE)
 //' @param infile Path to a 4D NIfTI image file to denoise (e.g., functional data).
 //' @param X A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 //'          Typically includes motion parameters, physiological noise, etc.

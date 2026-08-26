@@ -4,21 +4,31 @@
 \alias{capture_output_manifest}
 \title{Capture output manifest for a completed step}
 \usage{
-capture_output_manifest(output_dir, recursive = TRUE, pattern = NULL)
+capture_output_manifest(
+  output_dir,
+  recursive = TRUE,
+  pattern = NULL,
+  files = NULL
+)
 }
 \arguments{
-\item{output_dir}{Directory to scan for output files}
+\item{output_dir}{Root directory used to locate and verify output files.}
 
 \item{recursive}{Scan subdirectories (default TRUE)}
 
-\item{pattern}{Optional regex pattern to filter files}
+\item{pattern}{Optional regex pattern to filter files.}
+
+\item{files}{Optional character vector of exact output files to record. When
+supplied, only these files are included and they must exist beneath
+\code{output_dir}. This is useful when several jobs share an output directory.}
 }
 \value{
 JSON string containing the manifest, or NULL if directory doesn't exist
 }
 \description{
-Scans an output directory and creates a JSON manifest containing file paths,
-sizes, and modification times. This manifest can be stored in the job tracking
-database and later used to verify that outputs remain intact.
+Creates a JSON manifest containing output file paths, sizes, and modification
+times. By default all files beneath \code{output_dir} are scanned; \code{files} can
+instead identify an exact job-specific subset. The manifest can be stored in
+the job tracking database and later used to verify that outputs remain intact.
 }
 \keyword{internal}

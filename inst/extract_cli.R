@@ -58,6 +58,18 @@ if (!is.null(cli_args$config_yaml)) {
 # Now add additional command line arguments to cfg -- this leads any settings in YAML to be overridden by the same CLI arguments
 cfg <- modifyList(cfg, cli_args)
 
+nested_cor_method <- cfg$correlation$method
+legacy_cor_method <- cfg$cor_method
+if (!is.null(nested_cor_method) && !is.null(legacy_cor_method) &&
+    !identical(nested_cor_method, legacy_cor_method)) {
+  stop("Conflicting correlation methods configured in correlation/method and cor_method.")
+}
+
+cor_method <- if (!is.null(nested_cor_method)) nested_cor_method else legacy_cor_method
+if (is.null(cor_method)) {
+  stop("A correlation method must be configured in correlation/method or cor_method.")
+}
+
 if (!checkmate::test_string(cfg$input)) stop("A valid --input must be provided pointing either to a folder with data to postprocess or to a single 4D NIfTI file")
 
 # Require
@@ -94,19 +106,66 @@ if (any(!a_exists)) {
 arg_list <- list(
   atlas_files = atlases, # extract_rois loops over these
   out_dir = cfg$out_dir,
-  cor_method = cfg$cor_method,
+  cor_method = cor_method,
   roi_reduce = cfg$roi_reduce,
   mask_file = cfg$mask_file,
   min_vox_per_roi = cfg$min_vox_per_roi,
+  save_ts = if (is.null(cfg$save_ts)) TRUE else cfg$save_ts,
+  save_diagnostics = if (is.null(cfg$save_diagnostics)) FALSE else cfg$save_diagnostics,
   rtoz = cfg$rtoz,
   log_file = log_file,
   overwrite = isTRUE(cfg$overwrite)
 )
 
+output_files <- character()
 for (i in input_files) {
   arg_list$bold_file <- i
-  do.call(BrainGnomes::extract_rois, arg_list)
+  result <- do.call(BrainGnomes::extract_rois, arg_list)
+  result_files <- unname(unlist(result, recursive = TRUE, use.names = FALSE))
+  if (length(result_files) > 0L) {
+    result_files <- as.character(result_files)
+    output_files <- c(
+      output_files,
+      result_files[!is.na(result_files) & nzchar(result_files)]
+    )
+  }
+}
+
+if (!is.null(cfg$output_manifest_file)) {
+  checkmate::assert_string(cfg$output_manifest_file)
+  output_files <- sort(unique(output_files))
+  if (length(output_files) == 0L) {
+    stop("ROI extraction completed without producing any files to record.")
+  }
+  if (any(!file.exists(output_files))) {
+    stop(
+      "ROI extraction did not produce every reported output: ",
+      paste(output_files[!file.exists(output_files)], collapse = ", ")
+    )
+  }
+
+  manifest_json <- BrainGnomes:::capture_output_manifest(
+    cfg$out_dir,
+    files = output_files
+  )
+  manifest_dir <- dirname(cfg$output_manifest_file)
+  if (!dir.exists(manifest_dir)) {
+    stop("Output manifest directory does not exist: ", manifest_dir)
+  }
+  write_manifest <- function(manifest_json, manifest_file) {
+    manifest_tmp <- tempfile(
+      pattern = paste0(".", basename(manifest_file), "-"),
+      tmpdir = dirname(manifest_file)
+    )
+    on.exit(unlink(manifest_tmp, force = TRUE), add = TRUE)
+    writeLines(manifest_json, manifest_tmp, useBytes = TRUE)
+    if (file.exists(manifest_file)) unlink(manifest_file, force = TRUE)
+    if (!file.rename(manifest_tmp, manifest_file)) {
+      stop("Could not atomically install output manifest: ", manifest_file)
+    }
+  }
+  write_manifest(manifest_json, cfg$output_manifest_file)
 }
 
 # cat("Processing completed. Output files: \n")
-# print(out_files)
+# print(output_files)

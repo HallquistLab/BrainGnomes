@@ -24,9 +24,9 @@ must complete before this validation job starts.}
 The job id returned by the scheduler.
 }
 \description{
-This helper submits the BIDS validator as a standalone job. It does not run as part
-of \code{run_project()} and can be invoked whenever validation of the project
-BIDS directory is desired.
+BIDS validation is configured with the project but submitted separately
+through this function. It is not a \code{run_project()} stage and can be
+invoked whenever validation of the project BIDS directory is desired.
 }
 \examples{
 \dontrun{

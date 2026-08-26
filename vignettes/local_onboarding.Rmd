@@ -1,0 +1,134 @@
+---
+title: "Local onboarding and prerequisites"
+author: "Michael Hallquist"
+date: "25 Aug 2026"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Local onboarding and prerequisites}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+# What works without a cluster?
+
+BrainGnomes can be installed and loaded on an ordinary computer. Configuration
+inspection, BIDS filename utilities, status-table handling, and native image
+helpers do not submit jobs and do not require SLURM, TORQUE/PBS, or a container
+runtime. Full project execution is different: `run_project()` coordinates HPC
+jobs and therefore requires a supported scheduler, shared storage, and the
+external software for every selected stage.
+
+This walkthrough is evaluated when the vignette is built. It provides a first
+successful task without assuming access to study data or a cluster.
+
+```{r setup}
+library(BrainGnomes)
+```
+
+# Inspect the installed example configuration
+
+The package includes a miniature YAML configuration whose stages are disabled
+and whose paths are explicit placeholders. Load it with `validate = FALSE` for
+inspection only; validation is deliberately deferred because the placeholder
+paths do not exist.
+
+```{r inspect-config}
+example_config_file <- system.file(
+  "extdata", "example_project_config.yaml",
+  package = "BrainGnomes"
+)
+stopifnot(nzchar(example_config_file))
+
+example_config <- load_project(example_config_file, validate = FALSE)
+c(
+  project_name = example_config$metadata$project_name,
+  scheduler = example_config$compute_environment$scheduler
+)
+
+stage_names <- c(
+  "flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma",
+  "postprocess", "extract_rois"
+)
+vapply(stage_names, function(stage) isTRUE(example_config[[stage]]$enable), logical(1))
+```
+
+Copy this file before adapting it:
+
+```{r copy-config, eval=FALSE}
+file.copy(example_config_file, "project_config.yaml")
+scfg <- load_project("project_config.yaml", validate = FALSE)
+scfg <- edit_project(scfg)
+```
+
+Do not submit the unchanged example: its `/path/to/...` values are not real.
+Interactive `setup_project()` remains the recommended way to create a complete
+configuration because it records only the stages and resources you choose.
+
+# Exercise BIDS filename handling locally
+
+These helpers operate on names and require neither image data nor external
+software:
+
+```{r bids-roundtrip}
+filenames <- c(
+  "sub-01_task-rest_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz",
+  "sub-02_ses-A_task-nback_run-2_bold.nii.gz"
+)
+bids_info <- extract_bids_info(filenames, drop_unused = TRUE)
+bids_info
+stopifnot(identical(construct_bids_filename(bids_info), filenames))
+```
+
+# Exercise a native image helper locally
+
+`image_quantile()` is compiled with the package but does not invoke a scheduler
+or container. Here it reads a tiny synthetic NIfTI image:
+
+```{r local-image}
+image_file <- tempfile(fileext = ".nii.gz")
+RNifti::writeNifti(
+  RNifti::asNifti(array(1:27, dim = c(3, 3, 3))),
+  image_file
+)
+image_quantile(image_file, quantiles = c(0.25, 0.5, 0.75))
+unlink(image_file)
+```
+
+# Understand dry runs
+
+Once a real configuration exists, a dry run validates accessible paths and
+selected stage resources, resolves stream settings, and reports planned
+subject/session work without submitting jobs:
+
+```{r dry-run, eval=FALSE}
+scfg <- load_project("/real/project/project_config.yaml")
+run_project(
+  scfg,
+  steps = c("postprocess", "extract_rois"),
+  dry_run = TRUE
+)
+```
+
+A dry run is submission-free, but it is not a substitute for configuration:
+the selected stages still need real directories, inputs, containers, and other
+required files so that validation can describe a trustworthy plan.
+
+# Stage-specific prerequisites
+
+| Stage | External runtime and inputs |
+|---|---|
+| Flywheel synchronization | Flywheel `fw` CLI and account access |
+| DICOM-to-BIDS conversion | HeuDiConv container, DICOM inputs, and Python heuristic |
+| BIDS validation | BIDS validator; configured with the project and submitted separately through `run_bids_validation()` |
+| MRIQC | MRIQC container |
+| fMRIPrep | fMRIPrep container, BIDS inputs, TemplateFlow cache, and FreeSurfer license |
+| ICA-AROMA | fMRIPost-AROMA container |
+| Postprocessing | FSL container; Python with `nibabel`, `nilearn`, and `templateflow` when template masks must be resampled |
+| ROI extraction | Postprocessed BOLD inputs and compatible atlas/mask NIfTI files |
+
+Every project-managed stage additionally requires SLURM or TORQUE/PBS, Bash,
+shared writable storage, and site-appropriate scheduler settings. BrainGnomes
+batch scripts invoke `singularity`; Apptainer is suitable when it supplies the
+compatible `singularity` command.

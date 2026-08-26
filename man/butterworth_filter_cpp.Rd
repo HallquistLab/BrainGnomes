@@ -31,7 +31,8 @@ butterworth_filter_cpp(
 
 \item{use_zi}{Logical. Whether to use steady-state initial conditions (default = true).}
 
-\item{demean}{Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove}
+\item{demean}{Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove
+DC (mean) component (default = true).}
 }
 \value{
 A 4D filtered NIfTI image as a niftiImage or internalImage object.

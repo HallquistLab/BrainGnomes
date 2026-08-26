@@ -222,6 +222,8 @@ void demean_vec(std::vector<double> &ts) {
 //' including optional initial condition handling via steady-state initialization.
 //'
 //' @name filtfilt_cpp
+//' @usage filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
+//'   use_zi = TRUE)
 //' @param x A numeric vector representing the input time series.
 //' @param b A numeric vector of numerator (feedforward) filter coefficients.
 //' @param a A numeric vector of denominator (feedback) filter coefficients. Must have `a[0] == 1.0`.
@@ -269,7 +271,7 @@ NumericVector filtfilt_cpp(NumericVector x, NumericVector b, NumericVector a,
 //' @param padtype String. Padding type: "even", "odd", "constant", or "zero" (default = "even").
 //' @param use_zi Logical. Whether to use steady-state initial conditions (default = true).
 //' @param demean Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove 
-//     DC (mean) component (default = true).
+//'   DC (mean) component (default = true).
 //'
 //' @return A 4D filtered NIfTI image as a niftiImage or internalImage object.
 //'

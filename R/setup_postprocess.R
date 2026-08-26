@@ -1682,40 +1682,61 @@ setup_apply_aroma <- function(ppcfg = list(), fields = NULL) {
 
 
 
-#' List postprocessed output files for a stream based on its input spec
+#' List postprocessed output files for paired input specifications
 #'
-#' Converts a postprocess input specification into a pattern that targets
-#' postprocessed outputs by ensuring the `desc` entity matches `bids_desc`.
+#' Converts postprocess input specifications into patterns that target
+#' postprocessed outputs by ensuring each `desc` entity matches its corresponding
+#' `bids_desc`.
 #'
 #' @param input_dir Directory containing postprocessed outputs.
-#' @param input_regex Specification used to match the input files for the stream.
-#'   May be a space-separated set of BIDS entities or a regex prefixed with "regex:".
-#' @param bids_desc The `desc` value used for postprocessed outputs.
+#' @param input_regex One or more specifications used to match the input files.
+#'   Each may be a space-separated set of BIDS entities or a regex prefixed with
+#'   `"regex:"`.
+#' @param bids_desc One `desc` value to apply to every `input_regex`, or a vector
+#'   with the same length as `input_regex`. Equal-length vectors are paired by
+#'   position; they are not combined as a cross-product.
 #'
-#' @return A character vector of full paths to matching postprocessed outputs.
+#' @return A character vector of unique full paths to matching postprocessed
+#'   outputs.
+#'
+#' @details A scalar `bids_desc` is recycled for backward compatibility. Any
+#'   other length mismatch is rejected because it would make the association
+#'   between an input specification and its postprocessing stream ambiguous.
 #' @export
 get_postproc_output_files <- function(input_dir, input_regex, bids_desc) {
   checkmate::assert_directory_exists(input_dir)
   if (is.null(input_regex)) input_regex <- "desc:preproc suffix:bold"
-  checkmate::assert_character(input_regex, min.len = 1L)
-  checkmate::assert_string(bids_desc)
+  checkmate::assert_character(input_regex, min.len = 1L, any.missing = FALSE)
+  checkmate::assert_character(bids_desc, min.len = 1L, any.missing = FALSE)
 
-  resolve_spec <- function(spec) {
+  if (length(bids_desc) == 1L) {
+    bids_desc <- rep(bids_desc, length(input_regex))
+  } else if (length(bids_desc) != length(input_regex)) {
+    stop(
+      "bids_desc must have length 1 or the same length as input_regex ",
+      "so that input specifications and descriptions can be paired.",
+      call. = FALSE
+    )
+  }
+
+  resolve_spec <- function(spec, desc) {
     spec <- trimws(spec)
     if (grepl("^regex:", spec)) {
       return(trimws(sub("^regex\\s*:", "", spec)))
     }
 
     if (grepl("\\bdesc:", spec)) {
-      spec <- sub("\\bdesc:[^[:space:]]+", paste0("desc:", bids_desc), spec)
+      spec <- sub("\\bdesc:[^[:space:]]+", paste0("desc:", desc), spec)
     } else {
-      spec <- paste(spec, paste0("desc:", bids_desc))
+      spec <- paste(spec, paste0("desc:", desc))
     }
 
     construct_bids_regex(spec)
   }
 
-  patterns <- vapply(input_regex, resolve_spec, character(1))
+  patterns <- vapply(seq_along(input_regex), function(i) {
+    resolve_spec(input_regex[[i]], bids_desc[[i]])
+  }, character(1))
   files <- unlist(lapply(patterns, function(pat) {
     list.files(path = input_dir, pattern = pat, recursive = TRUE, full.names = TRUE)
   }), use.names = FALSE)

@@ -16,10 +16,14 @@ using namespace Rcpp;
 //' and/or excludes zero-valued voxels. For 4D images, the function pools over all timepoints.
 //'
 //' @name image_quantile
+//' @usage image_quantile(in_file, brain_mask = NULL,
+//'   quantiles = as.numeric(c(0.5)), exclude_zero = FALSE)
 //' @param in_file Path to the input 3D or 4D NIfTI image (.nii or .nii.gz).
 //' @param brain_mask Optional path to a 3D NIfTI image used as a brain mask. Voxels with values > 0.001 are retained.
 //'                  The mask must have the same spatial dimensions as the input image. If \code{R_NilValue}, no mask is used.
-//' @param quantiles A numeric vector of probabilities in `[0, 1]` specifying which quantiles to compute (e.g., 0.5 for the median).
+//' @param quantiles A non-empty numeric vector of finite, non-missing
+//'   probabilities in `[0, 1]` specifying which quantiles to compute (e.g., 0.5
+//'   for the median). `NA`, `NaN`, `Inf`, and `-Inf` are rejected.
 //' @param exclude_zero If \code{true}, zero-valued voxels in the image will be excluded from the quantile calculation.
 //'
 //' @return A named numeric vector of quantiles. Names are formatted as percentage strings (e.g., "50.00%").
@@ -32,7 +36,7 @@ using namespace Rcpp;
 //' @examples
 //' \dontrun{
 //' # Compute the median
-//' image_quantile("bold.nii.gz", 0.5)
+//' image_quantile("bold.nii.gz", quantiles = 0.5)
 //'
 //' # With masking and zero exclusion
 //' image_quantile("bold.nii.gz", "mask.nii.gz", c(0.25, 0.5, 0.75), exclude_zero=TRUE)
@@ -46,9 +50,22 @@ NumericVector image_quantile(std::string in_file,
                              NumericVector quantiles = NumericVector::create(0.5),
                              bool exclude_zero = false) {
   
-  // validate quantile specification between 0 and 1
+  if (quantiles.size() == 0) {
+    stop("quantiles must contain at least one probability.");
+  }
+
+  // Validate missing/non-finite values before range checks and image I/O so
+  // callers receive an error about the argument itself.
   for (R_xlen_t i = 0; i < quantiles.size(); ++i) {
-    if (quantiles[i] > 1.0 || quantiles[i] < 0.0) stop("All quantiles must be between 0 and 1.");
+    const double probability = quantiles[i];
+    if (R_IsNA(probability)) stop("quantiles must not contain NA values.");
+    if (R_IsNaN(probability)) stop("quantiles must not contain NaN values.");
+    if (!std::isfinite(probability)) {
+      stop("quantiles must contain only finite values; Inf and -Inf are not allowed.");
+    }
+    if (probability > 1.0 || probability < 0.0) {
+      stop("All quantiles must be between 0 and 1.");
+    }
   }
   
   // read image
@@ -153,4 +170,3 @@ NumericVector image_quantile(std::string in_file,
   result.attr("names") = result_names;
   return result;
 }
-

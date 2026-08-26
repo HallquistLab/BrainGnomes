@@ -91,6 +91,7 @@ std::vector<double> natural_spline_interp(const std::vector<double>& x, const st
 //' Cubic spline interpolation with natural spline and linear extrapolation
 //' 
 //' @name natural_spline_interp
+//' @usage natural_spline_interp(x, y, xout)
 //' @description Performs natural cubic spline interpolation for given input values.
 //' This function takes known data points `(x, y)` and evaluates the cubic spline
 //' interpolation at specified output points `xout`. It uses a natural spline

@@ -15,44 +15,68 @@
 #' @param cor_method Correlation method(s) to use when computing functional
 #'   connectivity. Supported options include "pearson", "spearman",
 #'   "kendall", and "cor.shrink". Use "none" to skip correlation
-#'   computation. Multiple methods may be supplied.
+#'   computation. Multiple correlation methods may be supplied, but "none"
+#'   must be used by itself and requires `save_ts = TRUE`.
 #' @param roi_reduce Method used to summarize voxel time series within each
 #'   ROI. Options are "mean" (default), "median", "pca", or "huber".
 #' @param mask_file Optional path to a mask NIfTI file. Voxels outside of this mask
 #'   are excluded from ROI extraction and connectivity calculation. Note that
 #'   constant and zero voxels are always automatically removed by extract_rois.
+#'   All positive atlas labels remain in the outputs; fully masked ROIs have
+#'   all-`NA` time series and connectivity rows and columns.
 #' @param min_vox_per_roi Minimum ROI size requirement. Supply a positive integer
 #'   to require at least that many ROI voxels survive masking and are non-zero, or provide 
 #'   a proportion (e.g., `0.8`) or percentage string (e.g., `80%`) to require that fraction of
 #'   the ROI voxels to remain. ROIs failing this check are set to `NA`, preserving
 #'   consistent ROI matrix size. Default: `5`.
-#' @param save_ts If `TRUE`, save the ROI time series (aggregated using `roi_reduce` method)
-#'   to `_timeseries.tsv`. files. Useful for running external analyses on the ROIs. Default: `TRUE`.
-#' @param rtoz If `TRUE`, using Fisher's z (aka atanh) transformation on correlations to make them
-#'   continuous and unbounded, rather than `[0,1]`. The diagonal of the correlation matrices beccomes
-#'   15 to approximate the 1.0 correlation, rather than making it `Inf`.
-#' @param overwrite If `TRUE`, overwrite existing timeseries.tsv or connectivity.tsv files.
+#' @param save_ts If `TRUE`, save the ROI time series (aggregated using the
+#'   `roi_reduce` method) to `_timeseries.tsv` files. Useful for running
+#'   external analyses on the ROIs. Default: `TRUE`.
+#' @param save_diagnostics If `TRUE`, write a per-ROI voxel-retention table to
+#'   `_roidiagnostics.tsv`. The table distinguishes atlas voxels excluded by an
+#'   optional spatial mask from voxels rejected because their BOLD time series
+#'   are missing, zero, or constant. Default: `FALSE`.
+#' @param rtoz If `TRUE`, apply Fisher's z (atanh) transformation to
+#'   correlations. Untransformed correlations range from `-1` to `1`; transformed
+#'   values are unbounded. Fisher transformation would map a diagonal correlation
+#'   of `1` to `Inf`, so transformed output matrices use `NA` on the diagonal.
+#' @param overwrite If `TRUE`, overwrite existing time-series, connectivity,
+#'   or ROI-diagnostics TSV files.
 #' 
 #' @return A named list. Each element corresponds to an atlas and contains
 #'   paths to the written timeseries (\code{timeseries}) and correlation
-#'   matrix (\code{correlation}, or \code{NULL} if not computed).
+#'   matrix (\code{correlation}, or \code{NULL} if not computed), plus the
+#'   voxel-retention table (\code{diagnostics}) when requested. Output ROI
+#'   columns and connectivity dimensions include every positive atlas label,
+#'   including labels with no usable voxels.
 #' @importFrom checkmate assert_file_exists assert_character assert_directory_exists assert_flag
 #' @export
 extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
                          cor_method = c("pearson", "spearman", "kendall", "cor.shrink"),
                          roi_reduce = c("mean", "median", "pca", "huber"),
-                         mask_file = NULL, min_vox_per_roi = 5, save_ts = TRUE, rtoz = FALSE,
-                         overwrite = FALSE) {
+                         mask_file = NULL, min_vox_per_roi = 5, save_ts = TRUE,
+                         save_diagnostics = FALSE, rtoz = FALSE, overwrite = FALSE) {
   checkmate::assert_file_exists(bold_file)
   checkmate::assert_character(atlas_files, any.missing = FALSE, min.len = 1)
   checkmate::assert_directory_exists(out_dir, access = "w")
-  cor_method <- match.arg(cor_method, several.ok = TRUE)
+  if ("none" %in% cor_method) {
+    if (length(cor_method) != 1L) {
+      stop("'none' cannot be combined with correlation methods.", call. = FALSE)
+    }
+    cor_method <- NULL
+  } else {
+    cor_method <- match.arg(cor_method, several.ok = TRUE)
+  }
   roi_reduce <- match.arg(roi_reduce)
   checkmate::assert_string(mask_file, null.ok = TRUE, na.ok = TRUE)
   if (isTRUE(is.na(mask_file[1L]))) mask_file <- NULL
 
   min_vox_spec <- parse_min_vox_per_roi(min_vox_per_roi)
   checkmate::assert_flag(save_ts)
+  checkmate::assert_flag(save_diagnostics)
+  if (is.null(cor_method) && !save_ts) {
+    stop("cor_method = 'none' requires save_ts = TRUE.", call. = FALSE)
+  }
   checkmate::assert_flag(rtoz)
   checkmate::assert_flag(overwrite)
 
@@ -71,13 +95,15 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
 
   # Start with BOLD-derived mask that drops constant voxels or those with NAs.
   # Use the !all(zero) to screen out 0 voxels because is it faster than computing the variance
-  mask_vec <- apply(mat, 1L, function(v) {
+  bold_valid_vec <- apply(mat, 1L, function(v) {
     var_ts <- stats::var(v)
     !anyNA(v) && # no NAs
       !all(abs(v) < 2 * .Machine$double.eps) && # not all zero
       !is.na(var_ts) && # variance is defined
       var_ts > 2 * .Machine$double.eps # variance is positive
   })
+
+  provided_mask_vec <- rep(TRUE, length(bold_valid_vec))
 
   # Handle user-specified mask, if provided
   if (!is.null(mask_file)) {
@@ -93,14 +119,14 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
     }
 
     provided_mask_vec <- as.vector(mask_img > 0)
-    if (length(provided_mask_vec) != length(mask_vec)) {
-      to_log(lg, "fatal", "Mask voxel count ({length(provided_mask_vec)}) does not match BOLD grid ({length(mask_vec)})")
+    if (length(provided_mask_vec) != length(bold_valid_vec)) {
+      to_log(lg, "fatal", "Mask voxel count ({length(provided_mask_vec)}) does not match BOLD grid ({length(bold_valid_vec)})")
     }
-
-    # intersect mask file with internal automask (for 0/constant voxels)
-    mask_vec <- mask_vec & provided_mask_vec
   }
 
+  provided_mask_vec[is.na(provided_mask_vec)] <- FALSE
+  provided_mask_vec <- as.logical(provided_mask_vec)
+  mask_vec <- bold_valid_vec & provided_mask_vec
   mask_vec[is.na(mask_vec)] <- FALSE
   mask_vec <- as.logical(mask_vec)
 
@@ -122,6 +148,33 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
 
         ts_bids <- modifyList(bids_info, list(rois = bids_camelcase(atlas_label), suffix = "timeseries", ext = ".tsv"))
         ts_file <- file.path(out_dir_atlas, construct_bids_filename(ts_bids, full.names = FALSE))
+        diagnostics_file <- NULL
+        if (isTRUE(save_diagnostics)) {
+          diagnostics_bids <- modifyList(bids_info, list(
+            rois = bids_camelcase(atlas_label), suffix = "roidiagnostics", ext = ".tsv"
+          ))
+          diagnostics_file <- file.path(
+            out_dir_atlas,
+            construct_bids_filename(diagnostics_bids, full.names = FALSE)
+          )
+        }
+
+        cor_paths <- NULL
+        if (compute_correlation) {
+          cor_paths <- vapply(cor_method, function(cmeth) {
+            cor_entity <- bids_camelcase(cmeth)
+            cor_bids <- modifyList(bids_info, list(
+              rois = bids_camelcase(atlas_label), correlation = cor_entity,
+              suffix = "connectivity", ext = ".tsv"
+            ))
+            file.path(out_dir_atlas, construct_bids_filename(cor_bids, full.names = FALSE))
+          }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+
+          if (anyDuplicated(cor_paths)) {
+            stop("Correlation methods must produce unique output paths.", call. = FALSE)
+          }
+          names(cor_paths) <- cor_method
+        }
 
         if (!identical(dim(atlas_img)[1:3], dim_img[1:3])) {
           to_log(lg, "fatal", "Atlas '{atlas_path}' spatial dimensions {paste(dim(atlas_img)[1:3], collapse = 'x')}\n           do not match BOLD grid {paste(dim_img[1:3], collapse = 'x')}.\n           Resample atlas or BOLD to a common grid.")
@@ -130,15 +183,71 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
         atlas_vec <- as.vector(atlas_img)
 
         if (!checkmate::test_integerish(atlas_vec, tol = 1e-6)) stop("Atlas ", atlas_path, " contains non-integer labels (outside tolerance).")
-        roi_vals <- sort(unique(atlas_vec[atlas_vec > 0 & mask_vec]))
+        roi_vals <- sort(unique(atlas_vec[atlas_vec > 0]))
+        if (length(roi_vals) == 0L) {
+          stop("Atlas '", atlas_path, "' contains no positive ROI labels.", call. = FALSE)
+        }
+        roi_names <- paste0("roi", roi_vals)
 
-        ts_mat <- sapply(roi_vals, function(lbl) {
-          roi_voxels <- sum(atlas_vec == lbl)
-          required_vox <- compute_min_vox_required(min_vox_spec, roi_voxels)
-          roi_idx <- which((atlas_vec == lbl) & mask_vec)
+        roi_index_vec <- match(atlas_vec, roi_vals, nomatch = 0L)
+        n_rois <- length(roi_vals)
+        n_vox_atlas <- tabulate(roi_index_vec, nbins = n_rois)
+        n_vox_in_mask <- tabulate(
+          roi_index_vec[provided_mask_vec],
+          nbins = n_rois
+        )
+        n_vox_usable <- tabulate(roi_index_vec[mask_vec], nbins = n_rois)
+        min_vox_required <- vapply(n_vox_atlas, function(n_vox) {
+          compute_min_vox_required(min_vox_spec, n_vox)
+        }, integer(1))
+        retained <- n_vox_usable >= min_vox_required
+        exclusion_reason <- ifelse(
+          retained,
+          NA_character_,
+          ifelse(
+            n_vox_in_mask == 0L,
+            "outside_mask",
+            ifelse(n_vox_usable == 0L, "invalid_bold", "below_threshold")
+          )
+        )
+        diagnostics <- data.frame(
+          roi = roi_names,
+          atlas_value = roi_vals,
+          n_vox_atlas = n_vox_atlas,
+          n_vox_in_mask = n_vox_in_mask,
+          n_vox_usable = n_vox_usable,
+          min_vox_required = min_vox_required,
+          proportion_in_mask = n_vox_in_mask / n_vox_atlas,
+          proportion_usable = n_vox_usable / n_vox_atlas,
+          proportion_usable_in_mask = ifelse(
+            n_vox_in_mask > 0L,
+            n_vox_usable / n_vox_in_mask,
+            NA_real_
+          ),
+          retained = retained,
+          exclusion_reason = exclusion_reason,
+          stringsAsFactors = FALSE
+        )
+
+        if (isTRUE(save_diagnostics)) {
+          if (file.exists(diagnostics_file) && isFALSE(overwrite)) {
+            to_log(lg, "info", "Not overwriting existing ROI diagnostics file {diagnostics_file}")
+          } else {
+            to_log(lg, "info", "Writing subject {sub_id} ROI voxel-retention diagnostics to {diagnostics_file}")
+            data.table::fwrite(diagnostics, diagnostics_file, sep = "\t", na = "NA")
+          }
+        }
+
+        ts_mat <- sapply(seq_along(roi_vals), function(roi_index) {
+          lbl <- roi_vals[[roi_index]]
+          required_vox <- min_vox_required[[roi_index]]
+          roi_idx <- which((roi_index_vec == roi_index) & mask_vec)
           if (length(roi_idx) < required_vox) {
-            req_txt <- as.character(format_min_vox_requirement(min_vox_spec, roi_voxels))
-            to_log(lg, "info", "ROI {lbl} has {length(roi_idx)} usable voxels but requires {req_txt}. Dropping")
+            req_txt <- as.character(format_min_vox_requirement(
+              min_vox_spec,
+              n_vox_atlas[[roi_index]]
+            ))
+            to_log(lg, "info", "ROI {lbl} has {length(roi_idx)} usable voxels but requires {req_txt}. Marking as missing")
             rep(NA_real_, n_time)
           } else {
             roi_vox <- t(mat[roi_idx, , drop = FALSE])
@@ -157,13 +266,13 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
           }
         })
         if (is.null(dim(ts_mat))) ts_mat <- matrix(ts_mat, ncol = 1L)
+        colnames(ts_mat) <- roi_names
 
         ts_df <- as.data.frame(ts_mat)
-        colnames(ts_df) <- paste0("roi", roi_vals)
         ts_df$volume <- seq_len(n_time)
-        ts_df <- ts_df[, c("volume", paste0("roi", roi_vals))]
+        ts_df <- ts_df[, c("volume", roi_names)]
         surviving_idx <- which(colSums(!is.na(ts_mat)) > 0L)
-        surviving_labels <- if (length(surviving_idx) > 0L) paste(head(paste0("roi", roi_vals[surviving_idx]), 5L), collapse = ", ") else "<none>"
+        surviving_labels <- if (length(surviving_idx) > 0L) paste(head(roi_names[surviving_idx], 5L), collapse = ", ") else "<none>"
         to_log(lg, "debug", "Atlas {atlas_label}: retained {length(surviving_idx)} of {length(roi_vals)} ROIs after masking/min_vox (examples: {surviving_labels})")
 
         censor_file <- get_censor_file(bids_info)
@@ -193,7 +302,7 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
         }
 
         enough_timepoints <- TRUE
-        if (nrow(ts_mat) < 20L) {
+        if (compute_correlation && nrow(ts_mat) < 20L) {
           to_log(lg, "warn", "Only {nrow(ts_mat)} timepoints in timeseries. Cannot compute valid correlations")
           enough_timepoints <- FALSE
         }
@@ -203,9 +312,10 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
           cor_files <- lapply(cor_method, function(cmeth) {
             nacols <- which(apply(ts_mat, 2, function(col) all(is.na(col))))
             ts_use <- if (length(nacols) > 0L) ts_mat[, -nacols, drop = FALSE] else ts_mat
+            no_usable_rois <- ncol(ts_use) == 0L
 
-            if (ncol(ts_use) == 0L) {
-              cmat <- matrix(NA_real_, 0, 0)
+            if (no_usable_rois) {
+              cmat <- matrix(NA_real_, ncol(ts_mat), ncol(ts_mat))
             } else {
               cmat <- if (cmeth == "cor.shrink") {
                 corpcor::cor.shrink(ts_use)
@@ -226,12 +336,9 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
                 cmat <- full
               }
             }
+            dimnames(cmat) <- list(roi_names, roi_names)
 
-            cor_bids <- modifyList(bids_info, list(
-              rois = bids_camelcase(atlas_label), correlation = cmeth, suffix = "connectivity", ext = ".tsv"
-            ))
-
-            cor_file <- file.path(out_dir_atlas, construct_bids_filename(cor_bids, full.names = FALSE))
+            cor_file <- cor_paths[[cmeth]]
             write_file <- TRUE
             if (file.exists(cor_file)) {
               if (overwrite) {
@@ -244,18 +351,19 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
               to_log(lg, "info", "Writing subject {sub_id} {cmeth} correlations to {cor_file}")
             }
 
-            zero_roi <- ncol(cmat) == 0L || nrow(cmat) == 0L
             if (write_file) {
               dir.create(dirname(cor_file), recursive = TRUE, showWarnings = FALSE)
-              if (zero_roi) {
-                to_log(lg, "warn", "No usable ROIs remain after filtering; creating an empty file at {cor_file}")
-                if (file.exists(cor_file)) unlink(cor_file)
-                file.create(cor_file)
-              } else {
-                data.table::fwrite(as.data.frame(cmat), cor_file, sep = "\t")
+              if (no_usable_rois) {
+                to_log(lg, "warn", "No usable ROIs remain after filtering; writing an all-NA connectivity matrix to {cor_file}")
               }
-            } else if (zero_roi) {
-              to_log(lg, "warn", "No usable ROIs remain after filtering; correlations not written because overwrite=FALSE for {cor_file}")
+              data.table::fwrite(
+                as.data.frame.matrix(cmat),
+                cor_file,
+                sep = "\t",
+                na = "NA"
+              )
+            } else if (no_usable_rois) {
+              to_log(lg, "warn", "No usable ROIs remain after filtering; all-NA connectivity matrix not written because overwrite=FALSE for {cor_file}")
             }
 
             cor_file
@@ -263,7 +371,11 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
           names(cor_files) <- cor_method
         }
 
-        list(timeseries = ts_file, correlation = cor_files)
+        list(
+          timeseries = ts_file,
+          correlation = cor_files,
+          diagnostics = diagnostics_file
+        )
       },
       atlas_path = atlas,
       atlas_label = atlas_name,

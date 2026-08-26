@@ -520,29 +520,54 @@ populate_list_arg = function(list_to_populate, arg_name, new_value = NULL, appen
 
 #' Capture output manifest for a completed step
 #'
-#' Scans an output directory and creates a JSON manifest containing file paths,
-#' sizes, and modification times. This manifest can be stored in the job tracking
-#' database and later used to verify that outputs remain intact.
+#' Creates a JSON manifest containing output file paths, sizes, and modification
+#' times. By default all files beneath `output_dir` are scanned; `files` can
+#' instead identify an exact job-specific subset. The manifest can be stored in
+#' the job tracking database and later used to verify that outputs remain intact.
 #'
-#' @param output_dir Directory to scan for output files
+#' @param output_dir Root directory used to locate and verify output files.
 #' @param recursive Scan subdirectories (default TRUE)
-#' @param pattern Optional regex pattern to filter files
+#' @param pattern Optional regex pattern to filter files.
+#' @param files Optional character vector of exact output files to record. When
+#'   supplied, only these files are included and they must exist beneath
+#'   `output_dir`. This is useful when several jobs share an output directory.
 #'
 #' @return JSON string containing the manifest, or NULL if directory doesn't exist
 #'
 #' @importFrom jsonlite toJSON
 #' @keywords internal
-capture_output_manifest <- function(output_dir, recursive = TRUE, pattern = NULL) {
+capture_output_manifest <- function(output_dir, recursive = TRUE, pattern = NULL,
+                                    files = NULL) {
   if (!checkmate::test_directory_exists(output_dir)) {
     return(NULL)
   }
-  
-  files <- list.files(output_dir, full.names = TRUE, recursive = recursive,
-                      pattern = pattern, all.files = FALSE)
-  
+
+  norm_dir <- normalizePath(output_dir, winslash = "/", mustWork = TRUE)
+  scope <- if (is.null(files)) "directory" else "explicit"
+  if (is.null(files)) {
+    files <- list.files(
+      output_dir,
+      full.names = TRUE,
+      recursive = recursive,
+      pattern = pattern,
+      all.files = FALSE
+    )
+  } else {
+    checkmate::assert_character(files, any.missing = FALSE)
+    files <- unique(files[nzchar(files)])
+    if (length(files) > 0L && any(!file.exists(files))) {
+      stop(
+        "Cannot capture output manifest because these files do not exist: ",
+        paste(files[!file.exists(files)], collapse = ", "),
+        call. = FALSE
+      )
+    }
+  }
+
   if (length(files) == 0) {
     manifest <- list(
-      output_dir = normalizePath(output_dir),
+      output_dir = norm_dir,
+      scope = scope,
       captured_at = as.character(Sys.time()),
       file_count = 0L,
       total_size_bytes = 0L,
@@ -551,20 +576,34 @@ capture_output_manifest <- function(output_dir, recursive = TRUE, pattern = NULL
     return(jsonlite::toJSON(manifest, auto_unbox = TRUE, pretty = FALSE))
   }
   
-  info <- file.info(files)
-  norm_dir <- normalizePath(output_dir, winslash = "/", mustWork = TRUE)
-  norm_files <- normalizePath(files, winslash = "/", mustWork = TRUE)
-  
+  norm_files <- sort(unique(normalizePath(
+    files,
+    winslash = "/",
+    mustWork = TRUE
+  )))
+  root_prefix <- paste0(sub("/+$", "", norm_dir), "/")
+  if (any(!startsWith(norm_files, root_prefix))) {
+    stop(
+      "All manifest files must be located beneath output_dir: ",
+      norm_dir,
+      call. = FALSE
+    )
+  }
+  info <- file.info(norm_files)
+  if (any(info$isdir)) {
+    stop("Manifest entries must be files, not directories.", call. = FALSE)
+  }
+  relative_files <- substring(norm_files, nchar(root_prefix) + 1L)
+
   manifest <- list(
     output_dir = norm_dir,
+    scope = scope,
     captured_at = as.character(Sys.time()),
-    file_count = length(files),
+    file_count = length(norm_files),
     total_size_bytes = sum(info$size, na.rm = TRUE),
     files = lapply(seq_len(nrow(info)), function(i) {
-      # Store relative path for portability
-      rel_path <- sub(paste0("^", gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", norm_dir), "/?"), "", norm_files[i])
       list(
-        path = rel_path,
+        path = relative_files[i],
         size = info$size[i],
         mtime = as.numeric(info$mtime[i])
       )

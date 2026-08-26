@@ -1,7 +1,10 @@
 #' @keywords internal
 manage_extract_streams <- function(scfg, allow_empty = FALSE) {
   extract_field_list <- function() {
-    c("input_streams", "atlases", "mask_file", "roi_reduce", "correlation/method", "rtoz")
+    c(
+      "input_streams", "atlases", "mask_file", "roi_reduce", "save_ts",
+      "save_diagnostics", "correlation/method", "rtoz", "min_vox_per_roi"
+    )
   }
 
   show_val <- function(val) {
@@ -198,7 +201,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
 
   if (is.null(fields)) {
     fields <- c(
-      "extract_rois/input_streams", "extract_rois/atlases", "extract_rois/mask_file", "extract_rois/roi_reduce", "extract_rois/save_ts",
+      "extract_rois/input_streams", "extract_rois/atlases", "extract_rois/mask_file", "extract_rois/roi_reduce", "extract_rois/save_ts", "extract_rois/save_diagnostics",
       "extract_rois/correlation/method", "extract_rois/rtoz", "extract_rois/min_vox_per_roi"
     )
   }
@@ -218,7 +221,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if ("extract_rois/mask_file" %in% fields) {
-    mask_file <- prompt_input(
+    excfg$mask_file <- validate_char(prompt_input(
       instruct = glue("\n
         ROI extraction always removes constant and zero voxels from its calculations.
         In addition, you may provide a mask file that only retains voxels in the mask
@@ -229,7 +232,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
       prompt = "Mask file for ROI extraction",
       type = "character", required = FALSE,
       default = excfg$mask_file
-    )
+    ), empty_value = NULL)
   }
 
   if ("extract_rois/roi_reduce" %in% fields) {
@@ -271,6 +274,17 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
         to a .tsv file that is volumes x rois in size. This can be helpful if you want to run
         external analyses on ROI time series."),
       prompt = "Output ROI time series?", type = "flag"
+    )
+  }
+
+  if ("extract_rois/save_diagnostics" %in% fields) {
+    excfg$save_diagnostics <- prompt_input(
+      instruct = glue("
+        BrainGnomes can write one row per atlas ROI describing how many voxels
+        survived the optional spatial mask, BOLD validity checks, and the
+        minimum-voxel requirement."),
+      prompt = "Output ROI voxel-retention diagnostics?", type = "flag",
+      default = if (is.null(excfg$save_diagnostics)) FALSE else isTRUE(excfg$save_diagnostics)
     )
   }
 

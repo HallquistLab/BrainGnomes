@@ -43,3 +43,19 @@ test_that("extract_bids_info parses filename entities and reconstructs with cons
   )
 })
 
+test_that("extract_bids_info returns its full typed schema for empty input", {
+  expected_names <- c(
+    "subject", "session", "task", "acquisition", "reconstruction",
+    "direction", "run", "modality", "echo", "hemisphere", "space",
+    "cohort", "resolution", "description", "fieldmap", "suffix", "ext",
+    "directory"
+  )
+
+  for (drop_unused in c(FALSE, TRUE)) {
+    result <- extract_bids_info(character(), drop_unused = drop_unused)
+    expect_s3_class(result, "data.frame")
+    expect_identical(dim(result), c(0L, length(expected_names)))
+    expect_named(result, expected_names)
+    expect_true(all(vapply(result, is.character, logical(1))))
+  }
+})

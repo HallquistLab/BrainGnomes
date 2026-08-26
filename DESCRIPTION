@@ -1,10 +1,21 @@
 Package: BrainGnomes
-Title: An R package for preprocessing and analyzing fMRI data
-Version: 0.8-2
-Date: 2026-03-24
+Title: HPC Workflows for Functional MRI Preprocessing and Analysis
+Version: 0.9
+Date: 2026-08-25
 Authors@R: 
     person("Michael", "Hallquist", email="michael.hallquist@gmail.com", role = c("aut", "cre"))
-Description: This R package handles preprocessing of fMRI data on HPC clusters.
+Description: Configures, submits, and monitors reproducible functional magnetic
+    resonance imaging workflows on high-performance computing clusters using
+    containerized neuroimaging tools. The package can be installed and its
+    configuration, BIDS, status, and native imaging helpers can be used without
+    a cluster. Full pipeline execution requires a supported scheduler and
+    stage-specific external software; template-dependent operations may also
+    use Python and TemplateFlow.
+SystemRequirements: Full scheduled workflows: SLURM or TORQUE/PBS, Bash,
+    Singularity (or Apptainer providing a Singularity-compatible command), and
+    stage-specific container images. Optional stages may additionally require
+    the Flywheel CLI, a BIDS validator, a HeuDiConv heuristic, a FreeSurfer
+    license, and Python 3 with nibabel, nilearn, and templateflow.
 License: GPL-3
 BugReports: https://github.com/UNCDEPENdLab/BrainGnomes/issues
 Depends:

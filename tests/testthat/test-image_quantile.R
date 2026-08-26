@@ -66,3 +66,32 @@ test_that("image_quantile computes correct quantiles in 3D and 4D with masking a
                  tolerance = 1e-6, label = label)
   }
 })
+
+test_that("image_quantile rejects empty, missing, and non-finite probabilities", {
+  skip_if_not_installed("RNifti")
+  image_file <- tempfile(fileext = ".nii.gz")
+  RNifti::writeNifti(RNifti::asNifti(array(1:8, dim = c(2, 2, 2))), image_file)
+
+  expect_error(
+    image_quantile(image_file, quantiles = numeric()),
+    "quantiles must contain at least one probability",
+    fixed = TRUE
+  )
+  expect_error(
+    image_quantile(image_file, quantiles = NA_real_),
+    "quantiles must not contain NA values",
+    fixed = TRUE
+  )
+  expect_error(
+    image_quantile(image_file, quantiles = NaN),
+    "quantiles must not contain NaN values",
+    fixed = TRUE
+  )
+  for (probability in c(Inf, -Inf)) {
+    expect_error(
+      image_quantile(image_file, quantiles = probability),
+      "quantiles must contain only finite values; Inf and -Inf are not allowed",
+      fixed = TRUE
+    )
+  }
+})

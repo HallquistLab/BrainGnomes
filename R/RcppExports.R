@@ -11,7 +11,10 @@
 #' erosion/dilation, optional superior–inferior cutoff).
 #'
 #' @name automask
-#' @param image A `RNifti::NiftiImage` object containing a 3D or 4D volume or
+#' @usage automask(img, outfile = "", clfrac = 0.5, NN = 2L,
+#'   erode_steps = 0L, dilate_steps = 0L, SIhh = 0, peels = 1L,
+#'   fill_holes = TRUE)
+#' @param img A `RNifti::NiftiImage` object containing a 3D or 4D volume or
 #'   file path to a NIfTI object whose mask should be calculated
 #' @param outfile Optional file path where the resulting mask should be saved as
 #'   a NIfTI file. If `""` (default), no file is written.
@@ -44,7 +47,7 @@
 #' \dontrun{
 #'   library(RNifti)
 #'   nii <- readNifti("sub-01_task-rest_bold.nii.gz")
-#'   mask <- automask_rcpp(nii, outfile = "sub-01_mask.nii.gz")
+#'   mask <- automask(nii, outfile = "sub-01_mask.nii.gz")
 #' }
 #'
 #' @details
@@ -67,7 +70,7 @@
 #' @export
 NULL
 
-automask <- function(img, outfile, clfrac = 0.5, NN = 2L, erode_steps = 0L, dilate_steps = 0L, SIhh = 0.0, peels = 1L, fill_holes = TRUE) {
+automask <- function(img, outfile = "", clfrac = 0.5, NN = 2L, erode_steps = 0L, dilate_steps = 0L, SIhh = 0.0, peels = 1L, fill_holes = TRUE) {
     .Call(`_BrainGnomes_automask`, img, outfile, clfrac, NN, erode_steps, dilate_steps, SIhh, peels, fill_holes)
 }
 
@@ -79,6 +82,8 @@ automask <- function(img, outfile, clfrac = 0.5, NN = 2L, erode_steps = 0L, dila
 #' including optional initial condition handling via steady-state initialization.
 #'
 #' @name filtfilt_cpp
+#' @usage filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
+#'   use_zi = TRUE)
 #' @param x A numeric vector representing the input time series.
 #' @param b A numeric vector of numerator (feedforward) filter coefficients.
 #' @param a A numeric vector of denominator (feedback) filter coefficients. Must have `a[0] == 1.0`.
@@ -102,6 +107,10 @@ automask <- function(img, outfile, clfrac = 0.5, NN = 2L, erode_steps = 0L, dila
 #' @export
 NULL
 
+filtfilt_cpp <- function(x, b, a, padlen = -1L, padtype = "constant", use_zi = TRUE) {
+    .Call(`_BrainGnomes_filtfilt_cpp`, x, b, a, padlen, padtype, use_zi)
+}
+
 #' Apply Butterworth Filter to 4D NIfTI Image
 #'
 #' This function applies a temporal Butterworth filter to each voxel time series
@@ -116,12 +125,7 @@ NULL
 #' @param padtype String. Padding type: "even", "odd", "constant", or "zero" (default = "even").
 #' @param use_zi Logical. Whether to use steady-state initial conditions (default = true).
 #' @param demean Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove 
-NULL
-
-filtfilt_cpp <- function(x, b, a, padlen = -1L, padtype = "constant", use_zi = TRUE) {
-    .Call(`_BrainGnomes_filtfilt_cpp`, x, b, a, padlen, padtype, use_zi)
-}
-
+#'   DC (mean) component (default = true).
 #'
 #' @return A 4D filtered NIfTI image as a niftiImage or internalImage object.
 #'
@@ -171,10 +175,14 @@ getline <- function(prompt) {
 #' and/or excludes zero-valued voxels. For 4D images, the function pools over all timepoints.
 #'
 #' @name image_quantile
+#' @usage image_quantile(in_file, brain_mask = NULL,
+#'   quantiles = as.numeric(c(0.5)), exclude_zero = FALSE)
 #' @param in_file Path to the input 3D or 4D NIfTI image (.nii or .nii.gz).
 #' @param brain_mask Optional path to a 3D NIfTI image used as a brain mask. Voxels with values > 0.001 are retained.
 #'                  The mask must have the same spatial dimensions as the input image. If \code{R_NilValue}, no mask is used.
-#' @param quantiles A numeric vector of probabilities in `[0, 1]` specifying which quantiles to compute (e.g., 0.5 for the median).
+#' @param quantiles A non-empty numeric vector of finite, non-missing
+#'   probabilities in `[0, 1]` specifying which quantiles to compute (e.g., 0.5
+#'   for the median). `NA`, `NaN`, `Inf`, and `-Inf` are rejected.
 #' @param exclude_zero If \code{true}, zero-valued voxels in the image will be excluded from the quantile calculation.
 #'
 #' @return A named numeric vector of quantiles. Names are formatted as percentage strings (e.g., "50.00%").
@@ -187,7 +195,7 @@ getline <- function(prompt) {
 #' @examples
 #' \dontrun{
 #' # Compute the median
-#' image_quantile("bold.nii.gz", 0.5)
+#' image_quantile("bold.nii.gz", quantiles = 0.5)
 #'
 #' # With masking and zero exclusion
 #' image_quantile("bold.nii.gz", "mask.nii.gz", c(0.25, 0.5, 0.75), exclude_zero=TRUE)
@@ -214,7 +222,10 @@ image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c
 #' it is preserved. If \code{add_intercept = TRUE}, an intercept column will be added (if not present).
 #'
 #' @name lmfit_residuals_4d
-#'
+#' @usage lmfit_residuals_4d(infile, X, include_rows = NULL,
+#'   add_intercept = FALSE, outfile = "", internal = FALSE,
+#'   preserve_mean = FALSE, set_mean = 0, regress_cols = NULL,
+#'   exclusive = FALSE)
 #' @param infile Path to a 4D NIfTI image file to denoise (e.g., functional data).
 #' @param X A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 #'          Typically includes motion parameters, physiological noise, etc.
@@ -304,6 +315,8 @@ menu_safe <- function(choices, title = NULL) {
 #' and optionally writes the result back to a new NIfTI file.
 #'
 #' @name natural_spline_4d
+#' @usage natural_spline_4d(infile, t_interpolate, edge_nn = FALSE,
+#'   outfile = "", internal = FALSE)
 #' @param infile Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).
 #' @param t_interpolate Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
 #'        Timepoints outside the valid range `[1, T]` are ignored with a warning.
@@ -350,6 +363,7 @@ natural_spline_4d <- function(infile, t_interpolate, edge_nn = FALSE, outfile = 
 #' Cubic spline interpolation with natural spline and linear extrapolation
 #' 
 #' @name natural_spline_interp
+#' @usage natural_spline_interp(x, y, xout)
 #' @description Performs natural cubic spline interpolation for given input values.
 #' This function takes known data points `(x, y)` and evaluates the cubic spline
 #' interpolation at specified output points `xout`. It uses a natural spline
@@ -532,6 +546,7 @@ derive_reference_core <- function(img, candidate_mask, constraint_mask = NULL, i
 #' consistent with R conventions.
 #'
 #' @name remove_nifti_volumes
+#' @usage remove_nifti_volumes(infile, remove_tpts, outfile)
 #' @param infile Character string. Path to the input 4D NIfTI file.
 #' @param remove_tpts Integer vector. Timepoints (1-based) to remove from the image.
 #' @param outfile Character string. Path to save the output NIfTI file with selected volumes.

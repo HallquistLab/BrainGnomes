@@ -13,13 +13,13 @@ print_global_help <- function(status = 0L) {
     "Commands:\n",
     "  setup_project [project_name] [project_directory]\n",
     "  edit_project <project_directory|config.yaml>\n",
-    "  run_project <project_directory|config.yaml> [--steps=<steps>] [--subject_filter=<ids>] [--dry-run]\n",
+    "  run_project <project_directory|config.yaml> [--steps=<steps>] [--subject_filter=<ids>] [--extract_streams=<streams>] [--dry-run]\n",
     "  status <project_directory|config.yaml> [--sub_id=<id>] [--ses_id=<id>] [--summary]\n",
     "  help [command]\n\n",
     "Examples:\n",
     "  BrainGnomes setup_project demo_project /proj/my_study\n",
     "  BrainGnomes edit_project /proj/my_study/project_config.yaml\n",
-    "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='bids_validation fmriprep' --subject_filter='001 002' --force\n",
+    "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess' --subject_filter='001 002' --force\n",
     "  BrainGnomes status /proj/my_study/project_config.yaml --summary\n\n",
     "Use 'BrainGnomes <command> --help' for command-specific help.\n",
     sep = ""
@@ -53,14 +53,18 @@ print_command_help <- function(command, status = 0L) {
       "  --steps=<steps>                    Pipeline steps to run (space-separated).\n",
       "  --subject_filter=<ids>             Subject IDs to include (space-separated).\n",
       "  --postprocess_streams=<streams>    Postprocess streams to include (space-separated).\n",
+      "  --extract_streams=<streams>        ROI-extraction streams to include (space-separated).\n",
       "  --debug                            Run in debug mode.\n",
       "  --force                            Force rerun of previously completed jobs.\n\n",
       "  --dry-run                          Validate and show planned work without submitting jobs.\n\n",
       "Examples:\n",
       "  BrainGnomes run_project /proj/my_study\n",
-      "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='bids_validation fmriprep'\n",
+      "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess'\n",
       "  BrainGnomes run_project /proj/my_study --subject_filter='001 002' --postprocess_streams='rest task' --debug --force\n",
+      "  BrainGnomes run_project /proj/my_study --steps='extract_rois' --extract_streams='rest task'\n",
       "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='bids_conversion fmriprep' --dry-run\n",
+      "\nBIDS validation is configured with the project but submitted separately through run_bids_validation(); it is not a run_project step:\n",
+      "  BrainGnomes::run_bids_validation(BrainGnomes::load_project('/proj/my_study'))\n",
       sep = ""
     ),
     "status" = cat(
@@ -140,21 +144,7 @@ cli_run <- function(opts) {
   if (length(opts) < 1) stop("run_project requires a project directory or YAML file")
   input <- opts[1]
   cli_args <- if (length(opts) > 1) BrainGnomes::parse_cli_args(opts[-1]) else list()
-  steps <- cli_args$steps
-  subject_filter <- cli_args$subject_filter
-  postprocess_streams <- cli_args$postprocess_streams
-  debug <- FALSE
-  force <- FALSE
-  dry_run <- FALSE
-  dry_run_opt <- NULL
-  if (!is.null(cli_args[["dry-run"]])) dry_run_opt <- cli_args[["dry-run"]]
-  if (is.null(dry_run_opt) && !is.null(cli_args$dry_run)) dry_run_opt <- cli_args$dry_run
-  if (!is.null(cli_args$debug)) debug <- isTRUE(cli_args$debug) || is.na(cli_args$debug)
-  if (!is.null(cli_args$force)) force <- isTRUE(cli_args$force) || is.na(cli_args$force)
-  if (!is.null(dry_run_opt)) dry_run <- isTRUE(dry_run_opt) || is.na(dry_run_opt)
-  scfg <- BrainGnomes::load_project(input)
-  ret <- BrainGnomes::run_project(scfg, steps = steps, subject_filter = subject_filter,
-    postprocess_streams = postprocess_streams, debug = debug, force = force, dry_run = dry_run)
+  ret <- BrainGnomes:::.run_project_cli(input, cli_args)
 }
 
 cli_status <- function(opts) {

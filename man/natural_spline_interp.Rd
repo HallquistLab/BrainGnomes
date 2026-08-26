@@ -3,6 +3,9 @@
 \name{natural_spline_interp}
 \alias{natural_spline_interp}
 \title{Cubic spline interpolation with natural spline and linear extrapolation}
+\usage{
+natural_spline_interp(x, y, xout)
+}
 \arguments{
 \item{x}{A numeric vector of strictly increasing x-values (time or position).}
 

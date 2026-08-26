@@ -396,8 +396,8 @@ setup_bids_validation <- function(scfg, fields=NULL) {
       The validator can be run quickly, and produces an HTML report that summarizes any warnings or errors.
       Note: Even if you say 'no' here, fmriprep will run BIDS validation on each subject's dataset prior to execution.
       
-      Saying 'Yes' to this step will enable BIDS validation, but that step must be run separately, at your leisure,
-      using run_bids_validation().
+      Saying 'Yes' configures BIDS validation with this project, but validation is submitted separately
+      through run_bids_validation().
       "),
       prompt = "Enable BIDS validation?",
       type = "flag",
@@ -929,12 +929,13 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   if ("compute_environment/bids_validator" %in% fields) {
     scfg$compute_environment$bids_validator <- prompt_input(
       instruct = glue("
-      \nAfter BIDS conversion, the pipeline can pass resulting BIDS folders to bids-validator to verify that 
-      the folder conforms to the BIDS specification. You can read more about validation here: 
+      \nThe configured bids-validator can verify that resulting BIDS folders conform to the BIDS specification.
+      This validation is submitted separately through run_bids_validation(). You can read more about validation here:
       https://bids-validator.readthedocs.io/en/stable/index.html.
       
-      If you'd like to include BIDS validation in the processing pipeline, specify the location of the 
-      bids-validator program here. If you need help building this program, follow these instructions: 
+      To configure BIDS validation with the project, specify the location of the bids-validator program here.
+      Validation is submitted separately through run_bids_validation(), not as a run_project() stage.
+      If you need help building this program, follow these instructions:
       https://bids-validator.readthedocs.io/en/stable/user_guide/command-line.html.\n
     "),
       prompt = "Location of bids-validator program: ",

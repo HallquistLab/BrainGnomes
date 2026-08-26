@@ -23,6 +23,8 @@ void writeToFile(const RNifti::NiftiImage& image, const std::string& outfile, in
 //' and optionally writes the result back to a new NIfTI file.
 //'
 //' @name natural_spline_4d
+//' @usage natural_spline_4d(infile, t_interpolate, edge_nn = FALSE,
+//'   outfile = "", internal = FALSE)
 //' @param infile Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).
 //' @param t_interpolate Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
 //'        Timepoints outside the valid range `[1, T]` are ignored with a warning.
@@ -214,4 +216,3 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
   
   return image.toArrayOrPointer(internal, "NIfTI image");
 }
-

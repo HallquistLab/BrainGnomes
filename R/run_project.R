@@ -1,25 +1,110 @@
 
+# Format one resolved configuration value for concise dry-run output.
+.dry_run_value <- function(x, default = "<not configured>") {
+  if (is.null(x) || length(x) == 0L || all(is.na(x))) return(default)
+  if (is.logical(x)) return(tolower(as.character(x)))
+  paste(as.character(x), collapse = ", ")
+}
+
+# Resolve the same default postprocessing order used by postprocess_subject().
+.dry_run_postprocess_sequence <- function(cfg) {
+  mask_file <- cfg$apply_mask$mask_file
+  has_usable_mask <- isTRUE(cfg$apply_mask$enable) &&
+    checkmate::test_string(mask_file) && !is.na(mask_file) &&
+    (identical(mask_file, "template") || file.exists(mask_file))
+
+  if (isTRUE(cfg$force_processing_order) && length(cfg$processing_steps) > 0L) {
+    sequence <- tolower(cfg$processing_steps)
+    sequence <- sub("^spatial_smoothing$", "spatial_smooth", sequence)
+    sequence <- sub("^temporal_filtering$", "temporal_filter", sequence)
+    sequence <- sub("^confound_regress$", "confound_regression", sequence)
+    sequence <- sub("^intensity_normalization$", "intensity_normalize", sequence)
+    if (!has_usable_mask) sequence <- sequence[sequence != "apply_mask"]
+    return(sequence)
+  }
+
+  sequence <- character()
+  if (has_usable_mask) sequence <- c(sequence, "apply_mask")
+  if (isTRUE(cfg$spatial_smooth$enable)) sequence <- c(sequence, "spatial_smooth")
+  if (isTRUE(cfg$intensity_normalize$enable)) sequence <- c(sequence, "intensity_normalize")
+  if (isTRUE(cfg$apply_aroma$enable)) sequence <- c(sequence, "apply_aroma")
+  if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$interpolate)) sequence <- c(sequence, "scrub_interpolate")
+  if (isTRUE(cfg$temporal_filter$enable)) sequence <- c(sequence, "temporal_filter")
+  if (isTRUE(cfg$confound_regression$enable)) sequence <- c(sequence, "confound_regression")
+  if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$apply)) sequence <- c(sequence, "scrub_timepoints")
+  sequence
+}
+
+.print_postprocess_dry_run_plan <- function(scfg, streams) {
+  cat("Resolved postprocess plan:\n")
+  for (stream in streams) {
+    cfg <- scfg$postprocess[[stream]]
+    sequence <- .dry_run_postprocess_sequence(cfg)
+    cat("  - ", stream, "\n", sep = "")
+    cat("      input query: ", .dry_run_value(cfg$input_regex, "desc:preproc suffix:bold"), "\n", sep = "")
+    cat("      output description: ", .dry_run_value(cfg$bids_desc), "\n", sep = "")
+    cat("      processing order: ", .dry_run_value(sequence, "<no processing steps enabled>"), "\n", sep = "")
+    cat("      output root: ", .dry_run_value(scfg$metadata$postproc_directory), "\n", sep = "")
+    cat("      overwrite: ", .dry_run_value(cfg$overwrite, "false"), "\n", sep = "")
+  }
+  invisible(NULL)
+}
+
+.print_extract_dry_run_plan <- function(scfg, streams) {
+  cat("Resolved extraction plan:\n")
+  for (stream in streams) {
+    cfg <- scfg$extract_rois[[stream]]
+    methods <- cfg$correlation$method
+    if (is.null(methods)) methods <- cfg$cor_method
+    input_streams <- cfg$input_streams
+    sources <- vapply(input_streams, function(input_stream) {
+      input_cfg <- scfg$postprocess[[input_stream]]
+      input_regex <- .dry_run_value(input_cfg$input_regex, "desc:preproc suffix:bold")
+      bids_desc <- .dry_run_value(input_cfg$bids_desc)
+      paste0(input_stream, " [", input_regex, " -> desc:", bids_desc, "]")
+    }, character(1))
+
+    cat("  - ", stream, "\n", sep = "")
+    cat("      inputs: ", .dry_run_value(sources), "\n", sep = "")
+    cat("      atlases: ", .dry_run_value(cfg$atlases), "\n", sep = "")
+    cat("      mask: ", .dry_run_value(cfg$mask_file, "<none; BOLD-valid voxels only>"), "\n", sep = "")
+    cat("      ROI reduction: ", .dry_run_value(cfg$roi_reduce, "mean"), "\n", sep = "")
+    cat("      correlation methods: ", .dry_run_value(methods), "\n", sep = "")
+    cat("      minimum voxels per ROI: ", .dry_run_value(cfg$min_vox_per_roi, "5"), "\n", sep = "")
+    cat("      save time series: ", .dry_run_value(cfg$save_ts, "true"), "\n", sep = "")
+    cat("      save ROI diagnostics: ", .dry_run_value(cfg$save_diagnostics, "false"), "\n", sep = "")
+    cat("      Fisher r-to-z: ", .dry_run_value(cfg$rtoz, "false"), "\n", sep = "")
+    cat("      output root: ", .dry_run_value(scfg$metadata$rois_directory), "\n", sep = "")
+    cat("      overwrite: ", .dry_run_value(cfg$overwrite, "false"), "\n", sep = "")
+  }
+  invisible(NULL)
+}
+
 #' Run the processing pipeline
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
-#' @param steps Character vector of pipeline steps to execute (or `"all"` to run all enabled steps).
-#'   Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois").
-#'   If `NULL`, the user will be prompted for which steps to run.
+#' @param steps Character vector of pipeline stages to execute. Supported stages
+#'   are `"flywheel_sync"`, `"bids_conversion"`, `"mriqc"`, `"fmriprep"`,
+#'   `"aroma"`, `"postprocess"`, and `"extract_rois"`. Use `"all"` to run all
+#'   enabled stages. If `NULL`, the user will be prompted for which stages to run.
+#'   BIDS validation is configured with the project but submitted separately
+#'   through [run_bids_validation()]; it is not a `run_project()` stage.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
-#' @param dry_run A logical value indicating whether to perform a dry run (validate settings and
-#'   report planned work without submitting any jobs).
+#' @param dry_run A logical value indicating whether to perform a dry run. Dry
+#'   runs validate settings and report subject/session scope plus resolved
+#'   postprocessing and extraction stream settings without submitting any jobs.
 #' @param subject_filter Optional character vector or data.frame specifying which
 #'   subjects (and optionally sessions) to process. When `NULL` and run
 #'   interactively, the user will be prompted to enter space-separated subject
 #'   IDs (press ENTER to process all subjects). When a data.frame is provided, it
 #'   must contain a `sub_id` column and may include a `ses_id` column to filter
 #'   on specific subject/session combinations.
-#' @param postprocess_streams Optional character vector specifying which postprocessing streams should be run. If
-#'   `"postprocess"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all postprocess
-#'   streams will be run.
-#' @param extract_streams Optional character vector specifying which ROI extraction streams should be run. If
-#'   `"extract_rois"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all extraction
-#'   streams will be run.
+#' @param postprocess_streams Optional character vector specifying which
+#'   postprocessing streams should run. When `"postprocess"` is included in
+#'   `steps`, `NULL` selects every configured postprocessing stream.
+#' @param extract_streams Optional character vector specifying which ROI
+#'   extraction streams should run. When `"extract_rois"` is included in
+#'   `steps`, `NULL` selects every configured extraction stream.
 #' @param log_level Character string controlling log verbosity. One of
 #'   `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, or `FATAL`.
 #' 
@@ -28,8 +113,10 @@
 #' @examples
 #'   \dontrun{
 #'     # Assuming you have a valid project configuration list named `study_config`
-#'     run_project(study_config, prompt = TRUE, force = FALSE)
+#'     run_project(study_config, steps = "fmriprep", force = FALSE)
 #'   }
+#' @seealso [run_bids_validation()] to submit the BIDS validation configured
+#'   with the project.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
@@ -237,9 +324,11 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     cat("Requested steps:", paste(dry_requested, collapse = ", "), "\n")
     if (length(postprocess_streams) > 0L) {
       cat("Postprocess streams:", paste(postprocess_streams, collapse = ", "), "\n")
+      .print_postprocess_dry_run_plan(scfg, postprocess_streams)
     }
     if (length(extract_streams) > 0L) {
       cat("Extraction streams:", paste(extract_streams, collapse = ", "), "\n")
+      .print_extract_dry_run_plan(scfg, extract_streams)
     }
     if (isTRUE(steps["flywheel_sync"])) {
       cat("Would submit: flywheel_sync\n")

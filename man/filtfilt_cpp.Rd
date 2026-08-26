@@ -3,6 +3,10 @@
 \name{filtfilt_cpp}
 \alias{filtfilt_cpp}
 \title{Zero-Phase IIR Filtering via Forward and Reverse Filtering}
+\usage{
+filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
+  use_zi = TRUE)
+}
 \arguments{
 \item{x}{A numeric vector representing the input time series.}
 

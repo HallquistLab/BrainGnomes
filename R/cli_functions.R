@@ -199,6 +199,34 @@ parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
 }
 
 
+# Translate the public command-line options into run_project() arguments.
+# Keeping this adapter in the package makes the installed CLI behavior directly
+# testable without submitting scheduler jobs from a subprocess.
+.run_project_cli <- function(input, cli_args = list()) {
+  checkmate::assert_string(input)
+  checkmate::assert_list(cli_args)
+
+  cli_flag <- function(value) {
+    !is.null(value) && (isTRUE(value) || is.na(value))
+  }
+
+  dry_run_opt <- cli_args[["dry-run"]]
+  if (is.null(dry_run_opt)) dry_run_opt <- cli_args$dry_run
+
+  scfg <- load_project(input)
+  run_project(
+    scfg,
+    steps = cli_args$steps,
+    subject_filter = cli_args$subject_filter,
+    postprocess_streams = cli_args$postprocess_streams,
+    extract_streams = cli_args$extract_streams,
+    debug = cli_flag(cli_args$debug),
+    force = cli_flag(cli_args$force),
+    dry_run = cli_flag(dry_run_opt)
+  )
+}
+
+
 #' Parse command-line arguments into a structured data frame
 #'
 #' Converts a character vector of CLI-style arguments into a data frame with fields for position,

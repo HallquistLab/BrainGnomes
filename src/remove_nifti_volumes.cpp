@@ -7,6 +7,7 @@
 //' consistent with R conventions.
 //'
 //' @name remove_nifti_volumes
+//' @usage remove_nifti_volumes(infile, remove_tpts, outfile)
 //' @param infile Character string. Path to the input 4D NIfTI file.
 //' @param remove_tpts Integer vector. Timepoints (1-based) to remove from the image.
 //' @param outfile Character string. Path to save the output NIfTI file with selected volumes.

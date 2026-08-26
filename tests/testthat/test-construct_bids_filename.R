@@ -73,6 +73,31 @@ test_that("construct_bids_filename accepts abbreviated entities", {
   )
 })
 
+test_that("construct_bids_filename preserves full and abbreviated correlation entities", {
+  entities <- list(
+    subject = "01",
+    rois = "DemoAtlas",
+    suffix = "connectivity",
+    ext = ".tsv"
+  )
+
+  expect_identical(
+    construct_bids_filename(c(entities, list(correlation = "pearson"))),
+    "sub-01_rois-DemoAtlas_cor-pearson_connectivity.tsv"
+  )
+  expect_identical(
+    construct_bids_filename(c(entities, list(cor = "spearman"))),
+    "sub-01_rois-DemoAtlas_cor-spearman_connectivity.tsv"
+  )
+})
+
+test_that("bids_camelcase treats periods, hyphens, and underscores as word boundaries", {
+  expect_identical(bids_camelcase("cor.shrink"), "corShrink")
+  expect_identical(bids_camelcase("partial.cor_rank-based"), "partialCorRankBased")
+  expect_identical(bids_camelcase("method...version_2"), "methodVersion2")
+  expect_identical(bids_camelcase("pearson"), "pearson")
+})
+
 test_that("construct_bids_regex supports cohort-qualified spaces", {
   pattern <- construct_bids_regex(
     "task:emo1 dir:AP space:MNIPediatricAsym cohort:2 desc:preproc suffix:bold"

@@ -251,6 +251,8 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
 #' @param step_name Name of the processing step
 #' @param pp_stream Name of the postprocessing stream when `step_name` is
 #'   "postprocess"
+#' @param ex_stream Name of the ROI-extraction stream when `step_name` is
+#'   "extract_rois"
 #' @param verify_manifest Logical. If TRUE and a manifest exists in the database,
 #'   verify that output files still exist and match (default TRUE).
 #' @return List containing `complete` (logical), `dir`, `complete_file`,
@@ -260,18 +262,14 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
 #' @importFrom checkmate assert_choice assert_string
 #' @keywords internal
 is_step_complete <- function(scfg, sub_id, ses_id = NULL,
-                             step_name, pp_stream = NULL,
+                             step_name, pp_stream = NULL, ex_stream = NULL,
                              verify_manifest = TRUE) {
   checkmate::assert_choice(step_name,
-    c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"))
+    c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois"))
   if (is.null(ses_id) || is.na(ses_id)) ses_id <- NULL
 
-  session_level <- step_name %in% c("bids_conversion", "postprocess")
-  name_tag <- step_name
-  if (step_name == "postprocess") {
-    checkmate::assert_string(pp_stream)
-    name_tag <- glue("{step_name}_{pp_stream}")
-  }
+  session_level <- step_name %in% c("bids_conversion", "postprocess", "extract_rois")
+  name_tag <- pipeline_step_name_tag(step_name, pp_stream, ex_stream)
 
   sub_str <- glue("_sub-{sub_id}")
   if (session_level && !is.null(ses_id)) {
@@ -315,7 +313,8 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
                   glue("ses-{ses_id}"))
       } else {
         file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}"))
-      }
+      },
+    extract_rois = scfg$metadata$rois_directory
   )
 
   # Initialize result structure
@@ -444,6 +443,19 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
   result$verification_source <- if (complete_by_file) "complete_file" else "incomplete"
 
   result
+}
+
+# Build the marker and tracking tag for a pipeline step.
+pipeline_step_name_tag <- function(step_name, pp_stream = NULL, ex_stream = NULL) {
+  if (identical(step_name, "postprocess")) {
+    checkmate::assert_string(pp_stream)
+    return(glue("{step_name}_{pp_stream}"))
+  }
+  if (identical(step_name, "extract_rois")) {
+    checkmate::assert_string(ex_stream)
+    return(glue("{step_name}_{ex_stream}"))
+  }
+  step_name
 }
 
 

@@ -2,7 +2,11 @@
 #' Extract fields from BIDS filenames
 #' @param filenames A character vector of BIDS file names (or paths). 
 #' @param drop_unused Logical; if `TRUE`, drop any BIDS entities that are not present in any of the filenames.
-#' @return A data.frame containing the BIDS key-value fields extracted from each filename (each row corresponds to an input filename).
+#' @return A data.frame containing the BIDS key-value fields extracted from each
+#'   filename (each row corresponds to an input filename). For empty input, a
+#'   zero-row data frame with the complete character-column schema is returned;
+#'   this schema is retained even when `drop_unused = TRUE` because no rows are
+#'   available from which to infer unused entities.
 #' @details Based on the BIDS specification for file naming (see BIDS documentation appendix on entities).
 #'   For more detail, see: https://bids-specification.readthedocs.io/en/stable/appendices/entities.html
 #' 
@@ -43,6 +47,14 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
     description = "desc-([a-zA-Z0-9]+)",
     fieldmap = "fmap-([a-zA-Z0-9]+)"
   )
+
+  if (length(filenames) == 0L) {
+    empty_columns <- c(names(patterns), "suffix", "ext", "directory")
+    return(as.data.frame(
+      stats::setNames(rep(list(character()), length(empty_columns)), empty_columns),
+      stringsAsFactors = FALSE
+    ))
+  }
   
   # Function to extract an entity from a filename
   extract_entity <- function(filename, pattern) {
@@ -157,7 +169,7 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
     "direction", "run", "modality", "echo",  "hemisphere", "space",
     "cohort",
     "resolution", "description", "fieldmap",
-    "rois", "cor" # custom entities for extract_rois
+    "rois", "correlation" # custom entities for extract_rois
   )
   
   # BIDS entity prefixes
@@ -543,8 +555,9 @@ get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "
 
 #' Convert a string to BIDS-compatible camelCase
 #'
-#' Removes hyphens/underscores and capitalizes the letter following them.
-#' E.g., "task-ridl_name" -> "taskRidlName".
+#' Treats periods, hyphens, and underscores as word boundaries, removes them,
+#' and capitalizes the following letter. E.g., "task-ridl_name" becomes
+#' "taskRidlName", and "cor.shrink" becomes "corShrink".
 #'
 #' @param x A character string.
 #' @return A character string in camelCase form.
@@ -553,12 +566,13 @@ get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "
 #' \dontrun{
 #'   bids_camelcase("task-ridl_name")
 #'   bids_camelcase("echo_time-series")
+#'   bids_camelcase("cor.shrink")
 #'   bids_camelcase("space-mni152nlin2009casym")
 #' }
 #' 
 bids_camelcase <- function(x) {
   stopifnot(is.character(x), length(x) == 1)
   
-  # Replace hyphen/underscore + letter with uppercase letter
-  gsub("[-_]+([a-zA-Z0-9\\.])", "\\U\\1", x, perl = TRUE)
+  # Treat periods, hyphens, and underscores as camelCase word boundaries.
+  gsub("[._-]+([a-zA-Z0-9])", "\\U\\1", x, perl = TRUE)
 }

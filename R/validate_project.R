@@ -952,6 +952,14 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
     gaps <- c(gaps, "extract_rois/rtoz")
   }
 
+  if (is.null(ecfg$save_diagnostics)) {
+    ecfg$save_diagnostics <- FALSE
+  } else if (!checkmate::test_flag(ecfg$save_diagnostics)) {
+    if (!quiet) message(glue("Invalid save_diagnostics in $extract_rois${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "extract_rois/save_diagnostics")
+    ecfg$save_diagnostics <- NULL
+  }
+
   if (!"min_vox_per_roi" %in% names(ecfg)) {
     gaps <- c(gaps, "extract_rois/min_vox_per_roi")
   } else {

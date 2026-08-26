@@ -1,5 +1,23 @@
-# BrainGnomes 0.8-2
+# BrainGnomes 0.9
 
+Released 2026-08-25
+
+* Document stage-specific runtime requirements in package metadata, the README, and Quickstart. Add an installed miniature project configuration and an executable local-onboarding vignette that clearly separates no-cluster helpers, submission-free dry runs, and scheduler/container-dependent project execution.
+* Correct ROI-connectivity provenance and execution: estimator-specific filenames are now unique, scheduled extraction honors nested correlation settings, `cor.shrink` has a stable BIDS entity, and time-series-only extraction supports `cor_method = "none"`.
+* Preserve the one-to-one association between multiple postprocessing input streams and their BIDS descriptions during ROI extraction. Ambiguous vector lengths now fail explicitly instead of selecting or combining unintended inputs.
+* Apply interactively configured ROI masks, preserve every atlas label when an ROI is fully masked, and return schema- and dimension-stable time-series, connectivity, and diagnostic outputs for empty ROIs and entirely masked atlases.
+* Report per-stream ROI-extraction state in project and subject status. Scheduled extraction now writes an explicit manifest of its actual time-series, connectivity, and diagnostic outputs so completion checks do not depend on a directory-wide snapshot.
+* Honor `save_ts = FALSE` in scheduled extraction and reject contradictory extraction configurations before output is created.
+* Align the CLI, `run_project()` help, examples, and vignettes with the seven supported submitted stages. BIDS validation remains project-configured but is submitted separately with `run_bids_validation()`; stream selection and dry-run output now expose resolved settings.
+* Harden public and native interfaces with complete help signatures, working examples, stable empty data-frame schemas, finite image-quantile validation, zero-length and dimension checks, and clearer argument errors.
+* Keep development-only calibration resources, local Codex files, audit reports, prior build products, and Python bytecode caches out of source packages and installed-package tests. Remove the obsolete `ROI_TempCorr.R` entry point after migrating its useful voxel-retention diagnostics into supported ROI extraction.
+* Stabilize empty-result contracts: `extract_bids_info(character())` now returns its complete typed BIDS schema, and `get_project_status()` returns configured status columns even before any subject jobs exist. `image_quantile()` now rejects empty, missing, NaN, and infinite probability vectors before reading image data.
+* Improve onboarding and release hygiene: generate Quickstart CLI help from the installed command, document the standalone BIDS-validation boundary consistently, show resolved postprocessing and extraction stream settings during dry runs, and remove the obsolete `ROI_TempCorr.R` installed entry point after migrating its useful diagnostics into `extract_rois()`.
+* Add optional per-ROI voxel-retention diagnostics to ROI extraction. Reports
+  separately track atlas size, optional-mask survival, BOLD-valid voxels,
+  minimum-voxel requirements, retention status, and exclusion reasons; the
+  scheduled extraction workflow includes requested diagnostics in its explicit
+  output manifest.
 * Preserve source FD in notch-filtered calculated confounds and write the
   recomputed series immediately beside it as `framewise_displacement_filtered`.
   The output respects the configured header setting and logs column order when

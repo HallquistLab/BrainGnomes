@@ -53,6 +53,7 @@ site-library/
 local/
 tmp/
 .cache/
+/inst/dev/
 
 .DS_Store
 .vscode/

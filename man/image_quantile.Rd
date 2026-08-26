@@ -3,13 +3,19 @@
 \name{image_quantile}
 \alias{image_quantile}
 \title{Compute Quantiles from a 3D or 4D NIfTI Image}
+\usage{
+image_quantile(in_file, brain_mask = NULL,
+  quantiles = as.numeric(c(0.5)), exclude_zero = FALSE)
+}
 \arguments{
 \item{in_file}{Path to the input 3D or 4D NIfTI image (.nii or .nii.gz).}
 
 \item{brain_mask}{Optional path to a 3D NIfTI image used as a brain mask. Voxels with values > 0.001 are retained.
 The mask must have the same spatial dimensions as the input image. If \code{R_NilValue}, no mask is used.}
 
-\item{quantiles}{A numeric vector of probabilities in \verb{[0, 1]} specifying which quantiles to compute (e.g., 0.5 for the median).}
+\item{quantiles}{A non-empty numeric vector of finite, non-missing
+probabilities in \verb{[0, 1]} specifying which quantiles to compute (e.g., 0.5
+for the median). \code{NA}, \code{NaN}, \code{Inf}, and \code{-Inf} are rejected.}
 
 \item{exclude_zero}{If \code{true}, zero-valued voxels in the image will be excluded from the quantile calculation.}
 }
@@ -30,7 +36,7 @@ and/or excludes zero-valued voxels. For 4D images, the function pools over all t
 \examples{
 \dontrun{
 # Compute the median
-image_quantile("bold.nii.gz", 0.5)
+image_quantile("bold.nii.gz", quantiles = 0.5)
 
 # With masking and zero exclusion
 image_quantile("bold.nii.gz", "mask.nii.gz", c(0.25, 0.5, 0.75), exclude_zero=TRUE)

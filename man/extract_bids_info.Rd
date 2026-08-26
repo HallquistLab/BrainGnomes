@@ -12,7 +12,11 @@ extract_bids_info(filenames, drop_unused = FALSE)
 \item{drop_unused}{Logical; if \code{TRUE}, drop any BIDS entities that are not present in any of the filenames.}
 }
 \value{
-A data.frame containing the BIDS key-value fields extracted from each filename (each row corresponds to an input filename).
+A data.frame containing the BIDS key-value fields extracted from each
+filename (each row corresponds to an input filename). For empty input, a
+zero-row data frame with the complete character-column schema is returned;
+this schema is retained even when \code{drop_unused = TRUE} because no rows are
+available from which to infer unused entities.
 }
 \description{
 Extract fields from BIDS filenames
