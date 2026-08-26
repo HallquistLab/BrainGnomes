@@ -21,6 +21,13 @@ them. Once configured,
 [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
 will schedule extraction jobs.
 
+Each successful scheduled extraction writes a job-specific manifest
+containing the exact timeseries and connectivity files returned by
+[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md).
+Status checks verify those paths and file sizes beneath the shared
+`data_rois` directory. Outputs from other subjects, sessions, or
+extraction streams are not used as evidence that the job completed.
+
 ## ROI extraction setup
 
 During `setup_project`, if you enable ROI extraction, you will be asked
@@ -29,11 +36,37 @@ identifying the stream), the postprocess streams that should serve as
 inputs to extraction (i.e., what files from postprocessing should be
 used), and which atlases or ROI masks should be used for extraction.
 
-Note that multiple postprocessing streams can serve as inputs for an
-extraction stream.
+Multiple postprocessing streams can serve as inputs for one extraction
+stream. For example, an extraction stream can combine a resting-state
+postprocessing stream whose outputs use `desc-clean` with a task stream
+whose outputs use `desc-denoised`:
+
+``` yaml
+postprocess:
+  rest_clean:
+    input_regex: "task:rest desc:preproc suffix:bold"
+    bids_desc: clean
+  nback_denoised:
+    input_regex: "task:nback desc:preproc suffix:bold"
+    bids_desc: denoised
+
+extract_rois:
+  connectivity:
+    input_streams: [rest_clean, nback_denoised]
+```
+
+BrainGnomes preserves these associations positionally: the resting-state
+specification is matched only with `desc-clean`, and the n-back
+specification only with `desc-denoised`. It does not search the
+cross-product of all input specifications and descriptions. The
+lower-level
+[`get_postproc_output_files()`](https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_output_files.md)
+function follows the same rule when supplied equal-length vectors. A
+single `bids_desc` may be applied to several input specifications; all
+other length mismatches are errors.
 
 Also, multiple atlases/ROI masks can be included in a single extraction
-stream. As detailed belwo, the output files are named according to the
+stream. As detailed below, the output files are named according to the
 mask name. All atlas/ROI mask files should be integer-valued NIfTI files
 having the same stereotaxic space and spatial resolution as the
 postprocessed data. BrainGnomes performs simple checks on these files,
@@ -68,7 +101,9 @@ connectivity calculations.
 
 Connectivity matrices are optional and are governed by the `cor_method`
 argument. Multiple methods may be supplied. If you choose `'none'`, then
-no connectivity calculations will be done. Supported options include:
+no connectivity calculations will be done. Select `'none'` by itself and
+keep `save_ts = TRUE`; the returned `correlation` value will be `NULL`.
+Supported correlation options include:
 
 - **pearson** – standard product–moment correlation.
 - **spearman** – rank‑based correlation that is robust to non‑linear but
@@ -78,6 +113,15 @@ no connectivity calculations will be done. Supported options include:
   useful when the number of ROIs is large relative to the number of time
   points.
 
+For scheduled extraction,
+[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+stores the selected methods under
+`extract_rois/<stream>/correlation/method`;
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+passes those nested settings to the extraction helper. The direct
+[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+interface uses the `cor_method` argument instead.
+
 ## Other settings
 
 BrainGnomes can export the time series from each ROI (aggregating voxels
@@ -85,6 +129,18 @@ in the region) to a .tsv file that is volumes x rois in size. This can
 be helpful if you want to run external analyses on ROI time series. If
 you answer “yes” to `Output ROI time series?`, then BrainGnomes will
 output timeseries files ending in `_timeseries.tsv`.
+
+Set `save_diagnostics = TRUE` to write an additional
+`_roidiagnostics.tsv` file for each atlas and input image. It contains
+one row per atlas label and reports the total atlas voxels, voxels
+surviving the optional spatial mask, voxels with usable BOLD time
+series, the applicable minimum-voxel threshold, and whether the ROI was
+retained. The `exclusion_reason` column distinguishes `outside_mask`,
+`invalid_bold`, and `below_threshold`. Proportions are reported relative
+to both the complete atlas ROI and, where applicable, the spatially
+masked ROI. This makes a fully masked ROI distinguishable from one that
+was present spatially but contained only zero, constant, or missing BOLD
+signals.
 
 The `rtoz` flag applies Fisher’s $`z`$ (aka `atanh`) transform to
 correlations, producing unbounded values better suited for group
@@ -95,6 +151,13 @@ for an ROI to be considered valid. The default is 5. If an ROI has fewer
 voxels, then it will be set to NA in the timeseries and connectivity
 output files.
 
+ROI labels are determined from the complete atlas before applying the
+BOLD-derived mask, an optional user-provided mask, or the minimum-voxel
+requirement. Consequently, every positive atlas label remains in the
+same output position for every participant. A fully masked ROI is
+represented by an all-`NA` time-series column and an all-`NA`
+connectivity row and column.
+
 ## Output files and naming
 
 Outputs are organised by atlas within `data_rois/<atlas_name>/`.
@@ -104,9 +167,14 @@ example:
 
     sub-01_task-rest_desc-clean_rois-Schaefer400_timeseries.tsv
     sub-01_task-rest_desc-clean_rois-Schaefer400_cor-pearson_connectivity.tsv
+    sub-01_task-rest_desc-clean_rois-Schaefer400_cor-corShrink_connectivity.tsv
+    sub-01_task-rest_desc-clean_rois-Schaefer400_roidiagnostics.tsv
 
 These naming conventions ensure that time‑series and connectivity files
 can be matched to their originating runs and analysis choices.
+Method-name separators are converted to camelCase to keep BIDS entities
+alphanumeric; for example, the `cor.shrink` estimator is encoded as
+`cor-corShrink`.
 
 ### Note about atlas naming
 
@@ -134,7 +202,8 @@ short example of such a file:
 
 Note how volume skips from 3 to 6. This reflects that volumes 4 and 5
 were scrubbed from the output. `roi3` is all NA because it had fewer
-than the minimum number of valid voxel time series (default: 5).
+than the minimum number of valid voxel time series (default: 5); the
+same representation is used if the ROI is completely masked.
 
 ### connectivity TSV format
 
@@ -145,10 +214,12 @@ integer value in the ROI mask. Here is a short example:
     roi1   roi2   roi3
        1    0.7     NA
      0.7      1     NA
-      NA     NA      1
+      NA     NA     NA
 
-Here, the correlations of `roi3` with the other ROIs are NA because the
-time series was NA.
+Here, every correlation involving `roi3`, including its diagonal, is NA
+because its time series was NA. If every ROI is masked or fails the
+minimum-voxel requirement, the connectivity file still contains the full
+atlas-sized square matrix, with every value set to `NA`.
 
 ## Summary
 

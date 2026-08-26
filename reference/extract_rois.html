@@ -11,7 +11,7 @@ optionally computes ROI-to-ROI correlation matrices."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -27,6 +27,7 @@ optionally computes ROI-to-ROI correlation matrices."></head><body>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -64,6 +65,7 @@ optionally computes ROI-to-ROI correlation matrices.</p>
 <span>  mask_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  min_vox_per_roi <span class="op">=</span> <span class="fl">5</span>,</span>
 <span>  save_ts <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  save_diagnostics <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  rtoz <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -93,7 +95,8 @@ optionally computes ROI-to-ROI correlation matrices.</p>
 <dd><p>Correlation method(s) to use when computing functional
 connectivity. Supported options include "pearson", "spearman",
 "kendall", and "cor.shrink". Use "none" to skip correlation
-computation. Multiple methods may be supplied.</p></dd>
+computation. Multiple correlation methods may be supplied, but "none"
+must be used by itself and requires <code>save_ts = TRUE</code>.</p></dd>
 
 
 <dt id="arg-roi-reduce">roi_reduce<a class="anchor" aria-label="anchor" href="#arg-roi-reduce"></a></dt>
@@ -104,7 +107,9 @@ ROI. Options are "mean" (default), "median", "pca", or "huber".</p></dd>
 <dt id="arg-mask-file">mask_file<a class="anchor" aria-label="anchor" href="#arg-mask-file"></a></dt>
 <dd><p>Optional path to a mask NIfTI file. Voxels outside of this mask
 are excluded from ROI extraction and connectivity calculation. Note that
-constant and zero voxels are always automatically removed by extract_rois.</p></dd>
+constant and zero voxels are always automatically removed by extract_rois.
+All positive atlas labels remain in the outputs; fully masked ROIs have
+all-<code>NA</code> time series and connectivity rows and columns.</p></dd>
 
 
 <dt id="arg-min-vox-per-roi">min_vox_per_roi<a class="anchor" aria-label="anchor" href="#arg-min-vox-per-roi"></a></dt>
@@ -116,25 +121,38 @@ consistent ROI matrix size. Default: <code>5</code>.</p></dd>
 
 
 <dt id="arg-save-ts">save_ts<a class="anchor" aria-label="anchor" href="#arg-save-ts"></a></dt>
-<dd><p>If <code>TRUE</code>, save the ROI time series (aggregated using <code>roi_reduce</code> method)
-to <code>_timeseries.tsv</code>. files. Useful for running external analyses on the ROIs. Default: <code>TRUE</code>.</p></dd>
+<dd><p>If <code>TRUE</code>, save the ROI time series (aggregated using the
+<code>roi_reduce</code> method) to <code>_timeseries.tsv</code> files. Useful for running
+external analyses on the ROIs. Default: <code>TRUE</code>.</p></dd>
+
+
+<dt id="arg-save-diagnostics">save_diagnostics<a class="anchor" aria-label="anchor" href="#arg-save-diagnostics"></a></dt>
+<dd><p>If <code>TRUE</code>, write a per-ROI voxel-retention table to
+<code>_roidiagnostics.tsv</code>. The table distinguishes atlas voxels excluded by an
+optional spatial mask from voxels rejected because their BOLD time series
+are missing, zero, or constant. Default: <code>FALSE</code>.</p></dd>
 
 
 <dt id="arg-rtoz">rtoz<a class="anchor" aria-label="anchor" href="#arg-rtoz"></a></dt>
-<dd><p>If <code>TRUE</code>, using Fisher's z (aka atanh) transformation on correlations to make them
-continuous and unbounded, rather than <code>[0,1]</code>. The diagonal of the correlation matrices beccomes
-15 to approximate the 1.0 correlation, rather than making it <code>Inf</code>.</p></dd>
+<dd><p>If <code>TRUE</code>, apply Fisher's z (atanh) transformation to
+correlations. Untransformed correlations range from <code>-1</code> to <code>1</code>; transformed
+values are unbounded. Fisher transformation would map a diagonal correlation
+of <code>1</code> to <code>Inf</code>, so transformed output matrices use <code>NA</code> on the diagonal.</p></dd>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
-<dd><p>If <code>TRUE</code>, overwrite existing timeseries.tsv or connectivity.tsv files.</p></dd>
+<dd><p>If <code>TRUE</code>, overwrite existing time-series, connectivity,
+or ROI-diagnostics TSV files.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A named list. Each element corresponds to an atlas and contains
 paths to the written timeseries (<code>timeseries</code>) and correlation
-matrix (<code>correlation</code>, or <code>NULL</code> if not computed).</p>
+matrix (<code>correlation</code>, or <code>NULL</code> if not computed), plus the
+voxel-retention table (<code>diagnostics</code>) when requested. Output ROI
+columns and connectivity dimensions include every positive atlas label,
+including labels with no usable voxels.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

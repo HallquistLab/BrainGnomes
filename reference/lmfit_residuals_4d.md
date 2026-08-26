@@ -6,6 +6,15 @@ voxel in a 4D NIfTI image. The fitted model is then applied to all
 timepoints to obtain predicted values, and the residuals are returned as
 a cleaned 4D image.
 
+## Usage
+
+``` r
+lmfit_residuals_4d(infile, X, include_rows = NULL,
+  add_intercept = FALSE, outfile = "", internal = FALSE,
+  preserve_mean = FALSE, set_mean = 0, regress_cols = NULL,
+  exclusive = FALSE)
+```
+
 ## Arguments
 
 - infile:

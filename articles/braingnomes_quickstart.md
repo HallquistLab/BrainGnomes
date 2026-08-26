@@ -8,14 +8,17 @@ serves as a wrapper around common fMRI processing tools such as
 HeuDiConv (for DICOM-to-BIDS conversion), BIDS Validator, MRIQC (quality
 control), fMRIPrep (preprocessing pipeline), and ICA-AROMA (automatic
 removal of motion artifacts), orchestrating their execution in a
-coherent pipeline. The package also provides additional processing steps
-for preparing fMRI data for analysis, such as spatial smoothing,
-temporal filtering, and confound regression. BrainGnomes uses
-containerized software (Singularity images) to ensure reproducible
-environments for imaging tools and it manages job submission to HPC
-schedulers (SLURM or TORQUE). In this tutorial, we will walk through the
-full workflow of setting up and running an fMRI preprocessing study
-using BrainGnomes. We will cover the three key functions:
+coherent pipeline. BIDS validation is configured with the project but
+submitted separately through
+[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+The package also provides additional processing steps for preparing fMRI
+data for analysis, such as spatial smoothing, temporal filtering, and
+confound regression. BrainGnomes uses containerized software
+(Singularity images) to ensure reproducible environments for imaging
+tools and it manages job submission to HPC schedulers (SLURM or TORQUE).
+In this tutorial, we will walk through the full workflow of setting up
+and running an fMRI preprocessing study using BrainGnomes. We will cover
+the three key functions:
 
 - setup_project(): Initialize a new study configuration (either from
   scratch or from an existing YAML configuration file)
@@ -34,8 +37,13 @@ inputs/outputs, and offers troubleshooting tips for common issues. By
 the end of demo, a new user should understand how to configure a study
 and launch the BrainGnomes pipeline from start to finish.
 
-This package is designed to run on HPC clusters that use SLURm or
-TORQUE. It not designed to run on a standard computer.
+Full pipeline submission is designed for HPC clusters using SLURM or
+TORQUE/PBS. The package itself can be installed and loaded on a standard
+computer, where configuration inspection, BIDS helpers, status-table
+handling, and native imaging helpers remain available. See [Local
+onboarding and
+prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.md)
+for an executable no-cluster introduction.
 
 ### Basic process flow of BrainGnomes
 
@@ -103,7 +111,26 @@ will be asked for Singularity containers for all analysis steps, but
 many of these can be skipped if you have no intention of running that
 step (e.g., MRIQC).
 
-Before using `BrainGnomes`, attend to the following prerequisites:
+Before using `BrainGnomes`, identify the requirements for the stages you
+plan to enable:
+
+| Capability or stage | Requirements beyond the installed R package |
+|----|----|
+| Local configuration/BIDS/image helpers | None; no scheduler or container is needed |
+| Any scheduled stage | SLURM or TORQUE/PBS, Bash, and accessible project, scratch, and log storage |
+| Flywheel synchronization | Flywheel `fw` CLI and account access |
+| DICOM-to-BIDS conversion | HeuDiConv container, DICOM inputs, and a study heuristic |
+| BIDS validation | BIDS validator; submitted separately through [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
+| MRIQC | MRIQC container |
+| fMRIPrep | fMRIPrep container, BIDS inputs, TemplateFlow cache, and FreeSurfer license |
+| ICA-AROMA | fMRIPost-AROMA container |
+| Postprocessing | FSL container; Python with `nibabel`, `nilearn`, and `templateflow` for template-mask resampling |
+| ROI extraction | Postprocessed BOLD and compatible atlas/mask images; project-managed runs use the scheduler |
+
+BrainGnomes batch scripts call `singularity`; Apptainer can be used when
+it provides the compatible `singularity` command.
+
+The corresponding setup checklist is:
 
 1.  Installation: Install the BrainGnomes R package. The package is not
     on CRAN (yet), so for now, you must install from GitHub. Then load
@@ -504,13 +531,15 @@ vignette](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.md).
 
 ### BIDS validation setup
 
-As an optional part of the pipeline, bids-validator can be run on the
-BIDS directory (once BIDS conversion has completed). This is
-accomplished by
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md),
-which can be run as needed. Here, saying yes to the prompt
+BIDS validation is configured with the project, but it is not a
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+stage. Submit it separately through
+[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+whenever validation of the BIDS directory is desired, usually after BIDS
+conversion. Saying yes to the prompt
 `Enable BIDS validation? (yes/no; Press enter to accept default: yes)`
-will setup the bids-validator step for later use. You will be asked for:
+records the validator settings for that later submission. You will be
+asked for:
 
 1.  Location of the bids-validator program
 2.  Resource requirements: Defaults for BrainGnomes bids-validator are
@@ -605,18 +634,33 @@ postprocessing on these subjects:
 run_project(scfg, subject_filter=c("242", "510"), steps="postprocess")
 ```
 
-The available `steps` are
-`"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois"`.
+The available `steps` are `"flywheel_sync"`, `"bids_conversion"`,
+`"mriqc"`, `"fmriprep"`, `"aroma"`, `"postprocess"`, and
+`"extract_rois"`. BIDS validation is configured with the project but
+submitted separately through
+[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
 Note that if you request a step in `run_project` that was never
 configured it will result in an error.
 
+Before submitting work, use `dry_run = TRUE` to inspect the
+subject/session scope and the resolved settings for every selected
+postprocessing and extraction stream:
+
+``` r
+
+run_project(
+  scfg,
+  steps = c("postprocess", "extract_rois"),
+  dry_run = TRUE
+)
+```
+
 ## Running BrainGnomes on the command line
 
-As of August 2025, this is a work in progress. That said, there is basic
-support for using BrainGnomes on the Linux command line. This is helpful
-if you prefer not to start an R session or you just want to perform
-basic operations such as editing a study configuration or running a
-processing step.
+BrainGnomes provides a command-line interface for setup, configuration
+editing, pipeline submission, and status reporting. This is helpful if
+you prefer not to start an R session or want to perform routine
+operations from a shell.
 
 To get BrainGnomes on the command line, you need to add the location of
 the package to your Linux path. If you don’t know where it is installed,
@@ -627,22 +671,37 @@ run this in an R session.
 find.package("BrainGnomes")
 ```
 
-You then need this in your path when a terminal starts. If you use bash,
-the easiest route is often to add a line like this to your `~/.bashrc`.
+Add that package directory to your path when a terminal starts. If you
+use bash, the following portable form can be added to `~/.bashrc`:
 
-    export PATH="/Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library/BrainGnomes:$PATH"
+``` bash
+export PATH="$(Rscript -e 'cat(find.package(\"BrainGnomes\"))'):$PATH"
+```
 
-This will enable you to type `BrainGnomes` at the terminal prompt:
+This enables the `BrainGnomes` command. The block below is generated by
+running the installed command itself when this vignette is built, so it
+stays synchronized with `inst/BrainGnomes`:
 
-    > /BrainGnomes
     Usage: BrainGnomes <command> [options]
+
     Commands:
       setup_project [project_name] [project_directory]
       edit_project <project_directory|config.yaml>
-      run_project <project_directory|config.yaml> -steps <steps> -subject_filter <ids> -postprocess_streams <streams> [-debug] [-force]
+      run_project <project_directory|config.yaml> [--steps=<steps>] [--subject_filter=<ids>] [--extract_streams=<streams>] [--dry-run]
+      status <project_directory|config.yaml> [--sub_id=<id>] [--ses_id=<id>] [--summary]
+      help [command]
 
-As seen above, the CLI supports `setup_project`, `edit_project`, and
-`run_project`. The basics of these commands have already been described
-above. On the CLI, the only difference is that objects such as `scfg`
-are not persisted in a session. Rather, changes are made to the
-`project_config.yaml` script in the project directory.
+    Examples:
+      BrainGnomes setup_project demo_project /proj/my_study
+      BrainGnomes edit_project /proj/my_study/project_config.yaml
+      BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess' --subject_filter='001 002' --force
+      BrainGnomes status /proj/my_study/project_config.yaml --summary
+
+    Use 'BrainGnomes <command> --help' for command-specific help.
+
+Use `BrainGnomes <command> --help` for command-specific options and
+examples. On the CLI, objects such as `scfg` are not persisted in a
+session; configuration changes are saved to `project_config.yaml` in the
+project directory. BIDS validation remains an R operation configured
+with the project but submitted separately through
+[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).

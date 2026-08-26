@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,7 @@
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul>
 </li>
@@ -82,14 +83,16 @@ serves as a wrapper around common fMRI processing tools such as
 HeuDiConv (for DICOM-to-BIDS conversion), BIDS Validator, MRIQC (quality
 control), fMRIPrep (preprocessing pipeline), and ICA-AROMA (automatic
 removal of motion artifacts), orchestrating their execution in a
-coherent pipeline. The package also provides additional processing steps
-for preparing fMRI data for analysis, such as spatial smoothing,
-temporal filtering, and confound regression. BrainGnomes uses
-containerized software (Singularity images) to ensure reproducible
-environments for imaging tools and it manages job submission to HPC
-schedulers (SLURM or TORQUE). In this tutorial, we will walk through the
-full workflow of setting up and running an fMRI preprocessing study
-using BrainGnomes. We will cover the three key functions:</p>
+coherent pipeline. BIDS validation is configured with the project but
+submitted separately through <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>. The
+package also provides additional processing steps for preparing fMRI
+data for analysis, such as spatial smoothing, temporal filtering, and
+confound regression. BrainGnomes uses containerized software
+(Singularity images) to ensure reproducible environments for imaging
+tools and it manages job submission to HPC schedulers (SLURM or TORQUE).
+In this tutorial, we will walk through the full workflow of setting up
+and running an fMRI preprocessing study using BrainGnomes. We will cover
+the three key functions:</p>
 <ul>
 <li>setup_project(): Initialize a new study configuration (either from
 scratch or from an existing YAML configuration file)</li>
@@ -106,8 +109,11 @@ expected inputs/outputs, and offers troubleshooting tips for common
 issues. By the end of demo, a new user should understand how to
 configure a study and launch the BrainGnomes pipeline from start to
 finish.</p>
-<p>This package is designed to run on HPC clusters that use SLURm or
-TORQUE. It not designed to run on a standard computer.</p>
+<p>Full pipeline submission is designed for HPC clusters using SLURM or
+TORQUE/PBS. The package itself can be installed and loaded on a standard
+computer, where configuration inspection, BIDS helpers, status-table
+handling, and native imaging helpers remain available. See <a href="local_onboarding.html">Local onboarding and prerequisites</a> for
+an executable no-cluster introduction.</p>
 <div class="section level3">
 <h3 id="basic-process-flow-of-braingnomes">Basic process flow of BrainGnomes<a class="anchor" aria-label="anchor" href="#basic-process-flow-of-braingnomes"></a>
 </h3>
@@ -175,8 +181,71 @@ through fmriprep, you could use BrainGnomes only for postprocessing. In
 the setup phase, you will be asked for Singularity containers for all
 analysis steps, but many of these can be skipped if you have no
 intention of running that step (e.g., MRIQC).</p>
-<p>Before using <code>BrainGnomes</code>, attend to the following
-prerequisites:</p>
+<p>Before using <code>BrainGnomes</code>, identify the requirements for
+the stages you plan to enable:</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th>Capability or stage</th>
+<th>Requirements beyond the installed R package</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>Local configuration/BIDS/image helpers</td>
+<td>None; no scheduler or container is needed</td>
+</tr>
+<tr class="even">
+<td>Any scheduled stage</td>
+<td>SLURM or TORQUE/PBS, Bash, and accessible project, scratch, and log
+storage</td>
+</tr>
+<tr class="odd">
+<td>Flywheel synchronization</td>
+<td>Flywheel <code>fw</code> CLI and account access</td>
+</tr>
+<tr class="even">
+<td>DICOM-to-BIDS conversion</td>
+<td>HeuDiConv container, DICOM inputs, and a study heuristic</td>
+</tr>
+<tr class="odd">
+<td>BIDS validation</td>
+<td>BIDS validator; submitted separately through
+<code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>
+</td>
+</tr>
+<tr class="even">
+<td>MRIQC</td>
+<td>MRIQC container</td>
+</tr>
+<tr class="odd">
+<td>fMRIPrep</td>
+<td>fMRIPrep container, BIDS inputs, TemplateFlow cache, and FreeSurfer
+license</td>
+</tr>
+<tr class="even">
+<td>ICA-AROMA</td>
+<td>fMRIPost-AROMA container</td>
+</tr>
+<tr class="odd">
+<td>Postprocessing</td>
+<td>FSL container; Python with <code>nibabel</code>,
+<code>nilearn</code>, and <code>templateflow</code> for template-mask
+resampling</td>
+</tr>
+<tr class="even">
+<td>ROI extraction</td>
+<td>Postprocessed BOLD and compatible atlas/mask images; project-managed
+runs use the scheduler</td>
+</tr>
+</tbody>
+</table>
+<p>BrainGnomes batch scripts call <code>singularity</code>; Apptainer
+can be used when it provides the compatible <code>singularity</code>
+command.</p>
+<p>The corresponding setup checklist is:</p>
 <ol style="list-style-type: decimal">
 <li>Installation: Install the BrainGnomes R package. The package is not
 on CRAN (yet), so for now, you must install from GitHub. Then load it in
@@ -572,13 +641,14 @@ details about ROI reduction choices and correlation options, see the <a href="ex
 <div class="section level3">
 <h3 id="bids-validation-setup">BIDS validation setup<a class="anchor" aria-label="anchor" href="#bids-validation-setup"></a>
 </h3>
-<p>As an optional part of the pipeline, bids-validator can be run on the
-BIDS directory (once BIDS conversion has completed). This is
-accomplished by <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>, which can be run as
-needed. Here, saying yes to the prompt
+<p>BIDS validation is configured with the project, but it is not a
+<code><a href="../reference/run_project.html">run_project()</a></code> stage. Submit it separately through
+<code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code> whenever validation of the BIDS
+directory is desired, usually after BIDS conversion. Saying yes to the
+prompt
 <code>Enable BIDS validation? (yes/no; Press enter to accept default: yes)</code>
-will setup the bids-validator step for later use. You will be asked
-for:</p>
+records the validator settings for that later submission. You will be
+asked for:</p>
 <ol style="list-style-type: decimal">
 <li>Location of the bids-validator program</li>
 <li>Resource requirements: Defaults for BrainGnomes bids-validator are
@@ -653,43 +723,66 @@ postprocessing on these subjects:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
 <span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span>, steps<span class="op">=</span><span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
-<p>The available <code>steps</code> are
-<code>"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois"</code>.
-Note that if you request a step in <code>run_project</code> that was
-never configured it will result in an error.</p>
+<p>The available <code>steps</code> are <code>"flywheel_sync"</code>,
+<code>"bids_conversion"</code>, <code>"mriqc"</code>,
+<code>"fmriprep"</code>, <code>"aroma"</code>,
+<code>"postprocess"</code>, and <code>"extract_rois"</code>. BIDS
+validation is configured with the project but submitted separately
+through <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>. Note that if you request a
+step in <code>run_project</code> that was never configured it will
+result in an error.</p>
+<p>Before submitting work, use <code>dry_run = TRUE</code> to inspect
+the subject/session scope and the resolved settings for every selected
+postprocessing and extraction stream:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span></span>
+<span>  <span class="va">scfg</span>,</span>
+<span>  steps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"postprocess"</span>, <span class="st">"extract_rois"</span><span class="op">)</span>,</span>
+<span>  dry_run <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
 <h2 id="running-braingnomes-on-the-command-line">Running BrainGnomes on the command line<a class="anchor" aria-label="anchor" href="#running-braingnomes-on-the-command-line"></a>
 </h2>
-<p>As of August 2025, this is a work in progress. That said, there is
-basic support for using BrainGnomes on the Linux command line. This is
-helpful if you prefer not to start an R session or you just want to
-perform basic operations such as editing a study configuration or
-running a processing step.</p>
+<p>BrainGnomes provides a command-line interface for setup,
+configuration editing, pipeline submission, and status reporting. This
+is helpful if you prefer not to start an R session or want to perform
+routine operations from a shell.</p>
 <p>To get BrainGnomes on the command line, you need to add the location
 of the package to your Linux path. If you don’t know where it is
 installed, run this in an R session.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/find.package.html" class="external-link">find.package</a></span><span class="op">(</span><span class="st">"BrainGnomes"</span><span class="op">)</span></span></code></pre></div>
-<p>You then need this in your path when a terminal starts. If you use
-bash, the easiest route is often to add a line like this to your
-<code>~/.bashrc</code>.</p>
-<pre><code>export PATH="/Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library/BrainGnomes:$PATH"</code></pre>
-<p>This will enable you to type <code>BrainGnomes</code> at the terminal
-prompt:</p>
-<pre><code>&gt; /BrainGnomes
-Usage: BrainGnomes &lt;command&gt; [options]
+<p>Add that package directory to your path when a terminal starts. If
+you use bash, the following portable form can be added to
+<code>~/.bashrc</code>:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">'cat(find.package(\"BrainGnomes\"))'</span><span class="va">)</span><span class="st">:</span><span class="va">$PATH</span><span class="st">"</span></span></code></pre></div>
+<p>This enables the <code>BrainGnomes</code> command. The block below is
+generated by running the installed command itself when this vignette is
+built, so it stays synchronized with <code>inst/BrainGnomes</code>:</p>
+<pre><code>Usage: BrainGnomes &lt;command&gt; [options]
+
 Commands:
   setup_project [project_name] [project_directory]
   edit_project &lt;project_directory|config.yaml&gt;
-  run_project &lt;project_directory|config.yaml&gt; -steps &lt;steps&gt; -subject_filter &lt;ids&gt; -postprocess_streams &lt;streams&gt; [-debug] [-force]</code></pre>
-<p>As seen above, the CLI supports <code>setup_project</code>,
-<code>edit_project</code>, and <code>run_project</code>. The basics of
-these commands have already been described above. On the CLI, the only
-difference is that objects such as <code>scfg</code> are not persisted
-in a session. Rather, changes are made to the
-<code>project_config.yaml</code> script in the project directory.</p>
+  run_project &lt;project_directory|config.yaml&gt; [--steps=&lt;steps&gt;] [--subject_filter=&lt;ids&gt;] [--extract_streams=&lt;streams&gt;] [--dry-run]
+  status &lt;project_directory|config.yaml&gt; [--sub_id=&lt;id&gt;] [--ses_id=&lt;id&gt;] [--summary]
+  help [command]
+
+Examples:
+  BrainGnomes setup_project demo_project /proj/my_study
+  BrainGnomes edit_project /proj/my_study/project_config.yaml
+  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess' --subject_filter='001 002' --force
+  BrainGnomes status /proj/my_study/project_config.yaml --summary
+
+Use 'BrainGnomes &lt;command&gt; --help' for command-specific help.</code></pre>
+<p>Use <code>BrainGnomes &lt;command&gt; --help</code> for
+command-specific options and examples. On the CLI, objects such as
+<code>scfg</code> are not persisted in a session; configuration changes
+are saved to <code>project_config.yaml</code> in the project directory.
+BIDS validation remains an R operation configured with the project but
+submitted separately through <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

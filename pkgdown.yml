@@ -7,8 +7,9 @@ articles:
   diagnosing_pipeline: diagnosing_pipeline.html
   extract_rois: extract_rois.html
   intensity_normalization: intensity_normalization.html
+  local_onboarding: local_onboarding.html
   postprocessing: postprocessing.html
-last_built: 2026-08-14T18:58Z
+last_built: 2026-08-26T12:15Z
 urls:
   reference: https://uncdependlab.github.io/BrainGnomes/reference
   article: https://uncdependlab.github.io/BrainGnomes/articles

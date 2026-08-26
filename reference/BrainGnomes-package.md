@@ -1,6 +1,12 @@
-# BrainGnomes: An R package for preprocessing and analyzing fMRI data
+# BrainGnomes: HPC Workflows for Functional MRI Preprocessing and Analysis
 
-This R package handles preprocessing of fMRI data on HPC clusters.
+Configures, submits, and monitors reproducible functional magnetic
+resonance imaging workflows on high-performance computing clusters using
+containerized neuroimaging tools. The package can be installed and its
+configuration, BIDS, status, and native imaging helpers can be used
+without a cluster. Full pipeline execution requires a supported
+scheduler and stage-specific external software; template-dependent
+operations may also use Python and TemplateFlow.
 
 ## See also
 

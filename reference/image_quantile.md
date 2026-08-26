@@ -4,6 +4,13 @@ Computes one or more quantiles from a 3D or 4D NIfTI image. Optionally
 applies a 3D brain mask and/or excludes zero-valued voxels. For 4D
 images, the function pools over all timepoints.
 
+## Usage
+
+``` r
+image_quantile(in_file, brain_mask = NULL,
+  quantiles = as.numeric(c(0.5)), exclude_zero = FALSE)
+```
+
 ## Arguments
 
 - in_file:
@@ -18,8 +25,9 @@ images, the function pools over all timepoints.
 
 - quantiles:
 
-  A numeric vector of probabilities in `[0, 1]` specifying which
-  quantiles to compute (e.g., 0.5 for the median).
+  A non-empty numeric vector of finite, non-missing probabilities in
+  `[0, 1]` specifying which quantiles to compute (e.g., 0.5 for the
+  median). `NA`, `NaN`, `Inf`, and `-Inf` are rejected.
 
 - exclude_zero:
 
@@ -47,7 +55,7 @@ strings (e.g., "50.00%").
 ``` r
 if (FALSE) { # \dontrun{
 # Compute the median
-image_quantile("bold.nii.gz", 0.5)
+image_quantile("bold.nii.gz", quantiles = 0.5)
 
 # With masking and zero exclusion
 image_quantile("bold.nii.gz", "mask.nii.gz", c(0.25, 0.5, 0.75), exclude_zero=TRUE)

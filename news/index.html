@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -23,6 +23,7 @@
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -42,8 +43,21 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.8-2" id="braingnomes-08-2">BrainGnomes 0.8-2<a class="anchor" aria-label="anchor" href="#braingnomes-08-2"></a></h2>
-<ul><li>Preserve source FD in notch-filtered calculated confounds and write the recomputed series immediately beside it as <code>framewise_displacement_filtered</code>. The output respects the configured header setting and logs column order when headers are disabled; filtering-based scrubbing and confound regression use the filtered FD. Clearly reversed notch bounds are repaired automatically; skipped filters are logged and never produce a misleading filtered-FD label. When FD is selected as a processed confound, both the source-derived and notch-derived FD columns retain all configured BOLD-matched confound processing.</li>
+<h2 class="pkg-version" data-toc-text="0.9" id="braingnomes-09">BrainGnomes 0.9<a class="anchor" aria-label="anchor" href="#braingnomes-09"></a></h2>
+<p>Released 2026-08-25</p>
+<ul><li>Document stage-specific runtime requirements in package metadata, the README, and Quickstart. Add an installed miniature project configuration and an executable local-onboarding vignette that clearly separates no-cluster helpers, submission-free dry runs, and scheduler/container-dependent project execution.</li>
+<li>Correct ROI-connectivity provenance and execution: estimator-specific filenames are now unique, scheduled extraction honors nested correlation settings, <code>cor.shrink</code> has a stable BIDS entity, and time-series-only extraction supports <code>cor_method = "none"</code>.</li>
+<li>Preserve the one-to-one association between multiple postprocessing input streams and their BIDS descriptions during ROI extraction. Ambiguous vector lengths now fail explicitly instead of selecting or combining unintended inputs.</li>
+<li>Apply interactively configured ROI masks, preserve every atlas label when an ROI is fully masked, and return schema- and dimension-stable time-series, connectivity, and diagnostic outputs for empty ROIs and entirely masked atlases.</li>
+<li>Report per-stream ROI-extraction state in project and subject status. Scheduled extraction now writes an explicit manifest of its actual time-series, connectivity, and diagnostic outputs so completion checks do not depend on a directory-wide snapshot.</li>
+<li>Honor <code>save_ts = FALSE</code> in scheduled extraction and reject contradictory extraction configurations before output is created.</li>
+<li>Align the CLI, <code><a href="../reference/run_project.html">run_project()</a></code> help, examples, and vignettes with the seven supported submitted stages. BIDS validation remains project-configured but is submitted separately with <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>; stream selection and dry-run output now expose resolved settings.</li>
+<li>Harden public and native interfaces with complete help signatures, working examples, stable empty data-frame schemas, finite image-quantile validation, zero-length and dimension checks, and clearer argument errors.</li>
+<li>Keep development-only calibration resources, local Codex files, audit reports, prior build products, and Python bytecode caches out of source packages and installed-package tests. Remove the obsolete <code>ROI_TempCorr.R</code> entry point after migrating its useful voxel-retention diagnostics into supported ROI extraction.</li>
+<li>Stabilize empty-result contracts: <code>extract_bids_info(character())</code> now returns its complete typed BIDS schema, and <code><a href="../reference/get_project_status.html">get_project_status()</a></code> returns configured status columns even before any subject jobs exist. <code><a href="../reference/image_quantile.html">image_quantile()</a></code> now rejects empty, missing, NaN, and infinite probability vectors before reading image data.</li>
+<li>Improve onboarding and release hygiene: generate Quickstart CLI help from the installed command, document the standalone BIDS-validation boundary consistently, show resolved postprocessing and extraction stream settings during dry runs, and remove the obsolete <code>ROI_TempCorr.R</code> installed entry point after migrating its useful diagnostics into <code><a href="../reference/extract_rois.html">extract_rois()</a></code>.</li>
+<li>Add optional per-ROI voxel-retention diagnostics to ROI extraction. Reports separately track atlas size, optional-mask survival, BOLD-valid voxels, minimum-voxel requirements, retention status, and exclusion reasons; the scheduled extraction workflow includes requested diagnostics in its explicit output manifest.</li>
+<li>Preserve source FD in notch-filtered calculated confounds and write the recomputed series immediately beside it as <code>framewise_displacement_filtered</code>. The output respects the configured header setting and logs column order when headers are disabled; filtering-based scrubbing and confound regression use the filtered FD. Clearly reversed notch bounds are repaired automatically; skipped filters are logged and never produce a misleading filtered-FD label. When FD is selected as a processed confound, both the source-derived and notch-derived FD columns retain all configured BOLD-matched confound processing.</li>
 <li>Add a <code>voxel_psc</code> intensity-normalization mode that uses the existing robust reference-core and eligible-frame policy and applies denominator-guarded baseline-to-100 scaling after spatial processing. Reliable local baselines use ordinary PSC scaling, very low positive baselines use a lower denominator bound, and invalid baselines or those with too few eligible frames use a conservative run-level fallback. The guards do not clip observations or mask voxels; the user’s <code>apply_mask</code> decision is preserved, and the multiplier map and guard counts are saved for provenance. Guard counts and percentages within the conservative automask are logged at info level, with complete-grid counts at debug level.</li>
 <li>Add a user-oriented intensity-normalization vignette documenting the <code>target</code> convention, robust reference-core policy, provenance outputs, QA, and limitations.</li>
 <li>Replace <code><a href="../reference/automask.html">automask()</a></code>’s background-sensitive positive-voxel quantile interpolation with an iterative AFNI-style clip estimator and a smoothly varying local threshold field.</li>

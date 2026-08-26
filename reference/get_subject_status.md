@@ -27,4 +27,6 @@ get_subject_status(scfg, sub_id, ses_id = NULL)
 ## Value
 
 A data.frame with columns indicating completion status and times for
-each enabled step.
+each enabled step. ROI-extraction streams use columns named
+`extract_rois_<stream>_complete` and `extract_rois_<stream>_time`,
+keeping them distinct from postprocessing streams with the same name.

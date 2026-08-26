@@ -6,6 +6,13 @@ passes to eliminate phase distortions, similar to
 using the Direct Form II Transposed structure, including optional
 initial condition handling via steady-state initialization.
 
+## Usage
+
+``` r
+filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
+  use_zi = TRUE)
+```
+
 ## Arguments
 
 - x:

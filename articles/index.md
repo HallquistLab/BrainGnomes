@@ -12,5 +12,7 @@
   Connectivity](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.md):
 - [Intensity Normalization in
   BrainGnomes](https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.md):
+- [Local onboarding and
+  prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.md):
 - [Postprocessing
   Walkthrough](https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.md):

@@ -55,7 +55,7 @@ butterworth_filter_cpp(
 - demean:
 
   Logical. Whether to demean the timeseries prior to filtering. Usually
-  a good to remove
+  a good to remove DC (mean) component (default = true).
 
 ## Value
 

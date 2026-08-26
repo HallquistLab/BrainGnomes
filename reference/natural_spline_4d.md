@@ -5,6 +5,13 @@ the time dimension of a 4D NIfTI image. Timepoints to interpolate are
 specified, and interpolation is applied independently to each voxel's
 time series.
 
+## Usage
+
+``` r
+natural_spline_4d(infile, t_interpolate, edge_nn = FALSE,
+  outfile = "", internal = FALSE)
+```
+
 ## Arguments
 
 - infile:

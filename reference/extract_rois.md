@@ -17,6 +17,7 @@ extract_rois(
   mask_file = NULL,
   min_vox_per_roi = 5,
   save_ts = TRUE,
+  save_diagnostics = FALSE,
   rtoz = FALSE,
   overwrite = FALSE
 )
@@ -45,7 +46,8 @@ extract_rois(
   Correlation method(s) to use when computing functional connectivity.
   Supported options include "pearson", "spearman", "kendall", and
   "cor.shrink". Use "none" to skip correlation computation. Multiple
-  methods may be supplied.
+  correlation methods may be supplied, but "none" must be used by itself
+  and requires `save_ts = TRUE`.
 
 - roi_reduce:
 
@@ -57,7 +59,9 @@ extract_rois(
   Optional path to a mask NIfTI file. Voxels outside of this mask are
   excluded from ROI extraction and connectivity calculation. Note that
   constant and zero voxels are always automatically removed by
-  extract_rois.
+  extract_rois. All positive atlas labels remain in the outputs; fully
+  masked ROIs have all-`NA` time series and connectivity rows and
+  columns.
 
 - min_vox_per_roi:
 
@@ -70,27 +74,38 @@ extract_rois(
 
 - save_ts:
 
-  If `TRUE`, save the ROI time series (aggregated using `roi_reduce`
-  method) to `_timeseries.tsv`. files. Useful for running external
+  If `TRUE`, save the ROI time series (aggregated using the `roi_reduce`
+  method) to `_timeseries.tsv` files. Useful for running external
   analyses on the ROIs. Default: `TRUE`.
+
+- save_diagnostics:
+
+  If `TRUE`, write a per-ROI voxel-retention table to
+  `_roidiagnostics.tsv`. The table distinguishes atlas voxels excluded
+  by an optional spatial mask from voxels rejected because their BOLD
+  time series are missing, zero, or constant. Default: `FALSE`.
 
 - rtoz:
 
-  If `TRUE`, using Fisher's z (aka atanh) transformation on correlations
-  to make them continuous and unbounded, rather than `[0,1]`. The
-  diagonal of the correlation matrices beccomes 15 to approximate the
-  1.0 correlation, rather than making it `Inf`.
+  If `TRUE`, apply Fisher's z (atanh) transformation to correlations.
+  Untransformed correlations range from `-1` to `1`; transformed values
+  are unbounded. Fisher transformation would map a diagonal correlation
+  of `1` to `Inf`, so transformed output matrices use `NA` on the
+  diagonal.
 
 - overwrite:
 
-  If `TRUE`, overwrite existing timeseries.tsv or connectivity.tsv
-  files.
+  If `TRUE`, overwrite existing time-series, connectivity, or
+  ROI-diagnostics TSV files.
 
 ## Value
 
 A named list. Each element corresponds to an atlas and contains paths to
 the written timeseries (`timeseries`) and correlation matrix
-(`correlation`, or `NULL` if not computed).
+(`correlation`, or `NULL` if not computed), plus the voxel-retention
+table (`diagnostics`) when requested. Output ROI columns and
+connectivity dimensions include every positive atlas label, including
+labels with no usable voxels.
 
 ## Details
 

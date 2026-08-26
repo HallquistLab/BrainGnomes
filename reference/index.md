@@ -4,7 +4,7 @@
 
 - [`add_tracked_job_parent()`](https://uncdependlab.github.io/BrainGnomes/reference/add_tracked_job_parent.md)
   : Add parent/child id relationship to tracking database
-- [`automask`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
+- [`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
   : Create an automatic brain mask from a NIfTI image (Rcpp
   implementation)
 - [`butterworth_filter_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/butterworth_filter_4d.md)
@@ -30,12 +30,12 @@
   : Extract fields from BIDS filenames
 - [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
   : Extract ROI timeseries and connectivity matrices
-- [`filtfilt_cpp`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)
+- [`filtfilt_cpp()`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)
   : Zero-Phase IIR Filtering via Forward and Reverse Filtering
 - [`get_fmriprep_outputs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.md)
   : Identify fMRIPrep-Derived Outputs for a NIfTI File
 - [`get_postproc_output_files()`](https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_output_files.md)
-  : List postprocessed output files for a stream based on its input spec
+  : List postprocessed output files for paired input specifications
 - [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
   : Get processing status for all subjects
 - [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
@@ -45,7 +45,7 @@
 - [`getline()`](https://uncdependlab.github.io/BrainGnomes/reference/getline.md)
   : Read a Line of Input from the User in Both Interactive and
   Non-Interactive Sessions
-- [`image_quantile`](https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.md)
+- [`image_quantile()`](https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.md)
   : Compute Quantiles from a 3D or 4D NIfTI Image
 - [`insert_df_sqlite()`](https://uncdependlab.github.io/BrainGnomes/reference/insert_df_sqlite.md)
   : helper function to insert a keyed data.frame into the sqlite storage
@@ -53,21 +53,21 @@
 - [`insert_tracked_job()`](https://uncdependlab.github.io/BrainGnomes/reference/insert_tracked_job.md)
   : Internal helper function to insert a job into the tracking SQLite
   database
-- [`lmfit_residuals_4d`](https://uncdependlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md)
+- [`lmfit_residuals_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md)
   : Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear
   Models
 - [`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md)
   : Load a project configuration from a file
-- [`natural_spline_4d`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_4d.md)
+- [`natural_spline_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_4d.md)
   : Interpolate fMRI Time Series with Cubic Splines in a NIfTI File
-- [`natural_spline_interp`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_interp.md)
+- [`natural_spline_interp()`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_interp.md)
   : Cubic spline interpolation with natural spline and linear
   extrapolation
 - [`parse_cli_args()`](https://uncdependlab.github.io/BrainGnomes/reference/parse_cli_args.md)
   : Parse CLI-style arguments into a nested list using args_to_df()
 - [`postprocess_subject()`](https://uncdependlab.github.io/BrainGnomes/reference/postprocess_subject.md)
   : Postprocess a single fMRI BOLD image using a configured pipeline
-- [`remove_nifti_volumes`](https://uncdependlab.github.io/BrainGnomes/reference/remove_nifti_volumes.md)
+- [`remove_nifti_volumes()`](https://uncdependlab.github.io/BrainGnomes/reference/remove_nifti_volumes.md)
   : Remove Specified Timepoints from a 4D NIfTI Image
 - [`resample_template_to_img()`](https://uncdependlab.github.io/BrainGnomes/reference/resample_template_to_img.md)
   : Resample TemplateFlow Mask to fMRIPrep Image Using Python

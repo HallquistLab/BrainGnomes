@@ -8,9 +8,17 @@ retained, and morphological clean-up steps are applied (largest
 component, peels, hole-filling, optional erosion/dilation, optional
 superior–inferior cutoff).
 
+## Usage
+
+``` r
+automask(img, outfile = "", clfrac = 0.5, NN = 2L,
+  erode_steps = 0L, dilate_steps = 0L, SIhh = 0, peels = 1L,
+  fill_holes = TRUE)
+```
+
 ## Arguments
 
-- image:
+- img:
 
   A `RNifti::NiftiImage` object containing a 3D or 4D volume or file
   path to a NIfTI object whose mask should be calculated
@@ -100,6 +108,6 @@ The processing pipeline is as follows:
 if (FALSE) { # \dontrun{
   library(RNifti)
   nii <- readNifti("sub-01_task-rest_bold.nii.gz")
-  mask <- automask_rcpp(nii, outfile = "sub-01_mask.nii.gz")
+  mask <- automask(nii, outfile = "sub-01_mask.nii.gz")
 } # }
 ```

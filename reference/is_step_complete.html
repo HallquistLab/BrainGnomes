@@ -9,7 +9,7 @@ are present for a given subject/session and processing step."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -25,6 +25,7 @@ are present for a given subject/session and processing step."></head><body>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -57,6 +58,7 @@ are present for a given subject/session and processing step.</p>
 <span>  ses_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">step_name</span>,</span>
 <span>  pp_stream <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  ex_stream <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verify_manifest <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -84,6 +86,11 @@ are present for a given subject/session and processing step.</p>
 <dt id="arg-pp-stream">pp_stream<a class="anchor" aria-label="anchor" href="#arg-pp-stream"></a></dt>
 <dd><p>Name of the postprocessing stream when <code>step_name</code> is
 "postprocess"</p></dd>
+
+
+<dt id="arg-ex-stream">ex_stream<a class="anchor" aria-label="anchor" href="#arg-ex-stream"></a></dt>
+<dd><p>Name of the ROI-extraction stream when <code>step_name</code> is
+"extract_rois"</p></dd>
 
 
 <dt id="arg-verify-manifest">verify_manifest<a class="anchor" aria-label="anchor" href="#arg-verify-manifest"></a></dt>

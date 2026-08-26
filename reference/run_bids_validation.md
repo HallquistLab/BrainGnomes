@@ -1,10 +1,10 @@
 # Run BIDS validation on the project BIDS directory
 
-This helper submits the BIDS validator as a standalone job. It does not
-run as part of
+BIDS validation is configured with the project but submitted separately
+through this function. It is not a
 [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
-and can be invoked whenever validation of the project BIDS directory is
-desired.
+stage and can be invoked whenever validation of the project BIDS
+directory is desired.
 
 ## Usage
 

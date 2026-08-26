@@ -5,6 +5,12 @@ function takes known data points `(x, y)` and evaluates the cubic spline
 interpolation at specified output points `xout`. It uses a natural
 spline formulation with zero second derivatives at the endpoints.
 
+## Usage
+
+``` r
+natural_spline_interp(x, y, xout)
+```
+
 ## Arguments
 
 - x:

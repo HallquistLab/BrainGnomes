@@ -17,7 +17,7 @@ erosion/dilation, optional superior–inferior cutoff)."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,6 +33,7 @@ erosion/dilation, optional superior–inferior cutoff)."></head><body>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -61,12 +62,18 @@ clean-up steps are applied (largest component, peels, hole-filling, optional
 erosion/dilation, optional superior–inferior cutoff).</p>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">automask</span><span class="op">(</span><span class="va">img</span>, outfile <span class="op">=</span> <span class="st">""</span>, clfrac <span class="op">=</span> <span class="fl">0.5</span>, NN <span class="op">=</span> <span class="fl">2L</span>,</span>
+<span>  erode_steps <span class="op">=</span> <span class="fl">0L</span>, dilate_steps <span class="op">=</span> <span class="fl">0L</span>, SIhh <span class="op">=</span> <span class="fl">0</span>, peels <span class="op">=</span> <span class="fl">1L</span>,</span>
+<span>  fill_holes <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+    </div>
 
     <div class="section level2">
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-image">image<a class="anchor" aria-label="anchor" href="#arg-image"></a></dt>
+<dl><dt id="arg-img">img<a class="anchor" aria-label="anchor" href="#arg-img"></a></dt>
 <dd><p>A <code>RNifti::NiftiImage</code> object containing a 3D or 4D volume or
 file path to a NIfTI object whose mask should be calculated</p></dd>
 
@@ -147,7 +154,7 @@ surviving component.</p></li>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/jonclayden/RNifti" class="external-link">RNifti</a></span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="va">nii</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/RNifti/man/readNifti.html" class="external-link">readNifti</a></span><span class="op">(</span><span class="st">"sub-01_task-rest_bold.nii.gz"</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">mask</span> <span class="op">&lt;-</span> <span class="fu">automask_rcpp</span><span class="op">(</span><span class="va">nii</span>, outfile <span class="op">=</span> <span class="st">"sub-01_mask.nii.gz"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">mask</span> <span class="op">&lt;-</span> <span class="fu">automask</span><span class="op">(</span><span class="va">nii</span>, outfile <span class="op">=</span> <span class="st">"sub-01_mask.nii.gz"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

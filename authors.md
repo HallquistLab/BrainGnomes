@@ -9,14 +9,14 @@
 Source:
 [`DESCRIPTION`](https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/DESCRIPTION)
 
-Hallquist M (2026). *BrainGnomes: An R package for preprocessing and
-analyzing fMRI data*. R package version 0.8-2,
+Hallquist M (2026). *BrainGnomes: HPC Workflows for Functional MRI
+Preprocessing and Analysis*. R package version 0.9,
 <https://uncdependlab.github.io/BrainGnomes/>.
 
     @Manual{,
-      title = {BrainGnomes: An R package for preprocessing and analyzing fMRI data},
+      title = {BrainGnomes: HPC Workflows for Functional MRI Preprocessing and Analysis},
       author = {Michael Hallquist},
       year = {2026},
-      note = {R package version 0.8-2},
+      note = {R package version 0.9},
       url = {https://uncdependlab.github.io/BrainGnomes/},
     }

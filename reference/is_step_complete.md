@@ -12,6 +12,7 @@ is_step_complete(
   ses_id = NULL,
   step_name,
   pp_stream = NULL,
+  ex_stream = NULL,
   verify_manifest = TRUE
 )
 ```
@@ -38,6 +39,10 @@ is_step_complete(
 - pp_stream:
 
   Name of the postprocessing stream when `step_name` is "postprocess"
+
+- ex_stream:
+
+  Name of the ROI-extraction stream when `step_name` is "extract_rois"
 
 - verify_manifest:
 

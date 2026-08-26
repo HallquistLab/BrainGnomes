@@ -4,6 +4,12 @@ This function removes specified timepoints (volumes) from a 4D NIfTI
 image and saves the resulting image to a new file. Timepoints are
 specified using 1-based indexing, consistent with R conventions.
 
+## Usage
+
+``` r
+remove_nifti_volumes(infile, remove_tpts, outfile)
+```
+
 ## Arguments
 
 - infile:

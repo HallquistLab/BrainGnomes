@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,7 @@
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul>
 </li>
@@ -88,6 +89,12 @@ because postprocessed files serve as the inputs to ROI extraction.</p>
 how to reduce voxels within ROIs to an aggregated time series and how to
 compute correlations among them. Once configured,
 <code><a href="../reference/run_project.html">run_project()</a></code> will schedule extraction jobs.</p>
+<p>Each successful scheduled extraction writes a job-specific manifest
+containing the exact timeseries and connectivity files returned by
+<code><a href="../reference/extract_rois.html">extract_rois()</a></code>. Status checks verify those paths and file
+sizes beneath the shared <code>data_rois</code> directory. Outputs from
+other subjects, sessions, or extraction streams are not used as evidence
+that the job completed.</p>
 </div>
 <div class="section level2">
 <h2 id="roi-extraction-setup">ROI extraction setup<a class="anchor" aria-label="anchor" href="#roi-extraction-setup"></a>
@@ -98,10 +105,33 @@ a name (for identifying the stream), the postprocess streams that should
 serve as inputs to extraction (i.e., what files from postprocessing
 should be used), and which atlases or ROI masks should be used for
 extraction.</p>
-<p>Note that multiple postprocessing streams can serve as inputs for an
-extraction stream.</p>
+<p>Multiple postprocessing streams can serve as inputs for one
+extraction stream. For example, an extraction stream can combine a
+resting-state postprocessing stream whose outputs use
+<code>desc-clean</code> with a task stream whose outputs use
+<code>desc-denoised</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">postprocess</span><span class="kw">:</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="at">  </span><span class="fu">rest_clean</span><span class="kw">:</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="at">    </span><span class="fu">input_regex</span><span class="kw">:</span><span class="at"> </span><span class="st">"task:rest desc:preproc suffix:bold"</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="at">    </span><span class="fu">bids_desc</span><span class="kw">:</span><span class="at"> clean</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="at">  </span><span class="fu">nback_denoised</span><span class="kw">:</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="at">    </span><span class="fu">input_regex</span><span class="kw">:</span><span class="at"> </span><span class="st">"task:nback desc:preproc suffix:bold"</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="at">    </span><span class="fu">bids_desc</span><span class="kw">:</span><span class="at"> denoised</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="fu">extract_rois</span><span class="kw">:</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="at">  </span><span class="fu">connectivity</span><span class="kw">:</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="at">    </span><span class="fu">input_streams</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">rest_clean</span><span class="kw">,</span><span class="at"> nback_denoised</span><span class="kw">]</span></span></code></pre></div>
+<p>BrainGnomes preserves these associations positionally: the
+resting-state specification is matched only with
+<code>desc-clean</code>, and the n-back specification only with
+<code>desc-denoised</code>. It does not search the cross-product of all
+input specifications and descriptions. The lower-level
+<code><a href="../reference/get_postproc_output_files.html">get_postproc_output_files()</a></code> function follows the same rule
+when supplied equal-length vectors. A single <code>bids_desc</code> may
+be applied to several input specifications; all other length mismatches
+are errors.</p>
 <p>Also, multiple atlases/ROI masks can be included in a single
-extraction stream. As detailed belwo, the output files are named
+extraction stream. As detailed below, the output files are named
 according to the mask name. All atlas/ROI mask files should be
 integer-valued NIfTI files having the same stereotaxic space and spatial
 resolution as the postprocessed data. BrainGnomes performs simple checks
@@ -149,7 +179,9 @@ functional connectivity calculations.</p>
 <p>Connectivity matrices are optional and are governed by the
 <code>cor_method</code> argument. Multiple methods may be supplied. If
 you choose <code>'none'</code>, then no connectivity calculations will
-be done. Supported options include:</p>
+be done. Select <code>'none'</code> by itself and keep
+<code>save_ts = TRUE</code>; the returned <code>correlation</code> value
+will be <code>NULL</code>. Supported correlation options include:</p>
 <ul>
 <li>
 <strong>pearson</strong> – standard product–moment correlation.</li>
@@ -165,6 +197,12 @@ for ordinal or small sample data.</li>
 <code>corpcor</code> package, useful when the number of ROIs is large
 relative to the number of time points.</li>
 </ul>
+<p>For scheduled extraction, <code><a href="../reference/setup_project.html">setup_project()</a></code> stores the
+selected methods under
+<code>extract_rois/&lt;stream&gt;/correlation/method</code>;
+<code><a href="../reference/run_project.html">run_project()</a></code> passes those nested settings to the
+extraction helper. The direct <code><a href="../reference/extract_rois.html">extract_rois()</a></code> interface uses
+the <code>cor_method</code> argument instead.</p>
 </div>
 <div class="section level2">
 <h2 id="other-settings">Other settings<a class="anchor" aria-label="anchor" href="#other-settings"></a>
@@ -175,6 +213,18 @@ This can be helpful if you want to run external analyses on ROI time
 series. If you answer “yes” to <code>Output ROI time series?</code>,
 then BrainGnomes will output timeseries files ending in
 <code>_timeseries.tsv</code>.</p>
+<p>Set <code>save_diagnostics = TRUE</code> to write an additional
+<code>_roidiagnostics.tsv</code> file for each atlas and input image. It
+contains one row per atlas label and reports the total atlas voxels,
+voxels surviving the optional spatial mask, voxels with usable BOLD time
+series, the applicable minimum-voxel threshold, and whether the ROI was
+retained. The <code>exclusion_reason</code> column distinguishes
+<code>outside_mask</code>, <code>invalid_bold</code>, and
+<code>below_threshold</code>. Proportions are reported relative to both
+the complete atlas ROI and, where applicable, the spatially masked ROI.
+This makes a fully masked ROI distinguishable from one that was present
+spatially but contained only zero, constant, or missing BOLD
+signals.</p>
 <p>The <code>rtoz</code> flag applies Fisher’s
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>z</mi><annotation encoding="application/x-tex">z</annotation></semantics></math>
 (aka <code>atanh</code>) transform to correlations, producing unbounded
@@ -183,6 +233,12 @@ values better suited for group analysis.</p>
 present for an ROI to be considered valid. The default is 5. If an ROI
 has fewer voxels, then it will be set to NA in the timeseries and
 connectivity output files.</p>
+<p>ROI labels are determined from the complete atlas before applying the
+BOLD-derived mask, an optional user-provided mask, or the minimum-voxel
+requirement. Consequently, every positive atlas label remains in the
+same output position for every participant. A fully masked ROI is
+represented by an all-<code>NA</code> time-series column and an
+all-<code>NA</code> connectivity row and column.</p>
 </div>
 <div class="section level2">
 <h2 id="output-files-and-naming">Output files and naming<a class="anchor" aria-label="anchor" href="#output-files-and-naming"></a>
@@ -193,9 +249,14 @@ entities: the atlas appears as <code>rois-&lt;Atlas&gt;</code> and
 correlation methods are labelled <code>cor-&lt;method&gt;</code>. For
 example:</p>
 <pre><code>sub-01_task-rest_desc-clean_rois-Schaefer400_timeseries.tsv
-sub-01_task-rest_desc-clean_rois-Schaefer400_cor-pearson_connectivity.tsv</code></pre>
+sub-01_task-rest_desc-clean_rois-Schaefer400_cor-pearson_connectivity.tsv
+sub-01_task-rest_desc-clean_rois-Schaefer400_cor-corShrink_connectivity.tsv
+sub-01_task-rest_desc-clean_rois-Schaefer400_roidiagnostics.tsv</code></pre>
 <p>These naming conventions ensure that time‑series and connectivity
-files can be matched to their originating runs and analysis choices.</p>
+files can be matched to their originating runs and analysis choices.
+Method-name separators are converted to camelCase to keep BIDS entities
+alphanumeric; for example, the <code>cor.shrink</code> estimator is
+encoded as <code>cor-corShrink</code>.</p>
 <div class="section level3">
 <h3 id="note-about-atlas-naming">Note about atlas naming<a class="anchor" aria-label="anchor" href="#note-about-atlas-naming"></a>
 </h3>
@@ -224,7 +285,7 @@ file:</p>
 <p>Note how volume skips from 3 to 6. This reflects that volumes 4 and 5
 were scrubbed from the output. <code>roi3</code> is all NA because it
 had fewer than the minimum number of valid voxel time series (default:
-5).</p>
+5); the same representation is used if the ROI is completely masked.</p>
 </div>
 <div class="section level3">
 <h3 id="connectivity-tsv-format">connectivity TSV format<a class="anchor" aria-label="anchor" href="#connectivity-tsv-format"></a>
@@ -235,9 +296,12 @@ integer value in the ROI mask. Here is a short example:</p>
 <pre><code>roi1   roi2   roi3
    1    0.7     NA
  0.7      1     NA
-  NA     NA      1</code></pre>
-<p>Here, the correlations of <code>roi3</code> with the other ROIs are
-NA because the time series was NA.</p>
+  NA     NA     NA</code></pre>
+<p>Here, every correlation involving <code>roi3</code>, including its
+diagonal, is NA because its time series was NA. If every ROI is masked
+or fails the minimum-voxel requirement, the connectivity file still
+contains the full atlas-sized square matrix, with every value set to
+<code>NA</code>.</p>
 </div>
 </div>
 <div class="section level2">
@@ -251,7 +315,7 @@ ROI analyses to the needs of your study.</p>
 directly, but this is recommended only for testing because it runs the
 compute directly within the R session, rather than scheduling jobs on
 the HPC.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/extract_rois.html">extract_rois</a></span><span class="op">(</span></span>
 <span>  bold_file <span class="op">=</span> <span class="st">"sub-01_task-rest_desc-clean_bold.nii.gz"</span>,</span>

@@ -27,10 +27,14 @@ run_project(
 
 - steps:
 
-  Character vector of pipeline steps to execute (or `"all"` to run all
-  enabled steps). Options are c("flywheel_sync", "bids_conversion",
-  "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois"). If
-  `NULL`, the user will be prompted for which steps to run.
+  Character vector of pipeline stages to execute. Supported stages are
+  `"flywheel_sync"`, `"bids_conversion"`, `"mriqc"`, `"fmriprep"`,
+  `"aroma"`, `"postprocess"`, and `"extract_rois"`. Use `"all"` to run
+  all enabled stages. If `NULL`, the user will be prompted for which
+  stages to run. BIDS validation is configured with the project but
+  submitted separately through
+  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md);
+  it is not a `run_project()` stage.
 
 - subject_filter:
 
@@ -44,16 +48,14 @@ run_project(
 - postprocess_streams:
 
   Optional character vector specifying which postprocessing streams
-  should be run. If ``` "postprocess"`` is included in  ```steps\`, then
-  this setting lets the user choose streams. If NULL, all postprocess
-  streams will be run.
+  should run. When `"postprocess"` is included in `steps`, `NULL`
+  selects every configured postprocessing stream.
 
 - extract_streams:
 
   Optional character vector specifying which ROI extraction streams
-  should be run. If ``` "extract_rois"`` is included in  ```steps\`,
-  then this setting lets the user choose streams. If NULL, all
-  extraction streams will be run.
+  should run. When `"extract_rois"` is included in `steps`, `NULL`
+  selects every configured extraction stream.
 
 - debug:
 
@@ -67,8 +69,10 @@ run_project(
 
 - dry_run:
 
-  A logical value indicating whether to perform a dry run (validate
-  settings and report planned work without submitting any jobs).
+  A logical value indicating whether to perform a dry run. Dry runs
+  validate settings and report subject/session scope plus resolved
+  postprocessing and extraction stream settings without submitting any
+  jobs.
 
 - log_level:
 
@@ -80,11 +84,16 @@ run_project(
 A logical value indicating whether the processing pipeline was
 successfully run.
 
+## See also
+
+[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+to submit the BIDS validation configured with the project.
+
 ## Examples
 
 ``` r
   if (FALSE) { # \dontrun{
     # Assuming you have a valid project configuration list named `study_config`
-    run_project(study_config, prompt = TRUE, force = FALSE)
+    run_project(study_config, steps = "fmriprep", force = FALSE)
   } # }
 ```
