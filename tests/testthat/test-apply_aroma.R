@@ -111,6 +111,41 @@ test_that("apply_aroma preserves a constant positive baseline", {
   expect_equal(as.vector(RNifti::readNifti(out_path)), rep(baseline, n_time))
 })
 
+test_that("non-aggressive AROMA preserves means for offset components", {
+  skip_if_not_installed("RNifti")
+
+  set.seed(20260827)
+  n_time <- 48L
+  removed <- sin(seq_len(n_time) / 4) + 2.5
+  retained <- cos(seq_len(n_time) / 7) - 1.75
+  mixing <- cbind(removed, retained)
+  signal <- 1000 + 4 * removed + 7 * retained + rnorm(n_time, sd = 0.1)
+  mix_path <- tempfile(fileext = ".tsv")
+  in_path <- tempfile(fileext = ".nii.gz")
+  out_path <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(mix_path, in_path, out_path)), add = TRUE)
+  data.table::fwrite(as.data.frame(mixing), mix_path,
+    sep = "\t", col.names = FALSE
+  )
+  RNifti::writeNifti(
+    RNifti::asNifti(array(signal, dim = c(1L, 1L, 1L, n_time))),
+    in_path
+  )
+
+  apply_aroma(
+    in_file = in_path,
+    out_file = out_path,
+    mixing_file = mix_path,
+    noise_ics = 1L,
+    overwrite = TRUE,
+    nonaggressive = TRUE
+  )
+
+  observed <- as.vector(RNifti::readNifti(out_path))
+  expect_equal(mean(observed), mean(signal), tolerance = 1e-5)
+  expect_gt(abs(mean(retained)), 0.5)
+})
+
 test_that("apply_aroma removes AROMA components from confounds using lmfit_residuals_mat", {
   skip_if_not_installed("RNifti")
 

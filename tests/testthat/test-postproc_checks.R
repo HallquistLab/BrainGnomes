@@ -314,7 +314,7 @@ test_that("validate_scrub_interpolate trivially passes with no censored TRs", {
 
 # --- validate_apply_aroma (replay) --------------------------------------------
 
-test_that("validate_apply_aroma passes on consistent replay", {
+test_that("validate_apply_aroma replays the production AROMA specification", {
   skip_if_not_installed("RNifti")
 
   set.seed(501)
@@ -331,33 +331,35 @@ test_that("validate_apply_aroma passes on consistent replay", {
 
   # create 4D BOLD with signal embedded from mixing matrix
   voxel_weights <- matrix(rnorm(prod(nx, ny, nz) * n_comp), nrow = prod(nx, ny, nz))
-  signal_mat <- voxel_weights %*% t(mixing) + rnorm(prod(nx, ny, nz) * nt, sd = 0.5)
+  signal_mat <- 1000 + voxel_weights %*% t(mixing) +
+    rnorm(prod(nx, ny, nz) * nt, sd = 0.5)
   pre_arr <- array(signal_mat, dim = c(nx, ny, nz, nt))
 
   pre_file <- tempfile(fileext = ".nii.gz")
-  post_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(pre_file, post_file, mixing_file)), add = TRUE)
+  post_files <- tempfile(pattern = c("nonaggressive-", "aggressive-"), fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_files, mixing_file)), add = TRUE)
   write_synth_4d(pre_arr, pre_file)
 
-  # apply AROMA (nonaggressive) via the same function the validator will replay
-  lmfit_residuals_4d(
-    infile = pre_file,
-    X = mixing,
-    include_rows = rep(TRUE, nt),
-    add_intercept = FALSE,
-    outfile = post_file,
-    internal = FALSE,
-    preserve_mean = FALSE,
-    set_mean = 0.0,
-    regress_cols = noise_ics,
-    exclusive = FALSE # nonaggressive = TRUE → exclusive = FALSE
-  )
+  # Use the production entry point: it adds an intercept and preserves each
+  # voxel's temporal mean. The validator must replay those exact settings.
+  for (i in seq_along(post_files)) {
+    nonaggressive <- c(TRUE, FALSE)[[i]]
+    apply_aroma(
+      in_file = pre_file,
+      out_file = post_files[[i]],
+      mixing_file = mixing_file,
+      noise_ics = noise_ics,
+      overwrite = TRUE,
+      nonaggressive = nonaggressive
+    )
 
-  result <- validate_apply_aroma(pre_file, post_file, mixing_file,
-    noise_ics = noise_ics, nonaggressive = TRUE
-  )
-  expect_true(result)
-  expect_lt(attr(result, "details")$max_abs_diff, 0.05)
+    result <- validate_apply_aroma(
+      pre_file, post_files[[i]], mixing_file,
+      noise_ics = noise_ics, nonaggressive = nonaggressive
+    )
+    expect_true(result)
+    expect_lt(attr(result, "details")$max_abs_diff, 0.05)
+  }
 })
 
 test_that("validate_apply_aroma skips when no noise ICs", {
@@ -782,6 +784,17 @@ test_that(".pp_power_multitaper returns expected frequency structure", {
   # peak should be near 0.05 Hz
   peak_freq <- spec$f[which.max(spec$power)]
   expect_true(abs(peak_freq - 0.05) < 0.02)
+})
+
+test_that(".pp_power_multitaper smooths a 50-frame spectrum safely", {
+  skip_if_not_installed("multitaper")
+  skip_if_not_installed("signal")
+
+  set.seed(902)
+  y <- sin(seq_len(50L) / 4) + rnorm(50L, sd = 0.2)
+  expect_no_error(spec <- .pp_power_multitaper(y, dt = 0.635, smooth_psd = TRUE))
+  expect_gt(nrow(spec), 0L)
+  expect_true(all(is.finite(spec$power)))
 })
 
 test_that(".pp_power_multitaper errors on constant series", {

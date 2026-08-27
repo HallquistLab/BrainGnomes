@@ -541,3 +541,79 @@ test_that("extract_rois keeps atlas dimensions across different and empty masks"
     "contains no positive ROI labels"
   )
 })
+
+test_that("extract_rois does not apply censoring twice to already scrubbed BOLD", {
+  skip_if_not_installed("RNifti")
+  skip_if_not_installed("data.table")
+  skip_if_not_installed("lgr")
+  skip_if_not_installed("checkmate")
+
+  tmpdir <- tempfile("extract-already-scrubbed-")
+  dir.create(tmpdir, recursive = TRUE)
+  on.exit(unlink(tmpdir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  original_n <- 30L
+  censor <- rep(1L, original_n)
+  censor[c(4L, 12L, 21L)] <- 0L
+  retained_n <- sum(censor)
+  bold <- array(
+    rep(seq_len(retained_n), each = 8L),
+    dim = c(2L, 2L, 2L, retained_n)
+  )
+  atlas <- array(1L, dim = c(2L, 2L, 2L))
+  bold_file <- file.path(tmpdir, "sub-01_task-rest_desc-scrubbed_bold.nii.gz")
+  atlas_file <- file.path(tmpdir, "DemoAtlas.nii.gz")
+  out_dir <- file.path(tmpdir, "rois")
+  dir.create(out_dir)
+  RNifti::writeNifti(RNifti::asNifti(bold), bold_file)
+  RNifti::writeNifti(RNifti::asNifti(atlas), atlas_file)
+  writeLines(
+    as.character(censor),
+    get_censor_file(as.list(extract_bids_info(bold_file)))
+  )
+
+  result <- extract_rois(
+    bold_file, atlas_file, out_dir,
+    cor_method = "pearson", min_vox_per_roi = 1L
+  )[[1L]]
+  timeseries <- data.table::fread(result$timeseries)
+
+  expect_equal(nrow(timeseries), retained_n)
+  expect_equal(timeseries$volume, seq_len(retained_n))
+  expect_true(file.exists(result$correlation[["pearson"]]))
+})
+
+test_that("extract_rois rejects a censor vector incompatible with BOLD length", {
+  skip_if_not_installed("RNifti")
+  skip_if_not_installed("data.table")
+  skip_if_not_installed("lgr")
+  skip_if_not_installed("checkmate")
+
+  tmpdir <- tempfile("extract-bad-censor-")
+  dir.create(tmpdir, recursive = TRUE)
+  on.exit(unlink(tmpdir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  bold <- array(rnorm(2L * 2L * 2L * 25L), dim = c(2L, 2L, 2L, 25L))
+  atlas <- array(1L, dim = c(2L, 2L, 2L))
+  bold_file <- file.path(tmpdir, "sub-01_task-rest_desc-clean_bold.nii.gz")
+  atlas_file <- file.path(tmpdir, "DemoAtlas.nii.gz")
+  out_dir <- file.path(tmpdir, "rois")
+  dir.create(out_dir)
+  RNifti::writeNifti(RNifti::asNifti(bold), bold_file)
+  RNifti::writeNifti(RNifti::asNifti(atlas), atlas_file)
+  writeLines(
+    as.character(c(rep(1L, 20L), rep(0L, 10L))),
+    get_censor_file(as.list(extract_bids_info(bold_file)))
+  )
+
+  expect_warning(
+    expect_error(
+      extract_rois(
+        bold_file, atlas_file, out_dir,
+        cor_method = "none", min_vox_per_roi = 1L
+      ),
+      "incompatible with the BOLD time dimension"
+    ),
+    "Error running extract_rois"
+  )
+})

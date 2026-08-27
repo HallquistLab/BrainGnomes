@@ -278,11 +278,30 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
         censor_file <- get_censor_file(bids_info)
         if (file.exists(censor_file)) {
           censor <- as.integer(readLines(censor_file))
-          to_drop <- which(1L - censor == 1L)
-          if (any(to_drop)) {
-            to_log(lg, "info", "Dropping volumes {paste(to_drop, collapse=', ')}")
-            ts_df <- ts_df[-to_drop, , drop = FALSE]
-            ts_mat <- ts_mat[-to_drop, , drop = FALSE]
+          if (anyNA(censor) || any(!censor %in% c(0L, 1L))) {
+            stop("Censor file must contain only 0 and 1 values: ", censor_file,
+                 call. = FALSE)
+          }
+          n_kept <- sum(censor == 1L)
+          if (length(censor) == n_time) {
+            to_drop <- which(censor == 0L)
+            if (any(to_drop)) {
+              to_log(lg, "info", "Dropping volumes {paste(to_drop, collapse=', ')}")
+              ts_df <- ts_df[-to_drop, , drop = FALSE]
+              ts_mat <- ts_mat[-to_drop, , drop = FALSE]
+            }
+          } else if (n_kept == n_time) {
+            to_log(
+              lg, "info",
+              "Censor file describes {length(censor) - n_kept} volumes already removed from the {n_time}-volume BOLD input; not applying it twice."
+            )
+          } else {
+            stop(
+              "Censor file is incompatible with the BOLD time dimension: ",
+              length(censor), " censor values (", n_kept, " retained) for ",
+              n_time, " BOLD volumes: ", censor_file,
+              call. = FALSE
+            )
           }
         }
 

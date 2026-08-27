@@ -24,7 +24,9 @@ Typically includes motion parameters, physiological noise, etc.}
 
 \item{internal}{Logical; if \code{TRUE}, returns an internal RNifti pointer. Otherwise returns an R array.}
 
-\item{preserve_mean}{Logical; if \code{TRUE}, constant time series will be left unchanged (not demeaned or recentered).}
+\item{preserve_mean}{Logical; if \code{TRUE}, recenter each output time
+series to the input mean over the rows used for fitting. Constant time
+series are therefore left unchanged.}
 
 \item{set_mean}{Optional numeric value; if specified, all residual time series will be shifted to have this mean
 (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.}
