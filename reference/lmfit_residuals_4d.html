@@ -11,7 +11,7 @@ timepoints to obtain predicted values, and the residuals are returned as a clean
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,7 +43,7 @@ timepoints to obtain predicted values, and the residuals are returned as a clean
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear Models</h1>
-      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.9/R/RcppExports.R" class="external-link"><code>R/RcppExports.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/R/RcppExports.R" class="external-link"><code>R/RcppExports.R</code></a></small>
       <div class="d-none name"><code>lmfit_residuals_4d.Rd</code></div>
     </div>
 
@@ -92,7 +92,9 @@ Typically includes motion parameters, physiological noise, etc.</p></dd>
 
 
 <dt id="arg-preserve-mean">preserve_mean<a class="anchor" aria-label="anchor" href="#arg-preserve-mean"></a></dt>
-<dd><p>Logical; if <code>TRUE</code>, constant time series will be left unchanged (not demeaned or recentered).</p></dd>
+<dd><p>Logical; if <code>TRUE</code>, recenter each output time
+series to the input mean over the rows used for fitting. Constant time
+series are therefore left unchanged.</p></dd>
 
 
 <dt id="arg-set-mean">set_mean<a class="anchor" aria-label="anchor" href="#arg-set-mean"></a></dt>

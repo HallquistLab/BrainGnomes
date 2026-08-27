@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,9 +39,16 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.9/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9-1" id="braingnomes-09-1">BrainGnomes 0.9-1<a class="anchor" aria-label="anchor" href="#braingnomes-09-1"></a></h2>
+<p>Released 2026-08-27</p>
+<ul><li>Preserve temporal means during partial/non-aggressive AROMA regression even when retained mixing columns are not centered, and make AROMA validation replay the production intercept and mean-preservation settings.</li>
+<li>Retarget raw <code>desc-preproc</code> input regexes to each postprocessing stream’s output description during ROI discovery, validate censor vectors, and avoid applying an original-length censor vector twice after physical scrubbing.</li>
+<li>Make Savitzky-Golay smoothing in temporal-filter validation safe for short spectra.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.9" id="braingnomes-09">BrainGnomes 0.9<a class="anchor" aria-label="anchor" href="#braingnomes-09"></a></h2>
 <p>Released 2026-08-25</p>

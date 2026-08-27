@@ -1,5 +1,20 @@
 # Changelog
 
+## BrainGnomes 0.9-1
+
+Released 2026-08-27
+
+- Preserve temporal means during partial/non-aggressive AROMA regression
+  even when retained mixing columns are not centered, and make AROMA
+  validation replay the production intercept and mean-preservation
+  settings.
+- Retarget raw `desc-preproc` input regexes to each postprocessing
+  stream’s output description during ROI discovery, validate censor
+  vectors, and avoid applying an original-length censor vector twice
+  after physical scrubbing.
+- Make Savitzky-Golay smoothing in temporal-filter validation safe for
+  short spectra.
+
 ## BrainGnomes 0.9
 
 Released 2026-08-25

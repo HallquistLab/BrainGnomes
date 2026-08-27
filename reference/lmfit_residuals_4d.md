@@ -50,8 +50,9 @@ lmfit_residuals_4d(infile, X, include_rows = NULL,
 
 - preserve_mean:
 
-  Logical; if `TRUE`, constant time series will be left unchanged (not
-  demeaned or recentered).
+  Logical; if `TRUE`, recenter each output time series to the input mean
+  over the rows used for fitting. Constant time series are therefore
+  left unchanged.
 
 - set_mean:
 
