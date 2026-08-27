@@ -1525,7 +1525,13 @@ lmfit_residuals_mat <- function(Y, X, include_rows = NULL, add_intercept = FALSE
     }
 
     if (preserve_mean) {
-      residuals <- residuals + mean(y_sub)
+      # Partial/non-aggressive regression can retain fitted columns whose means
+      # are nonzero. Merely adding mean(y_sub) assumes the residual entering
+      # this branch is centered, which is only guaranteed when every fitted
+      # column is removed. Recenter the actual fitted-row residuals so the
+      # contract holds for arbitrary component offsets as well as MELODIC's
+      # normally centered timecourses.
+      residuals <- residuals - mean(residuals[include_idx]) + mean(y_sub)
     } else if (use_set) {
       residuals <- residuals + set_mean
     }

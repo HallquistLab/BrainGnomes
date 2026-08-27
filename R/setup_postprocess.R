@@ -1722,7 +1722,27 @@ get_postproc_output_files <- function(input_dir, input_regex, bids_desc) {
   resolve_spec <- function(spec, desc) {
     spec <- trimws(spec)
     if (grepl("^regex:", spec)) {
-      return(trimws(sub("^regex\\s*:", "", spec)))
+      pattern <- trimws(sub("^regex\\s*:", "", spec))
+      if (!nzchar(pattern)) {
+        stop("regex: was provided but no regular expression followed it.", call. = FALSE)
+      }
+
+      # Raw expressions describe the files entering postprocessing, while this
+      # helper searches for the corresponding outputs. Match the common BIDS
+      # desc entity literally so configurations such as
+      # `regex: .*_desc-preproc_bold.nii.gz$` continue to constrain every other
+      # entity but target the stream's output description.
+      literal_desc_pattern <- "desc-[A-Za-z0-9]+"
+      if (grepl(literal_desc_pattern, pattern)) {
+        pattern <- sub(
+          literal_desc_pattern, paste0("desc-", desc), pattern
+        )
+      } else {
+        # A raw expression without a desc constraint cannot safely have one
+        # spliced into its syntax. Filter its matches below instead.
+        return(list(pattern = pattern, filter_desc = desc))
+      }
+      return(list(pattern = pattern, filter_desc = NULL))
     }
 
     if (grepl("\\bdesc:", spec)) {
@@ -1731,14 +1751,25 @@ get_postproc_output_files <- function(input_dir, input_regex, bids_desc) {
       spec <- paste(spec, paste0("desc:", desc))
     }
 
-    construct_bids_regex(spec)
+    list(pattern = construct_bids_regex(spec), filter_desc = NULL)
   }
 
-  patterns <- vapply(seq_along(input_regex), function(i) {
+  resolved_specs <- lapply(seq_along(input_regex), function(i) {
     resolve_spec(input_regex[[i]], bids_desc[[i]])
-  }, character(1))
-  files <- unlist(lapply(patterns, function(pat) {
-    list.files(path = input_dir, pattern = pat, recursive = TRUE, full.names = TRUE)
+  })
+  files <- unlist(lapply(resolved_specs, function(resolved) {
+    matched <- list.files(
+      path = input_dir, pattern = resolved$pattern,
+      recursive = TRUE, full.names = TRUE
+    )
+    filter_desc <- resolved$filter_desc
+    if (!is.null(filter_desc)) {
+      matched <- matched[grepl(
+        paste0("(^|_)desc-", filter_desc, "(_|\\.)"),
+        basename(matched)
+      )]
+    }
+    matched
   }), use.names = FALSE)
 
   unique(files)

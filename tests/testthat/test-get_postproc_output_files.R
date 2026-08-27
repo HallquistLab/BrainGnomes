@@ -74,3 +74,45 @@ test_that("get_postproc_output_files rejects ambiguous vector lengths", {
     "bids_desc must have length 1 or the same length as input_regex"
   )
 })
+
+test_that("get_postproc_output_files retargets raw preproc regexes to stream outputs", {
+  tmp_dir <- tempfile("bg_postproc_raw_regex_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  wanted <- file.path(
+    tmp_dir,
+    "sub-540294_task-ridl_run-01_space-MNI152NLin2009cAsym_desc-taskPost_bold.nii.gz"
+  )
+  wrong_desc <- sub("desc-taskPost", "desc-other", wanted, fixed = TRUE)
+  wrong_task <- sub("task-ridl", "task-rest", wanted, fixed = TRUE)
+  expect_true(all(file.create(c(wanted, wrong_desc, wrong_task))))
+
+  input_regex <- paste0(
+    "regex: .*task-ridl.*space-MNI152NLin2009cAsym.*",
+    "_desc-preproc_bold.nii.gz$"
+  )
+  expect_identical(
+    get_postproc_output_files(tmp_dir, input_regex, "taskPost"),
+    wanted
+  )
+})
+
+test_that("get_postproc_output_files constrains desc for raw regexes without one", {
+  tmp_dir <- tempfile("bg_postproc_raw_regex_no_desc_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  wanted <- file.path(tmp_dir, "sub-01_task-ridl_desc-clean_bold.nii.gz")
+  decoy <- file.path(tmp_dir, "sub-01_task-ridl_desc-other_bold.nii.gz")
+  expect_true(all(file.create(c(wanted, decoy))))
+
+  expect_identical(
+    get_postproc_output_files(
+      tmp_dir,
+      "regex: .*task-ridl.*_bold.nii.gz$",
+      "clean"
+    ),
+    wanted
+  )
+})

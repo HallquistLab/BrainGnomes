@@ -234,7 +234,9 @@ image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c
 #' @param add_intercept Logical; if \code{TRUE}, adds an intercept column to the design matrix unless one is already present.
 #' @param outfile Optional path to write the output residuals image. If empty, no file is written.
 #' @param internal Logical; if \code{TRUE}, returns an internal RNifti pointer. Otherwise returns an R array.
-#' @param preserve_mean Logical; if \code{TRUE}, constant time series will be left unchanged (not demeaned or recentered).
+#' @param preserve_mean Logical; if \code{TRUE}, recenter each output time
+#'   series to the input mean over the rows used for fitting. Constant time
+#'   series are therefore left unchanged.
 #' @param set_mean Optional numeric value; if specified, all residual time series will be shifted to have this mean
 #'        (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.
 #' @param regress_cols Optional integer vector (1-based) indicating which columns of \code{X} should be regressed out.

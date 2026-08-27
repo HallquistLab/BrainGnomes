@@ -168,6 +168,50 @@ test_that("lmfit_residuals_mat matches lmfit_residuals_4d", {
   expect_equal(res_mat_partial, res_cpp_partial_mat, tolerance = 1e-6)
 })
 
+test_that("partial regression preserves means with non-centered retained columns", {
+  skip_if_not_installed("RNifti")
+
+  set.seed(20260827)
+  n_t <- 48L
+  include_rows <- rep(TRUE, n_t)
+  include_rows[c(4L, 19L, 41L)] <- FALSE
+  removed <- sin(seq_len(n_t) / 4) + 2.5
+  retained <- cos(seq_len(n_t) / 7) - 1.75
+  X <- cbind(removed, retained)
+  Y <- cbind(
+    900 + 4 * removed + 7 * retained + rnorm(n_t, sd = 0.1),
+    1200 - 2 * removed + 3 * retained + rnorm(n_t, sd = 0.1)
+  )
+
+  expected_mean <- colMeans(Y[include_rows, , drop = FALSE])
+  residual_r <- lmfit_residuals_mat(
+    Y, X, include_rows = include_rows, add_intercept = TRUE,
+    preserve_mean = TRUE, regress_cols = 1L, exclusive = FALSE
+  )
+  expect_equal(
+    colMeans(residual_r[include_rows, , drop = FALSE]),
+    expected_mean,
+    tolerance = 1e-10
+  )
+
+  image_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(image_file), add = TRUE)
+  image <- array(as.vector(t(Y)), dim = c(ncol(Y), 1L, 1L, n_t))
+  RNifti::writeNifti(RNifti::asNifti(image), image_file)
+  residual_cpp <- as.array(lmfit_residuals_4d(
+    image_file, X, include_rows = include_rows, add_intercept = TRUE,
+    preserve_mean = TRUE, regress_cols = 1L, exclusive = FALSE
+  ))
+  residual_cpp <- t(matrix(residual_cpp, nrow = ncol(Y), ncol = n_t))
+
+  expect_equal(residual_cpp, residual_r, tolerance = 1e-5)
+  expect_equal(
+    colMeans(residual_cpp[include_rows, , drop = FALSE]),
+    expected_mean,
+    tolerance = 1e-5
+  )
+})
+
 test_that("exclusive regression requires regress_cols", {
   skip_if_not_installed("RNifti")
   library(RNifti)

@@ -121,8 +121,13 @@ validate_apply_mask <- function(mask_file, data_file) {
   
   # Spectra tend to be much easier to look at when smoothed. Use a peak-preserving smoother
   # with a width of 1/20th of the series
-  if (smooth_psd) {
-    window_length <- 2 * floor((length(p_db) / 20) / 2) + 1 # 1/20th of the series
+  if (smooth_psd && length(p_db) >= 5L) {
+    # sgolayfilt() requires an odd window strictly larger than p. The raw
+    # 1/20-width rule produces n=3 for common shortened fMRI fixtures.
+    window_length <- 2L * floor((length(p_db) / 20) / 2) + 1L
+    window_length <- max(5L, window_length)
+    max_window <- length(p_db) - as.integer(length(p_db) %% 2L == 0L)
+    window_length <- min(window_length, max_window)
     p_db <- signal::sgolayfilt(p_db, p = 3, n = window_length)
     #p_db <- stats::filter(p_db, rep(1/5, 5), sides = 2)  # 5-point moving average
   }
@@ -1381,6 +1386,7 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
 #' @param post_file Path to 4D BOLD after the step.
 #' @param X Design matrix (timepoints x regressors).
 #' @param include_rows Logical vector of rows used in fitting.
+#' @param add_intercept Passed to `lmfit_residuals_mat`.
 #' @param preserve_mean Passed to `lmfit_residuals_mat`.
 #' @param set_mean Passed to `lmfit_residuals_mat`.
 #' @param regress_cols Passed to `lmfit_residuals_mat` (1-based).
@@ -1391,6 +1397,7 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
 #' @keywords internal
 #' @noRd
 .pp_sample_and_replay <- function(pre_file, post_file, X, include_rows,
+                                  add_intercept = FALSE,
                                   preserve_mean = FALSE, set_mean = 0.0,
                                   regress_cols = NULL, exclusive = FALSE,
                                   n_sample = 100L) {
@@ -1432,7 +1439,7 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     Y = Y_pre,
     X = X,
     include_rows = include_rows,
-    add_intercept = FALSE,
+    add_intercept = add_intercept,
     preserve_mean = preserve_mean,
     set_mean = set_mean,
     regress_cols = regress_cols,
@@ -1491,7 +1498,8 @@ validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics,
     post_file = post_file,
     X = mixing_mat,
     include_rows = include_rows,
-    preserve_mean = FALSE,
+    add_intercept = TRUE,
+    preserve_mean = TRUE,
     set_mean = 0.0,
     regress_cols = comp_idx,
     exclusive = exclusive_flag,
