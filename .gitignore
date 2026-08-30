@@ -54,6 +54,7 @@ local/
 tmp/
 .cache/
 /inst/dev/
+/postprocess_roi_e2e_*/
 
 .DS_Store
 .vscode/

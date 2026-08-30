@@ -739,6 +739,82 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
   return(list(per_axis = per_axis, geom_axes = geom_axes, geom = overall))
 }
 
+#' Estimate classic FWHM directly from the rows inside a spatial mask
+#'
+#' This is algebraically identical to reconstructing a full 3D volume and
+#' calling `compute_fwhm_1dif()` at every timepoint. Precomputing the row pairs
+#' that are adjacent along each spatial axis avoids repeatedly allocating three
+#' full-volume difference arrays, which is material for 600-volume validation.
+#'
+#' @keywords internal
+#' @noRd
+.pp_estimate_classic_masked_matrix <- function(masked_matrix, mask3d, vox_mm) {
+  checkmate::assert_matrix(masked_matrix, mode = "numeric")
+  checkmate::assert_numeric(vox_mm, len = 3L, lower = 1e-6, finite = TRUE)
+  mask3d <- (mask3d != 0) & is.finite(mask3d)
+  spatial_dims <- dim(mask3d)
+  if (length(spatial_dims) != 3L) {
+    stop("Smoothness mask must be three-dimensional.", call. = FALSE)
+  }
+  mask_vec <- as.vector(mask3d)
+  if (nrow(masked_matrix) != sum(mask_vec)) {
+    stop("Masked matrix row count does not match the smoothness mask.", call. = FALSE)
+  }
+
+  full_index <- array(seq_len(prod(spatial_dims)), dim = spatial_dims)
+  mask_row <- integer(length(mask_vec))
+  mask_row[which(mask_vec)] <- seq_len(sum(mask_vec))
+  pair_rows <- lapply(seq_len(3L), function(axis) {
+    if (spatial_dims[[axis]] <= 1L) {
+      return(matrix(integer(), nrow = 0L, ncol = 2L,
+                    dimnames = list(NULL, c("lower", "upper"))))
+    }
+    lower_subscripts <- lapply(spatial_dims, seq_len)
+    upper_subscripts <- lower_subscripts
+    lower_subscripts[[axis]] <- seq_len(spatial_dims[[axis]] - 1L)
+    upper_subscripts[[axis]] <- seq.int(2L, spatial_dims[[axis]])
+    lower <- do.call(
+      `[`, c(list(full_index), lower_subscripts, list(drop = FALSE))
+    )
+    upper <- do.call(
+      `[`, c(list(full_index), upper_subscripts, list(drop = FALSE))
+    )
+    keep <- mask_vec[as.vector(lower)] & mask_vec[as.vector(upper)]
+    cbind(
+      lower = mask_row[as.vector(lower)[keep]],
+      upper = mask_row[as.vector(upper)[keep]]
+    )
+  })
+  rm(full_index, mask_row)
+
+  per_axis <- matrix(-1, nrow = ncol(masked_matrix), ncol = 3L)
+  for (time_i in seq_len(ncol(masked_matrix))) {
+    values <- masked_matrix[, time_i]
+    finite_values <- is.finite(values)
+    if (sum(finite_values) < 9L) next
+    vdat <- var_sample(values[finite_values])
+    if (!is.finite(vdat) || vdat <= 0) next
+    for (axis in seq_len(3L)) {
+      pairs <- pair_rows[[axis]]
+      if (!nrow(pairs)) next
+      differences <- values[pairs[, "upper"]] - values[pairs[, "lower"]]
+      difference_variance <- var_sample(differences)
+      if (!is.finite(difference_variance)) next
+      argument <- 1 - 0.5 * (difference_variance / vdat)
+      if (is.finite(argument) && argument > 0 && argument < 1) {
+        per_axis[time_i, axis] <-
+          2.35482 * sqrt(-1 / (4 * log(argument))) * vox_mm[[axis]]
+      }
+    }
+  }
+  geom_axes <- apply(per_axis, 2L, geom_mean_safe)
+  list(
+    per_axis = per_axis,
+    geom_axes = geom_axes,
+    geom = geom_mean_safe(geom_axes)
+  )
+}
+
 #' Build an orthonormal polynomial trend matrix for smoothness validation
 #' @keywords internal
 #' @noRd
@@ -787,7 +863,7 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
 #' Select timepoints for smoothness validation
 #' @keywords internal
 #' @noRd
-.pp_smoothness_volume_indices <- function(nt, max_volumes = 300L) {
+.pp_smoothness_volume_indices <- function(nt, max_volumes = 600L) {
   if (!checkmate::test_count(nt, positive = TRUE)) {
     stop("nt must be a positive integer.", call. = FALSE)
   }
@@ -816,6 +892,65 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
     mat[mask_vec, ] <- mat_mask
   }
   array(mat, dim = dims)
+}
+
+#' Estimate classic FWHM from one file without retaining a full prepared 4D copy
+#' @keywords internal
+#' @noRd
+.pp_estimate_classic_smoothness_file <- function(path, mask3d,
+                                                 max_volumes = 600L,
+                                                 preprocess = TRUE,
+                                                 polydeg = 3L,
+                                                 demean = TRUE,
+                                                 unif = TRUE) {
+  checkmate::assert_file_exists(path)
+  checkmate::assert_flag(preprocess)
+  checkmate::assert_flag(demean)
+  checkmate::assert_flag(unif)
+  if (isTRUE(preprocess)) checkmate::assert_count(polydeg)
+  invisible(gc(FALSE))
+  on.exit(invisible(gc(FALSE)), add = TRUE)
+
+  image <- .pp_read_4d(path)
+  spatial_dims <- dim(image)[1:3]
+  if (!identical(as.integer(spatial_dims), as.integer(dim(mask3d)))) {
+    stop("Image and smoothness mask dimensions do not match.", call. = FALSE)
+  }
+  total_volumes <- dim(image)[4]
+  volume_idx <- .pp_smoothness_volume_indices(total_volumes, max_volumes)
+  image <- image[, , , volume_idx, drop = FALSE]
+  mask_vec <- as.vector(mask3d)
+  prepared <- array(image, dim = c(prod(spatial_dims), length(volume_idx)))[
+    mask_vec, , drop = FALSE
+  ]
+  rm(image)
+  invisible(gc(FALSE))
+
+  if (isTRUE(preprocess)) {
+    detrended <- .pp_detrend_voxels(prepared, degree = polydeg, demean = demean)
+    rm(prepared)
+    invisible(gc(FALSE))
+    prepared <- detrended
+    rm(detrended)
+    if (isTRUE(unif)) {
+      scaled <- .pp_mad_scale_matrix(prepared)
+      rm(prepared)
+      invisible(gc(FALSE))
+      prepared <- scaled
+      rm(scaled)
+    }
+  }
+
+  estimate <- .pp_estimate_classic_masked_matrix(
+    prepared, mask3d, .pp_pixdim_mm(path)
+  )
+  list(
+    per_axis = estimate$per_axis,
+    geom_axes = estimate$geom_axes,
+    geom = estimate$geom,
+    volumes_used = length(volume_idx),
+    total_volumes = total_volumes
+  )
 }
 
 median_over_time <- function(arr4d) {
@@ -1065,6 +1200,11 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' `spatial_smooth()` directly with the same `automask()` configuration as
 #' `postprocess_subject()`. The final subject from each dataset was held out, and
 #' leave-one-dataset-out checks were used to assess transfer across resolutions.
+#' The definitive SUSAN calibration evaluates raw, detrended, and
+#' detrended-plus-MAD estimators instead of assuming one preparation a priori,
+#' and crosses the threshold mask with the mask already applied to the BOLD.
+#' Each promoted model stores its exact estimator and mask condition; those are
+#' part of the model and cannot be changed independently of its coefficients.
 #'
 #' The primary model predicts post-smoothing FWHM by Gaussian quadrature while
 #' allowing the program's effective kernel gain to depend on the dimensionless
@@ -1083,32 +1223,129 @@ validate_intensity_normalize <- function(pre_file, post_file,
   gaussian = list(
     classic = list(
       mask = list(
+        model_version = "smoothness-calibration-v1",
         type = "quadrature_ratio_linear", coeffs = c(1.18475396, -0.47521770),
         tolerance_mm = 0.8, mode = "afni_blurinmask",
-        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644)
+        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644),
+        estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
+        demean = TRUE, unif = TRUE
       ),
       nomask = list(
+        model_version = "smoothness-calibration-v1",
         type = "quadrature_ratio_linear", coeffs = c(1.13001562, -0.11747280),
         tolerance_mm = 1.0, mode = "afni_3dmerge",
-        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644)
+        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644),
+        estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
+        demean = TRUE, unif = TRUE
       )
     )
   ),
   susan = list(
     classic = list(
       mask = list(
-        type = "quadrature_ratio_linear", coeffs = c(1.21629120, -0.49103314),
-        tolerance_mm = 0.5, mode = "fsl_susan_mask",
-        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.40865896, 3.11664432)
+        none = list(
+          model_version = "smoothness-calibration-v3-fmriprep-k3-8",
+          input_mask = "none",
+          type = "quadrature_ratio_linear",
+          coeffs = c(1.3120485766964101, -0.55739645314541497),
+          tolerance_mm = 0.6, mode = "fsl_susan_mask",
+          kernel_range_mm = c(3, 8),
+          voxel_range_mm = c(2.40865896, 3.11664432),
+          estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
+          demean = TRUE, unif = TRUE
+        ),
+        fmriprep = list(
+          model_version = "smoothness-calibration-v3-fmriprep-k3-8",
+          input_mask = "fmriprep",
+          type = "quadrature_ratio_linear",
+          coeffs = c(1.2664743891602199, -0.48666277855524398),
+          tolerance_mm = 0.8, mode = "fsl_susan_mask",
+          kernel_range_mm = c(3, 8),
+          voxel_range_mm = c(2.40865896, 3.11664432),
+          estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
+          demean = TRUE, unif = TRUE
+        ),
+        template = list(
+          model_version = "smoothness-calibration-v3-fmriprep-k3-8",
+          input_mask = "template",
+          type = "quadrature_ratio_linear",
+          coeffs = c(1.1941731382927601, -0.41366442683986498),
+          tolerance_mm = 0.6, mode = "fsl_susan_mask",
+          kernel_range_mm = c(3, 8),
+          voxel_range_mm = c(2.40865896, 3.11664432),
+          estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
+          demean = TRUE, unif = TRUE
+        )
       ),
       nomask = list(
+        model_version = "smoothness-calibration-v1",
         type = "quadrature_ratio_linear", coeffs = c(-0.06022293, 0.80840240),
         tolerance_mm = 0.5, mode = "fsl_susan_nomask",
-        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644)
+        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644),
+        estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
+        demean = TRUE, unif = TRUE
       )
     )
   )
 )
+
+#' Resolve the exact estimator preparation stored with a calibration model
+#' @keywords internal
+#' @noRd
+.pp_calibration_preparation <- function(model = NULL, preprocess = NULL,
+                                        polydeg = NULL, demean = NULL,
+                                        unif = NULL) {
+  calibrated <- !is.null(model)
+  expected <- list(
+    preprocess = if (calibrated && !is.null(model$preprocess)) {
+      isTRUE(model$preprocess)
+    } else {
+      TRUE
+    },
+    polydeg = if (calibrated && !is.null(model$polydeg)) {
+      as.integer(model$polydeg)
+    } else {
+      3L
+    },
+    demean = if (calibrated && !is.null(model$demean)) isTRUE(model$demean) else TRUE,
+    unif = if (calibrated && !is.null(model$unif)) isTRUE(model$unif) else TRUE
+  )
+  supplied <- list(
+    preprocess = preprocess, polydeg = polydeg, demean = demean, unif = unif
+  )
+  if (calibrated) {
+    mismatched <- names(supplied)[vapply(names(supplied), function(name) {
+      !is.null(supplied[[name]]) &&
+        !isTRUE(all.equal(supplied[[name]], expected[[name]], check.attributes = FALSE))
+    }, logical(1))]
+    if (length(mismatched)) {
+      stop(
+        "Calibration model '", model$model_version,
+        "' requires estimator '", model$estimator,
+        "'; incompatible override(s): ", paste(mismatched, collapse = ", "), ".",
+        call. = FALSE
+      )
+    }
+  }
+  resolved <- lapply(names(expected), function(name) {
+    if (is.null(supplied[[name]])) expected[[name]] else supplied[[name]]
+  })
+  names(resolved) <- names(expected)
+  checkmate::assert_flag(resolved$preprocess)
+  if (isTRUE(resolved$preprocess)) checkmate::assert_count(resolved$polydeg)
+  checkmate::assert_flag(resolved$demean)
+  checkmate::assert_flag(resolved$unif)
+  resolved$estimator <- if (calibrated && !is.null(model$estimator)) {
+    model$estimator
+  } else if (!isTRUE(resolved$preprocess)) {
+    "raw"
+  } else if (isTRUE(resolved$unif)) {
+    "detrend_mad"
+  } else {
+    "detrend"
+  }
+  resolved
+}
 
 #' Predict the expected FWHM delta from a calibration model
 #' @keywords internal
@@ -1117,7 +1354,12 @@ validate_intensity_normalize <- function(pre_file, post_file,
   checkmate::assert_number(kernel_fwhm, lower = 1e-6, finite = TRUE)
   checkmate::assert_numeric(voxel_mm, lower = 1e-6, finite = TRUE, min.len = 1L)
   voxel_geom_mm <- exp(mean(log(voxel_mm)))
-  gain <- model$coeffs[1] + model$coeffs[2] * voxel_geom_mm / kernel_fwhm
+  gain <- if (identical(model$type, "quadrature_ratio_linear")) {
+    model$coeffs[[1]] + model$coeffs[[2]] * voxel_geom_mm / kernel_fwhm
+  } else {
+    stop("Calibration model does not define a quadrature gain: ", model$type,
+         call. = FALSE)
+  }
   if (!is.finite(gain) || gain <= 0) {
     stop("Calibration predicts a non-positive effective kernel gain.", call. = FALSE)
   }
@@ -1147,7 +1389,8 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' Select the calibration model for a given smoother and mask usage
 #' @keywords internal
 #' @noRd
-.pp_select_calibration <- function(smoother, used_mask) {
+.pp_select_calibration <- function(smoother, used_mask, input_mask = "none") {
+  checkmate::assert_choice(input_mask, c("none", "fmriprep", "template", "custom"))
   smooth_entry <- .pp_calibration_coeffs[[smoother]]
   if (is.null(smooth_entry)) {
     warning("No calibration table for smoother '", smoother,
@@ -1168,6 +1411,46 @@ validate_intensity_normalize <- function(pre_file, post_file,
     }
     warning("Calibration '", key, "' missing; using '", fallback_key, "' fallback.", call. = FALSE)
   }
+  calibrated_input_mask <- if (!is.null(model$input_mask)) {
+    model$input_mask
+  } else {
+    "none"
+  }
+  input_mask_extrapolated <- FALSE
+  if (is.null(model$type)) {
+    input_key <- input_mask
+    if (identical(input_key, "custom") || is.null(model[[input_key]])) {
+      fallback_input <- if (!is.null(model$template)) {
+        "template"
+      } else if (!is.null(model$fmriprep)) {
+        "fmriprep"
+      } else {
+        "none"
+      }
+      warning(
+        "No exact smoothness calibration for input mask '", input_key,
+        "'; using '", fallback_input, "' as an extrapolation.",
+        call. = FALSE
+      )
+      input_key <- fallback_input
+      input_mask_extrapolated <- TRUE
+    }
+    model <- model[[input_key]]
+    calibrated_input_mask <- input_key
+  } else if (!identical(input_mask, calibrated_input_mask)) {
+    warning(
+      "No exact smoothness calibration for input mask '", input_mask,
+      "'; using '", calibrated_input_mask, "' as an extrapolation.",
+      call. = FALSE
+    )
+    input_mask_extrapolated <- TRUE
+  }
+  if (is.null(model) || is.null(model$type)) {
+    stop("Calibration entry for input mask '", input_mask, "' is malformed.",
+         call. = FALSE)
+  }
+  model$calibrated_input_mask <- calibrated_input_mask
+  model$input_mask_extrapolated <- input_mask_extrapolated
   model
 }
 
@@ -1177,9 +1460,10 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' it to the calibration-predicted delta for the requested kernel size. The
 #' calibration accounts for the fact that fMRI data are non-Gaussian and the
 #' naive first-differences FWHM estimate has a systematic bias that depends on
-#' smoother type and whether masking was used. Before estimating FWHM, voxel time
-#' series are polynomial-detrended and MAD-normalized to match the preprocessing
-#' used by the calibration script.
+#' smoother type and whether masking was used. The calibrated preprocessing mode
+#' is selected together with the calibration model. The production masked-SUSAN
+#' calibration stores and enforces the estimator preparation selected by
+#' cross-dataset validation; the estimator is not chosen at validation time.
 #'
 #' Classic first-difference FWHM is used intentionally as a local
 #' gradient-variance statistic. A mixed Gaussian-plus-exponential ACF can
@@ -1188,18 +1472,12 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' tail change differently. The real-BOLD calibration therefore absorbs the
 #' non-Gaussian core behavior without treating the full ACF as Gaussian.
 #'
-#' The preprocessing is important because the classic first-difference FWHM
-#' estimator is sensitive to non-smooth sources of spatial variance that are not
-#' the target of the smoothing check. Slow voxelwise drifts, mean offsets, and
-#' large between-voxel variance differences can inflate or deflate the ratio of
-#' spatial-difference variance to total variance, making the measured FWHM change
-#' disagree with the calibration even when smoothing was applied correctly. The
-#' validation therefore mirrors `local/smoothness_checks/3dSmoothnessChange.R`:
-#' it removes a low-order polynomial trend from each in-mask voxel time series,
-#' removes the
-#' mean when `demean = TRUE`, and scales each voxel by its temporal MAD when
-#' `unif = TRUE`. This puts pre/post data on the same residualized, variance-
-#' normalized scale used to derive the empirical calibration coefficients.
+#' Optional preprocessing can remove a low-order polynomial trend, the temporal
+#' mean, and voxelwise temporal scale before the classic estimate. It is retained
+#' for diagnostic and legacy calibration use, but it must match the selected
+#' calibration. `preprocess = NULL` enforces that model-specific choice.
+#' Requests outside the model's stored kernel or voxel-size range are reported
+#' as extrapolations and cannot pass validation.
 #'
 #' @param pre_file Path to 4D BOLD before `spatial_smooth`.
 #' @param post_file Path to 4D BOLD after `spatial_smooth`.
@@ -1210,13 +1488,20 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #'   brightness threshold (default `TRUE`). SUSAN itself is not spatially
 #'   restricted to this mask. For Gaussian calibration modes this instead
 #'   distinguishes masked `3dBlurInMask` from unmasked `3dmerge`.
+#' @param input_mask Character input-mask condition: `"none"`, `"fmriprep"`,
+#'   `"template"`, or `"custom"`. This describes masking already applied to
+#'   the BOLD before smoothing, independently of `used_mask`. A model from a
+#'   different input-mask condition is reported as an extrapolation but cannot
+#'   pass validation, because masking materially changes the calibrated gain.
 #' @param tolerance_mm Tolerance in mm for `|observed_post - expected_post|`.
 #'   `NULL` (the default) uses the program/mask-specific cross-validation
 #'   tolerance stored with the calibration model.
-#' @param preprocess Logical; if `TRUE`, apply calibration-matched preprocessing.
-#' @param polydeg Polynomial detrending degree used when `preprocess = TRUE`.
-#' @param demean Logical; include mean removal in preprocessing.
-#' @param unif Logical; normalize each voxel by temporal MAD in preprocessing.
+#' @param preprocess Logical or `NULL`. `NULL` (the default) uses the preprocessing
+#'   mode recorded by the selected calibration model. An explicit value must
+#'   match that model; without `fwhm_mm`, `TRUE` applies diagnostic detrending.
+#' @param polydeg Optional polynomial detrending degree. `NULL` uses the model.
+#' @param demean Optional logical mean-removal setting. `NULL` uses the model.
+#' @param unif Optional logical temporal-MAD scaling setting. `NULL` uses the model.
 #' @param max_volumes Maximum number of timepoints used for validation. The
 #'   first `max_volumes` are used; `Inf` uses all volumes.
 #'
@@ -1226,48 +1511,61 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' @keywords internal
 validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA_real_,
                                     smoother = "susan", used_mask = TRUE,
-                                    tolerance_mm = NULL, preprocess = TRUE,
-                                    polydeg = 3L, demean = TRUE, unif = TRUE,
-                                    max_volumes = 300L) {
+                                    input_mask = "none",
+                                    tolerance_mm = NULL, preprocess = NULL,
+                                    polydeg = NULL, demean = NULL, unif = NULL,
+                                    max_volumes = 600L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
 
-  pre <- .pp_read_4d(pre_file)
-  post <- .pp_read_4d(post_file)
   msk <- RNifti::readNifti(mask_file)
   mask_logical <- (msk != 0) & is.finite(msk)
+  pre_header <- RNifti::niftiHeader(pre_file)
+  post_header <- RNifti::niftiHeader(post_file)
+  pre_dim <- as.integer(pre_header$dim[2:5])
+  post_dim <- as.integer(post_header$dim[2:5])
 
-  if (!all(dim(pre)[1:3] == dim(post)[1:3]) || !all(dim(pre)[1:3] == dim(msk))) {
+  if (!all(pre_dim[1:3] == post_dim[1:3]) ||
+      !all(pre_dim[1:3] == dim(msk))) {
     out <- FALSE
     attr(out, "message") <- "Pre/post/mask spatial dimensions mismatch."
     attr(out, "details") <- list()
     return(out)
   }
-  if (dim(pre)[4] != dim(post)[4]) {
+  if (pre_dim[4] != post_dim[4]) {
     out <- FALSE
     attr(out, "message") <- "Pre and post must have same number of timepoints."
     attr(out, "details") <- list()
     return(out)
   }
 
-  total_volumes <- dim(pre)[4]
-  volume_idx <- .pp_smoothness_volume_indices(total_volumes, max_volumes = max_volumes)
-  if (length(volume_idx) < total_volumes) {
-    pre <- pre[, , , volume_idx, drop = FALSE]
-    post <- post[, , , volume_idx, drop = FALSE]
-  }
-  volumes_used <- length(volume_idx)
-
   vox_mm <- .pp_pixdim_mm(pre_file)
-  if (isTRUE(preprocess)) {
-    pre <- .pp_prepare_classic_smoothness(pre, mask_logical,
-      polydeg = polydeg, demean = demean, unif = unif)
-    post <- .pp_prepare_classic_smoothness(post, mask_logical,
-      polydeg = polydeg, demean = demean, unif = unif)
+  has_kernel <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
+  cal_model <- if (has_kernel) {
+    .pp_select_calibration(smoother, used_mask, input_mask = input_mask)
+  } else {
+    NULL
   }
-  pre_f <- estimate_classic_fwhm(pre, mask_logical, vox_mm)$geom
-  post_f <- estimate_classic_fwhm(post, mask_logical, vox_mm)$geom
+  preparation <- .pp_calibration_preparation(
+    cal_model, preprocess = preprocess, polydeg = polydeg,
+    demean = demean, unif = unif
+  )
+  estimate_file <- function(path) {
+    .pp_estimate_classic_smoothness_file(
+      path, mask_logical, max_volumes = max_volumes,
+      preprocess = preparation$preprocess,
+      polydeg = preparation$polydeg, demean = preparation$demean,
+      unif = preparation$unif
+    )
+  }
+  pre_estimate <- estimate_file(pre_file)
+  pre_f <- pre_estimate$geom
+  volumes_used <- pre_estimate$volumes_used
+  total_volumes <- pre_estimate$total_volumes
+  rm(pre_estimate)
+  invisible(gc(FALSE))
+  post_f <- estimate_file(post_file)$geom
 
   if (!is.finite(pre_f) || !is.finite(post_f) || pre_f <= 0 || post_f <= 0) {
     out <- FALSE
@@ -1282,9 +1580,7 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   delta_observed <- post_f - pre_f
 
   # --- calibration-based comparison ---
-  has_kernel <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
   if (has_kernel) {
-    cal_model <- .pp_select_calibration(smoother, used_mask)
     delta_expected <- .pp_predict_calibration(
       cal_model, fwhm_mm, pre_fwhm = pre_f, voxel_mm = vox_mm
     )
@@ -1292,6 +1588,7 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     calibration_gain <- .pp_calibration_gain(cal_model, fwhm_mm, vox_mm)
     voxel_geom_mm <- exp(mean(log(vox_mm)))
     calibration_extrapolated <-
+      isTRUE(cal_model$input_mask_extrapolated) ||
       fwhm_mm < cal_model$kernel_range_mm[1] ||
       fwhm_mm > cal_model$kernel_range_mm[2] ||
       voxel_geom_mm < cal_model$voxel_range_mm[1] ||
@@ -1300,20 +1597,32 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     checkmate::assert_number(tolerance_mm, lower = 0, finite = TRUE)
     diff_cal <- delta_observed - delta_expected
     within_tol <- abs(diff_cal) <= tolerance_mm
-    passed <- within_tol
+    exact_input_mask_calibration <-
+      !isTRUE(cal_model$input_mask_extrapolated)
+    passed <- within_tol && !calibration_extrapolated
+    status <- if (!exact_input_mask_calibration) {
+      "FAIL (no exact input-mask calibration)"
+    } else if (calibration_extrapolated) {
+      "FAIL (outside calibration support)"
+    } else if (passed) {
+      "PASS"
+    } else {
+      "FAIL"
+    }
     msg <- sprintf(
       paste0(
         "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta_observed=%.4f mm. ",
-        "Expected post=%.4f mm, delta=%.4f mm (smoother=%s, mask=%s, model=%s). ",
+        "Expected post=%.4f mm, delta=%.4f mm (smoother=%s, threshold_mask=%s, input_mask=%s, model=%s, estimator=%s, version=%s). ",
         "Volumes used=%d/%d. Calibration support=%s. ",
         "|obs-exp|=%.4f mm (tol=%.4f mm). %s"
       ),
       pre_f, post_f, delta_observed,
-      expected_post, delta_expected, smoother, used_mask, cal_model$type,
+      expected_post, delta_expected, smoother, used_mask, input_mask, cal_model$type,
+      preparation$estimator, cal_model$model_version,
       volumes_used, total_volumes,
       if (calibration_extrapolated) "EXTRAPOLATED" else "interpolated",
       abs(diff_cal), tolerance_mm,
-      if (passed) "PASS" else "FAIL"
+      status
     )
     details <- list(
       pre_fwhm_mm = pre_f,
@@ -1325,8 +1634,16 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       tolerance_mm = tolerance_mm,
       smoother = smoother,
       used_mask = used_mask,
+      input_mask = input_mask,
+      calibration_input_mask = cal_model$calibrated_input_mask,
+      calibration_input_mask_extrapolated =
+        isTRUE(cal_model$input_mask_extrapolated),
+      exact_input_mask_calibration = exact_input_mask_calibration,
+      within_tolerance = within_tol,
       calibration_mode = cal_model$mode,
+      calibration_model_version = cal_model$model_version,
       calibration_type = cal_model$type,
+      calibration_estimator = preparation$estimator,
       calibration_coeffs = cal_model$coeffs,
       calibration_gain = calibration_gain,
       expected_effective_kernel_mm = calibration_gain * fwhm_mm,
@@ -1338,10 +1655,10 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       total_volumes = total_volumes,
       max_volumes = max_volumes,
       preprocessing = list(
-        enabled = isTRUE(preprocess),
-        polydeg = polydeg,
-        demean = isTRUE(demean),
-        unif = isTRUE(unif)
+        enabled = isTRUE(preparation$preprocess),
+        polydeg = preparation$polydeg,
+        demean = isTRUE(preparation$demean),
+        unif = isTRUE(preparation$unif)
       )
     )
   } else {
@@ -1362,10 +1679,10 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       total_volumes = total_volumes,
       max_volumes = max_volumes,
       preprocessing = list(
-        enabled = isTRUE(preprocess),
-        polydeg = polydeg,
-        demean = isTRUE(demean),
-        unif = isTRUE(unif)
+        enabled = isTRUE(preparation$preprocess),
+        polydeg = preparation$polydeg,
+        demean = isTRUE(preparation$demean),
+        unif = isTRUE(preparation$unif)
       )
     )
   }

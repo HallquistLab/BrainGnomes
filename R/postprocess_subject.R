@@ -38,6 +38,27 @@
   invisible(TRUE)
 }
 
+.smoothness_input_mask_condition <- function(completed_steps, mask_setting,
+                                             resolved_mask_file = NULL) {
+  if (!"apply_mask" %in% completed_steps) return("none")
+  if (checkmate::test_string(mask_setting) &&
+      identical(tolower(mask_setting), "template")) {
+    return("template")
+  }
+  mask_name <- if (checkmate::test_string(resolved_mask_file)) {
+    basename(resolved_mask_file)
+  } else {
+    ""
+  }
+  if (grepl("templatemask\\.nii(?:\\.gz)?$", mask_name, ignore.case = TRUE)) {
+    return("template")
+  }
+  if (grepl("desc-brain_mask\\.nii(?:\\.gz)?$", mask_name, ignore.case = TRUE)) {
+    return("fmriprep")
+  }
+  "custom"
+}
+
 #' Create the standard postprocessing whole-brain mask
 #'
 #' Centralizes the automask configuration shared by `postprocess_subject()` and
@@ -527,11 +548,21 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
       if (isTRUE(cfg$validate_postproc_steps)) {
+        completed_steps <- if (ii > 1L) {
+          processing_sequence[seq_len(ii - 1L)]
+        } else {
+          character()
+        }
         v_ok <- validate_spatial_smooth(
           pre_file = pre_spatial_smooth_file,
           post_file = cur_file,
           mask_file = brain_mask,
-          fwhm_mm = cfg$spatial_smooth$fwhm_mm
+          fwhm_mm = cfg$spatial_smooth$fwhm_mm,
+          input_mask = .smoothness_input_mask_condition(
+            completed_steps,
+            mask_setting = cfg$apply_mask$mask_file,
+            resolved_mask_file = apply_mask_file
+          )
         )
         postproc_validate_or_stop("spatial_smooth", v_ok)
       }

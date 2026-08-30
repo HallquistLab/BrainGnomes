@@ -433,7 +433,7 @@ test_that("validate_spatial_smooth passes when post FWHM exceeds pre FWHM", {
 
   set.seed(701)
   nx <- 16; ny <- 16; nz <- 8; nt <- 10
-  vox_mm <- c(2, 2, 2)
+  vox_mm <- c(2.7, 2.7, 2.7)
 
   mask <- array(0L, dim = c(nx, ny, nz))
   mask[3:(nx - 2), 3:(ny - 2), 2:(nz - 1)] <- 1L
@@ -487,7 +487,7 @@ test_that("validate_spatial_smooth calibration returns expected structure", {
 
   set.seed(702)
   nx <- 16; ny <- 16; nz <- 8; nt <- 5
-  vox_mm <- c(2, 2, 2)
+  vox_mm <- c(2.7, 2.7, 2.7)
 
   mask <- array(0L, dim = c(nx, ny, nz))
   mask[3:(nx - 2), 3:(ny - 2), 2:(nz - 1)] <- 1L
@@ -515,8 +515,46 @@ test_that("validate_spatial_smooth calibration returns expected structure", {
   expect_true(is.finite(details$post_expected_mm))
   expect_equal(details$tolerance_mm, .pp_select_calibration("susan", TRUE)$tolerance_mm)
   expect_equal(details$calibration_type, "quadrature_ratio_linear")
+  expect_equal(
+    details$calibration_model_version,
+    "smoothness-calibration-v3-fmriprep-k3-8"
+  )
+  expect_equal(details$calibration_estimator, "detrend_mad")
   expect_true(is.finite(details$calibration_gain))
-  expect_true(details$calibration_extrapolated)
+  expect_false(details$calibration_extrapolated)
+  expect_true(details$preprocessing$enabled)
+
+  extrapolated <- validate_spatial_smooth(
+    pre_file, post_file, mask_file, fwhm_mm = 10,
+    smoother = "susan", used_mask = TRUE, tolerance_mm = 100
+  )
+  extrapolated_details <- attr(extrapolated, "details")
+  expect_false(extrapolated)
+  expect_true(extrapolated_details$within_tolerance)
+  expect_true(extrapolated_details$calibration_extrapolated)
+  expect_true(extrapolated_details$exact_input_mask_calibration)
+  expect_match(
+    attr(extrapolated, "message"),
+    "FAIL \\(outside calibration support\\)"
+  )
+
+  expect_warning(
+    custom_result <- validate_spatial_smooth(
+      pre_file, post_file, mask_file, fwhm_mm = 6,
+      smoother = "susan", used_mask = TRUE, input_mask = "custom"
+    ),
+    "No exact smoothness calibration for input mask 'custom'"
+  )
+  custom_details <- attr(custom_result, "details")
+  expect_false(custom_result)
+  expect_identical(custom_details$calibration_input_mask, "template")
+  expect_true(custom_details$calibration_input_mask_extrapolated)
+  expect_false(custom_details$exact_input_mask_calibration)
+  expect_match(
+    attr(custom_result, "message"),
+    "FAIL \\(no exact input-mask calibration\\)"
+  )
+  expect_true(custom_details$calibration_extrapolated)
 })
 
 test_that("validate_spatial_smooth falls back to directional check without fwhm_mm", {
@@ -592,6 +630,7 @@ test_that(".pp_predict_calibration conditions quadrature delta on baseline and r
 })
 
 test_that(".pp_smoothness_volume_indices limits or preserves volumes", {
+  expect_equal(.pp_smoothness_volume_indices(800L), seq_len(600L))
   expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 3L), 1:3)
   expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 10L), 1:5)
   expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = Inf), 1:5)
@@ -604,16 +643,204 @@ test_that(".pp_mad_scale_matrix matches row-wise MAD scaling", {
   expect_equal(.pp_mad_scale_matrix(mat), mat / expected_mad)
 })
 
+test_that("file-backed smoothness estimation matches full-array preparation", {
+  skip_if_not_installed("RNifti")
+  set.seed(20260828)
+  image <- array(rnorm(8L * 7L * 5L * 20L), dim = c(8L, 7L, 5L, 20L))
+  mask <- array(FALSE, dim = c(8L, 7L, 5L))
+  mask[2:7, 2:6, 2:4] <- TRUE
+  image_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(image_file), add = TRUE)
+  RNifti::writeNifti(image, image_file)
+  voxel_mm <- .pp_pixdim_mm(image_file)
+
+  specs <- list(
+    raw = list(preprocess = FALSE, polydeg = NA_integer_, demean = FALSE, unif = FALSE),
+    detrend = list(preprocess = TRUE, polydeg = 3L, demean = TRUE, unif = FALSE),
+    detrend_mad = list(preprocess = TRUE, polydeg = 3L, demean = TRUE, unif = TRUE)
+  )
+  for (spec in specs) {
+    expected_data <- if (isTRUE(spec$preprocess)) {
+      .pp_prepare_classic_smoothness(
+        image, mask, polydeg = spec$polydeg,
+        demean = spec$demean, unif = spec$unif
+      )
+    } else {
+      image
+    }
+    expected <- estimate_classic_fwhm(expected_data, mask, voxel_mm)$geom
+    observed <- .pp_estimate_classic_smoothness_file(
+      image_file, mask, max_volumes = Inf,
+      preprocess = spec$preprocess, polydeg = spec$polydeg,
+      demean = spec$demean, unif = spec$unif
+    )$geom
+    expect_equal(observed, expected, tolerance = 1e-12)
+  }
+})
+
+test_that("masked-matrix classic estimator exactly matches full-array details", {
+  set.seed(20260828)
+  image <- array(rnorm(8L * 7L * 6L * 11L), dim = c(8L, 7L, 6L, 11L))
+  mask <- array(runif(8L * 7L * 6L) > 0.25, dim = c(8L, 7L, 6L))
+  sparse_volume <- image[, , , 1L]
+  sparse_volume[] <- NA_real_
+  sparse_volume[which(mask)[seq_len(6L)]] <- rnorm(6L)
+  image[, , , 1L] <- sparse_volume
+  image[3L, 3L, 3L, 2L] <- NA_real_
+  voxel_mm <- c(2.4, 2.7, 3.1)
+  masked_matrix <- array(image, dim = c(prod(dim(mask)), dim(image)[[4L]]))[
+    as.vector(mask), , drop = FALSE
+  ]
+
+  reference <- estimate_classic_fwhm(image, mask, voxel_mm)
+  observed <- .pp_estimate_classic_masked_matrix(
+    masked_matrix, mask, voxel_mm
+  )
+
+  expect_equal(observed$per_axis, reference$per_axis, tolerance = 1e-12)
+  expect_equal(observed$geom_axes, reference$geom_axes, tolerance = 1e-12)
+  expect_equal(observed$geom, reference$geom, tolerance = 1e-12)
+})
+
 test_that(".pp_select_calibration selects correct model", {
   m <- .pp_select_calibration("susan", used_mask = TRUE)
   expect_equal(m$type, "quadrature_ratio_linear")
   expect_length(m$coeffs, 2)
   expect_equal(m$mode, "fsl_susan_mask")
+  expect_true(m$preprocess)
+  expect_equal(m$estimator, "detrend_mad")
+  expect_equal(m$model_version, "smoothness-calibration-v3-fmriprep-k3-8")
+  expect_identical(m$calibrated_input_mask, "none")
+  expect_false(m$input_mask_extrapolated)
 
   m2 <- .pp_select_calibration("gaussian", used_mask = FALSE)
   expect_equal(m2$type, "quadrature_ratio_linear")
   expect_length(m2$coeffs, 2)
   expect_equal(m2$mode, "afni_3dmerge")
+  expect_equal(m2$estimator, "detrend_mad")
+})
+
+test_that("input-mask calibration fallback is explicitly extrapolated", {
+  expect_warning(
+    model <- .pp_select_calibration(
+      "susan", used_mask = TRUE, input_mask = "custom"
+    ),
+    "No exact smoothness calibration for input mask 'custom'"
+  )
+  expect_identical(model$calibrated_input_mask, "template")
+  expect_true(model$input_mask_extrapolated)
+})
+
+test_that("nested input-mask calibrations select an exact mask-specific leaf", {
+  nested <- .pp_calibration_coeffs
+  base_model <- nested$susan$classic$mask$none
+  nested$susan$classic$mask <- list(
+    none = modifyList(base_model, list(input_mask = "none", coeffs = c(1, -0.1))),
+    fmriprep = modifyList(
+      base_model, list(input_mask = "fmriprep", coeffs = c(1.1, -0.2))
+    ),
+    template = modifyList(
+      base_model, list(input_mask = "template", coeffs = c(1.2, -0.3))
+    )
+  )
+  testthat::local_mocked_bindings(
+    .pp_calibration_coeffs = nested,
+    .package = "BrainGnomes"
+  )
+
+  model <- .pp_select_calibration(
+    "susan", used_mask = TRUE, input_mask = "template"
+  )
+  expect_equal(model$coeffs, c(1.2, -0.3))
+  expect_identical(model$calibrated_input_mask, "template")
+  expect_false(model$input_mask_extrapolated)
+})
+
+test_that("promoted SUSAN calibrations are exact reviewed mask-specific models", {
+  expected <- list(
+    none = list(
+      coeffs = c(1.3120485766964101, -0.55739645314541497),
+      tolerance = 0.6
+    ),
+    fmriprep = list(
+      coeffs = c(1.2664743891602199, -0.48666277855524398),
+      tolerance = 0.8
+    ),
+    template = list(
+      coeffs = c(1.1941731382927601, -0.41366442683986498),
+      tolerance = 0.6
+    )
+  )
+  for (input_mask in names(expected)) {
+    model <- .pp_select_calibration(
+      "susan", used_mask = TRUE, input_mask = input_mask
+    )
+    expect_identical(
+      model$model_version, "smoothness-calibration-v3-fmriprep-k3-8"
+    )
+    expect_identical(model$calibrated_input_mask, input_mask)
+    expect_false(model$input_mask_extrapolated)
+    expect_equal(model$coeffs, expected[[input_mask]]$coeffs, tolerance = 1e-14)
+    expect_equal(model$tolerance_mm, expected[[input_mask]]$tolerance)
+    expect_identical(model$estimator, "detrend_mad")
+    expect_equal(model$kernel_range_mm, c(3, 8))
+  }
+})
+
+test_that("smoothing input-mask classification is independent of threshold masking", {
+  expect_identical(
+    .smoothness_input_mask_condition(character(), "template", "/tmp/template.nii.gz"),
+    "none"
+  )
+  expect_identical(
+    .smoothness_input_mask_condition("apply_mask", "template", "/tmp/anything.nii.gz"),
+    "template"
+  )
+  expect_identical(
+    .smoothness_input_mask_condition(
+      "apply_mask", "/data/mask.nii.gz",
+      "/data/sub-01_space-MNI_desc-brain_mask.nii.gz"
+    ),
+    "fmriprep"
+  )
+  expect_identical(
+    .smoothness_input_mask_condition(
+      "apply_mask", "/data/mask.nii.gz",
+      "/data/sub-01_space-MNI_desc-preproc_templatemask.nii.gz"
+    ),
+    "template"
+  )
+  expect_identical(
+    .smoothness_input_mask_condition(
+      "apply_mask", "/data/custom_mask.nii.gz", "/data/custom_mask.nii.gz"
+    ),
+    "custom"
+  )
+})
+
+test_that("calibrated estimator preparation is exact and cannot be overridden", {
+  susan_model <- .pp_select_calibration("susan", used_mask = TRUE)
+  susan_preparation <- .pp_calibration_preparation(susan_model)
+  expect_identical(susan_preparation$estimator, "detrend_mad")
+  expect_true(susan_preparation$preprocess)
+  expect_true(susan_preparation$unif)
+
+  detrended_model <- .pp_select_calibration("gaussian", used_mask = FALSE)
+  detrended <- .pp_calibration_preparation(detrended_model)
+  expect_identical(detrended$estimator, "detrend_mad")
+  expect_true(detrended$preprocess)
+  expect_identical(detrended$polydeg, 3L)
+  expect_true(detrended$demean)
+  expect_true(detrended$unif)
+
+  expect_error(
+    .pp_calibration_preparation(susan_model, preprocess = FALSE),
+    "incompatible override.*preprocess"
+  )
+  expect_error(
+    .pp_calibration_preparation(detrended_model, unif = FALSE),
+    "incompatible override.*unif"
+  )
 })
 
 test_that(".pp_select_calibration warns on unknown smoother", {
@@ -634,14 +861,45 @@ test_that("embedded smoothness models match the reviewed extdata table", {
 
   for (i in seq_len(nrow(calibration))) {
     row <- calibration[i, ]
-    model <- .pp_select_calibration(row$smoother, row$used_mask)
+    model <- .pp_select_calibration(
+      row$smoother, row$used_mask, input_mask = row$input_mask
+    )
+    expect_equal(model$model_version, row$model_version)
+    expect_identical(model$calibrated_input_mask, row$input_mask)
+    expect_false(model$input_mask_extrapolated)
     expect_equal(model$mode, row$mode)
     expect_equal(model$type, row$model_type)
     expect_equal(model$coeffs, c(row$coefficient_0, row$coefficient_1), tolerance = 1e-8)
     expect_equal(model$tolerance_mm, row$tolerance_mm)
     expect_equal(model$kernel_range_mm, c(row$kernel_min_mm, row$kernel_max_mm))
     expect_equal(model$voxel_range_mm, c(row$voxel_min_mm, row$voxel_max_mm))
+    if (!is.na(row$preprocess)) {
+      expect_identical(model$preprocess, row$preprocess)
+    }
+    if (!is.na(row$estimator)) {
+      expect_identical(model$estimator, row$estimator)
+    }
   }
+})
+
+test_that("promoted SUSAN models retain independent-validation evidence", {
+  validation_path <- system.file(
+    "extdata", "spatial_smooth_calibration_validation.csv",
+    package = "BrainGnomes", mustWork = TRUE
+  )
+  validation <- utils::read.csv(validation_path, stringsAsFactors = FALSE)
+  promoted <- validation[
+    validation$model_version == "smoothness-calibration-v3-fmriprep-k3-8",
+  ]
+
+  expect_equal(nrow(promoted), 3L)
+  expect_setequal(promoted$input_mask, c("none", "fmriprep", "template"))
+  expect_true(all(promoted$external_within_tolerance))
+  expect_true(all(
+    promoted$external_q95_abs_error_mm <= promoted$tolerance_mm
+  ))
+  expect_identical(promoted$n_external_subjects, rep(10L, 3L))
+  expect_identical(promoted$fmriprep_version, rep("25.2.5", 3L))
 })
 
 # --- validate_temporal_filter -------------------------------------------------

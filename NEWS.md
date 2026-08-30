@@ -1,3 +1,18 @@
+# BrainGnomes 0.9-2
+
+Released 2026-08-30
+
+* Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
+  distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask conditions.
+  Validation now enforces the selected detrending-plus-MAD estimator, uses up
+  to 600 volumes with a memory-reduced equivalent estimator, and cannot pass
+  by extrapolating across input-mask, kernel-size, or voxel-size support.
+* Validate the promoted 3--8 mm masked-SUSAN models on independent fMRIPrep
+  25.2.5 derivatives and through a 600-volume postprocessing-to-ROI E2E run.
+  The 10 mm stress kernel remains outside the supported calibration range.
+* Allow fsaverage setup to copy with GNU `cp` when newer fMRIPrep containers do
+  not provide `rsync`, while retaining the existing `rsync` path when present.
+
 # BrainGnomes 0.9-1
 
 Released 2026-08-27
