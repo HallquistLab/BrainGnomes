@@ -32,9 +32,9 @@ images for each tool and a working HPC environment. Additional
 information about setting up the compute environment is provided in
 [BrainGnomes Singularity container
 setup](https://uncdependlab.github.io/BrainGnomes/articles/building_containers.md).
-This vignette provides example R code snippets, explains expected
-inputs/outputs, and offers troubleshooting tips for common issues. By
-the end of demo, a new user should understand how to configure a study
+This vignette provides example R code snippets, explains expected inputs
+and outputs, and offers troubleshooting tips for common issues. By the
+end of the guide, a new user should understand how to configure a study
 and launch the BrainGnomes pipeline from start to finish.
 
 Full pipeline submission is designed for HPC clusters using SLURM or
@@ -59,16 +59,22 @@ BrainGnomes flow
 
 ### Running a subset of subject or a subset of processing steps
 
-As detailed below, the `run_project` function submits fMRI processing
-jobs to the scheduler. Although BrainGnomes is broadly intended to run
-all processing steps and all subjects, you can also run a subset of
-subjects. In the intractive mode of `run_project`, you can enter a set
-of subject IDs to run in case you don’t want to run all of them.
+As detailed below, the
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+function submits fMRI processing jobs to the scheduler. Although
+BrainGnomes is broadly intended to run all processing steps and all
+subjects, you can also run a subset of subjects. In the interactive mode
+of
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md),
+you can enter subject IDs when you do not want to run all of them.
 
-As detailed below, a BrainGnomes project can be configured to only run
-some steps (e.g., fmriprep and postprocessing). In this case, you will
-only be asked about these steps in `run_project`. Even if you have
-enabled a step, however, you can choose not to run it in `run_project`.
+As detailed below, a BrainGnomes project can be configured to run only
+some steps (for example, fMRIPrep and postprocessing). In this case, you
+will be asked only about these steps in
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+Even if you have enabled a step, however, you can choose not to run it
+in
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
 
 For example, if you only wish to run postprocessing stream “postproc1”
 on subject 540311, you might respond to the prompts like this:
@@ -104,12 +110,10 @@ jobs without prompting you.
 
 BrainGnomes is designed to support end-to-end processing of fMRI data,
 from original DICOM files to postprocessed data ready for analysis. That
-said, you are not required to setup or run any given step. For example,
-if you have data that have already be processed up through fmriprep, you
-could use BrainGnomes only for postprocessing. In the setup phase, you
-will be asked for Singularity containers for all analysis steps, but
-many of these can be skipped if you have no intention of running that
-step (e.g., MRIQC).
+said, you are not required to set up or run every step. For example, if
+your data have already been processed through fMRIPrep, you can use
+BrainGnomes only for postprocessing. During setup, container questions
+for steps you do not intend to run can be skipped.
 
 Before using `BrainGnomes`, identify the requirements for the stages you
 plan to enable:
@@ -189,18 +193,18 @@ With these in place, we can proceed to create a project configuration.
 ## Creating a Project Configuration with `setup_project()`
 
 The first step in using `BrainGnomes` is to create a project
-configuration, which is essentially a structured list containing all the
-parameters and paths needed for your pipeline. This configuration can be
-created interactively using the
+configuration, which is a structured list containing the settings and
+paths needed for your pipeline. This configuration can be created
+interactively using
+[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+In typical use, call
 [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
-function. In typical use, you will call
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
-with no arguments to start a new configuration from scratch, and it will
-interactively prompt you for all required information. The function
-returns an object with your settings, and it saves a a YAML
-configuration file to the root of the project directory
-(`$metadata$project_directory`) called `"project_config.yaml"`. If you
-later
+with no arguments to start a new configuration from scratch. It prompts
+for the required information, returns an object with your settings, and
+saves a YAML file named `project_config.yaml` in the project directory.
+In later sessions,
+[`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md)
+reloads this file.
 
 Let’s run
 [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
@@ -212,9 +216,9 @@ to initialize a new project config:
 scfg <- setup_project()
 ```
 
-This function function will ask a series of questions in the R console
-to gather information about your project. Below we outline the typical
-prompts and how to respond:
+This function asks a series of questions in the R console to gather
+information about your project. Below we outline the typical prompts and
+how to respond:
 
 - Project Name – A short name for your project (used for labeling and
   logging). Example: “MyStudy2025”.
@@ -471,7 +475,7 @@ fmripost-aroma.)
 
 ### Postprocessing setup
 
-Next, will decide whether to include postprocessing in the pipeline:
+Next, you will decide whether to include postprocessing in the pipeline:
 `Do you want to enable postprocessing of the BOLD data?`. Postprocessing
 includes several optional steps, including
 
@@ -523,10 +527,12 @@ analyses.
 
 The
 [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
-function – called using `run_project` – loops over configured atlases
-and writes out ROI time series and correlation matrices to the project’s
-`data_rois` directory using BIDS-style filenames. For more details about
-ROI reduction choices and correlation options, see the [Extracting ROIs
+function – called using
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+– loops over configured atlases and writes out ROI time series and
+correlation matrices to the project’s `data_rois` directory using
+BIDS-style filenames. For more details about ROI reduction choices and
+correlation options, see the [Extracting ROIs
 vignette](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.md).
 
 ### BIDS validation setup
@@ -551,15 +557,15 @@ asked for:
 
 ### Conclusion
 
-After `setup_project` completes, it will write a file called
-`project_config.yaml` into your project directory (if one exists, you
-will be prompted whether to overwrite it). This will contain all of your
-settings and can be used in future to load a project into R from an
-existing configuration.
+After
+[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+completes, it writes `project_config.yaml` into your project directory
+(if one exists, you will be prompted whether to overwrite it). This file
+contains your settings and can be used later to load the project into R.
 
 ## BrainGnomes workflow in a nutshell
 
-### Step 1: Setup your project
+### Step 1: Set up the project
 
 Use
 [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
@@ -570,97 +576,225 @@ to interactively complete or correct configuration entries:
 scfg <- setup_project()
 ```
 
-This will say a `project_config.yaml` file in your project directory.
+This saves `project_config.yaml` in the project directory. In later R
+sessions, use `load_project("/path/to/my/project")` to reload it.
 
-### Step 2: Load your configuration
+### Step 2: Run the project
 
-The step above results in an object in your R workspace called `scfg`
-that contains all of your project settings. This is great for now, but
-if you quit R and come back later, you probably want to pick up from
-where you left off. You can use
-[`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md)
-to load an existing configuration:
+Pass the configuration directly to
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+With no `steps` argument, the familiar prompts select subjects, stages,
+streams, debug/force behavior, and log level.
 
 ``` r
 
-scfg <- load_project("/path/to/my/project")
+run <- run_project(scfg)
 ```
 
-### Step 3: Edit configuration
-
-Use
-[`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md)
-for a menu-driven interface to modify parts of the project
-configuration.
+For unattended use, pass explicit selections. A direct run resolves its
+stages, streams, subject/session scope, and force setting internally; no
+separate inspection step is required.
 
 ``` r
 
-scfg <- edit_project(scfg)
-```
-
-Follow the prompts to choose what to edit. This is useful if you want to
-change job resources (e.g., memory or CPU for fMRIPrep) or adjust CLI
-options for specific pipeline steps.
-
-### Step 4: Run the project
-
-Once your configuration is complete, you can run the pipeline.
-
-``` r
-
-run_project(scfg)
-```
-
-By default, this will prompt you whether to run all steps in your
-pipeline. It will also process all available subjects and sessions
-defined in the BIDS directory.
-
-If you want to run only a subset of subjects, you can use the
-`subject_filter` argument like:
-
-``` r
-
-# run subjects 242 and 510 only
-run_project(scfg, subject_filter=c("242", "510"))
-```
-
-Likewise, if you want to skip the menu prompts for which step to run,
-you can use the `steps` argument. For example, to run only
-postprocessing on these subjects:
-
-``` r
-
-# run subjects 242 and 510 only
-run_project(scfg, subject_filter=c("242", "510"), steps="postprocess")
-```
-
-The available `steps` are `"flywheel_sync"`, `"bids_conversion"`,
-`"mriqc"`, `"fmriprep"`, `"aroma"`, `"postprocess"`, and
-`"extract_rois"`. BIDS validation is configured with the project but
-submitted separately through
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
-Note that if you request a step in `run_project` that was never
-configured it will result in an error.
-
-Before submitting work, use `dry_run = TRUE` to inspect the
-subject/session scope and the resolved settings for every selected
-postprocessing and extraction stream:
-
-``` r
-
-run_project(
+run <- run_project(
   scfg,
   steps = c("postprocess", "extract_rois"),
-  dry_run = TRUE
+  subject_filter = c("242", "510")
 )
+```
+
+The available submitted stages are `"flywheel_sync"`,
+`"bids_conversion"`, `"mriqc"`, `"fmriprep"`, `"aroma"`,
+`"postprocess"`, and `"extract_rois"`. BIDS validation is configured
+with the project but scheduled independently through
+[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+
+The returned run handle has a stable run ID connecting tracking rows,
+logs, diagnosis, provenance, retry, and cancellation. Before the first
+scheduler submission, BrainGnomes writes a run-specific provenance
+bundle beneath `<log_directory>/runs/<run_id>/`. It captures the
+resolved request and subjects, exact configuration, modeled resources
+and dependencies, software and host details, scheduler identity, and
+content fingerprints for containers, heuristics, licenses, atlases,
+masks, and other selected execution files.
+
+``` r
+
+get_project_runs(scfg)
+get_run_jobs(scfg, run$run_id)
+provenance <- get_run_provenance(scfg, run$run_id)
+find_run_logs(scfg, run$run_id, failed_only = TRUE)
+```
+
+### Step 3: Diagnose when needed
+
+Diagnosis is not a routine prerequisite. Use the established interactive
+browser when a run needs investigation:
+
+``` r
+
+diagnose_pipeline(scfg)
+```
+
+For scripts and automated reporting,
+`diagnose_project(scfg, run$run_id)` returns a non-interactive diagnosis
+object.
+
+## Optional inspection and automation tools
+
+Config, doctor, and plan are not additional required workflow steps.
+They support review, environment inspection, and automation around the
+direct workflow.
+
+### Config: inspect or validate YAML
+
+[`validate_project_config()`](https://uncdependlab.github.io/BrainGnomes/reference/validate_project_config.md)
+reports malformed or incomplete configuration without opening the setup
+wizard or writing files. This is useful in scripts, continuous
+integration, or configuration review.
+[`initialize_project()`](https://uncdependlab.github.io/BrainGnomes/reference/initialize_project.md)
+is also available when automation needs to create a portable
+disabled-stage starting configuration without prompts.
+
+``` r
+
+scfg <- initialize_project(
+  "my_study", "/project/my_study",
+  interactive = FALSE
+)
+validation <- validate_project_config(scfg)
+stopifnot(validation$valid)
+```
+
+Direct
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+calls retain their existing checks for the selected stages; separate
+config validation is optional.
+
+### Doctor: inspect the submission environment
+
+[`doctor()`](https://uncdependlab.github.io/BrainGnomes/reference/doctor.md)
+performs a broader, non-mutating preflight covering scheduler commands,
+container compatibility, storage permissions, stage-specific files, and
+the job-tracking database. It is valuable on a new cluster, after
+modules, containers, or storage have changed, or before an expensive
+submission.
+
+``` r
+
+preflight <- doctor(scfg)
+stopifnot(preflight$ok)
+```
+
+Pass `deep = TRUE` to also initialize the active reticulate Python and
+inspect optional modules used by template-dependent postprocessing.
+Doctor never submits jobs or changes project files and is not required
+before
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+
+### Plan: inspect or persist resolved work
+
+Plans resolve enabled stages, subject/session scope, streams, resources,
+dependencies, and implicit setup jobs before submission. Saved plans
+include their configuration and subject scope, making a reviewed request
+reusable in an approval or automation workflow. A plan is an optional
+view of the execution model that
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+resolves internally.
+
+``` r
+
+plan <- plan_project(
+  scfg,
+  steps = c("postprocess", "extract_rois"),
+  subject_filter = c("242", "510")
+)
+write_project_plan(plan, "/project/my_study/plans/analysis.yaml")
+run <- submit_project_plan(plan)
+```
+
+## Optional run operations
+
+Each call to
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+has a run ID. Use that ID to inspect the jobs and logs from one
+submission without mixing them up with earlier runs. If a run fails,
+diagnose the failure and correct its cause before retrying it.
+
+``` r
+
+# Summarize failed, blocked, and cancelled jobs and locate their logs.
+diagnosis <- diagnose_project(scfg, run$run_id)
+failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
+
+# Review what would be retried. This does not submit anything.
+retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
+
+# After correcting the cause, submit the retry as a new run.
+retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)
+```
+
+A retry does not resume or change the original run. It creates a new run
+and reruns the failed or cancelled stages and subjects even if old
+completion files would otherwise cause them to be skipped. The new run’s
+provenance records the source run ID. Jobs marked `FAILED_BY_EXT` did
+not run because an earlier job failed. They are not included by default;
+set `include_blocked = TRUE` when the new run should include that
+affected downstream work too.
+
+Cancellation is separate from retry. Preview it first; the second call
+below immediately asks the scheduler to cancel jobs that are still
+queued or running. It does not delete project data or outputs.
+
+``` r
+
+cancel_project_run(scfg, run$run_id, dry_run = TRUE)
+cancel_project_run(scfg, run$run_id, dry_run = FALSE)
 ```
 
 ## Running BrainGnomes on the command line
 
-BrainGnomes provides a command-line interface for setup, configuration
-editing, pipeline submission, and status reporting. This is helpful if
-you prefer not to start an R session or want to perform routine
-operations from a shell.
+BrainGnomes preserves the same primary workflow without requiring an
+interactive R session. The established command names are shown here;
+`init` and `run` are available as shorter aliases.
+
+``` bash
+BrainGnomes setup_project my_study /project/my_study
+BrainGnomes run_project /project/my_study
+
+# Only when a run needs investigation:
+BrainGnomes diagnose /project/my_study --interactive
+```
+
+The same optional inspection and automation tools are available at the
+command line. These commands are examples, not prerequisites for
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md):
+
+``` bash
+BrainGnomes config validate /project/my_study
+BrainGnomes doctor /project/my_study
+BrainGnomes plan /project/my_study --steps=all --output=/project/my_study/run.yaml
+BrainGnomes run /project/my_study/run.yaml
+```
+
+Run operations support observation and recovery:
+
+``` bash
+BrainGnomes status /project/my_study --run=latest --watch
+BrainGnomes provenance /project/my_study --run=latest --format=json
+BrainGnomes logs /project/my_study --run=latest --failed-only --tail=50
+BrainGnomes retry /project/my_study --run=<run-id> --dry-run
+BrainGnomes retry /project/my_study --run=<run-id> --yes
+BrainGnomes cancel /project/my_study --run=<run-id> --dry-run
+BrainGnomes cancel /project/my_study --run=<run-id> --yes
+```
+
+Use the run ID reported by `status --runs` when retrying so the source
+is unambiguous. Retry and cancellation require `--dry-run` or the
+explicit `--yes` confirmation flag. Use
+`BrainGnomes validate-bids /project/my_study` to submit the separately
+configured BIDS validation job.
 
 To get BrainGnomes on the command line, you need to add the location of
 the package to your Linux path. If you don’t know where it is installed,
@@ -684,24 +818,33 @@ stays synchronized with `inst/BrainGnomes`:
 
     Usage: BrainGnomes <command> [options]
 
-    Commands:
-      setup_project [project_name] [project_directory]
-      edit_project <project_directory|config.yaml>
-      run_project <project_directory|config.yaml> [--steps=<steps>] [--subject_filter=<ids>] [--extract_streams=<streams>] [--dry-run]
-      status <project_directory|config.yaml> [--sub_id=<id>] [--ses_id=<id>] [--summary]
+    Typical workflow:
+      setup_project <project_name> <project_directory> [--non-interactive]
+      run_project <project_directory|config.yaml> [run options]
+      diagnose <project_directory|config.yaml> [--interactive]
+
+    Optional inspection and automation:
+      config validate <project_directory|config.yaml> [--format=table|json]
+      config edit <project_directory|config.yaml>
+      config show <project_directory|config.yaml> [--format=table|json]
+      doctor <project_directory|config.yaml> [--steps=<steps>] [--deep]
+      plan <project_directory|config.yaml> [run options] [--output=<plan.yaml>]
+
+    Run operations:
+      status <project_directory|config.yaml> [--run=<id|latest>|--runs] [--watch]
+      provenance <project_directory|config.yaml> [--run=<id|latest>] [--format=table|json]
+      logs <project_directory|config.yaml> [--run=<id|latest>] [--failed-only]
+      retry <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes
+      cancel <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes
+      validate-bids <project_directory|config.yaml> [--outfile=<report.html>]
       help [command]
 
-    Examples:
-      BrainGnomes setup_project demo_project /proj/my_study
-      BrainGnomes edit_project /proj/my_study/project_config.yaml
-      BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess' --subject_filter='001 002' --force
-      BrainGnomes status /proj/my_study/project_config.yaml --summary
-
-    Use 'BrainGnomes <command> --help' for command-specific help.
+    Also accepted: init, edit_project, and run.
+    Config, doctor, and plan are optional; run_project resolves and submits directly.
+    Use 'BrainGnomes help <command>' or 'BrainGnomes <command> --help' for details.
 
 Use `BrainGnomes <command> --help` for command-specific options and
-examples. On the CLI, objects such as `scfg` are not persisted in a
-session; configuration changes are saved to `project_config.yaml` in the
-project directory. BIDS validation remains an R operation configured
-with the project but submitted separately through
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+examples. Table output is intended for people; commands that return
+structured results also provide JSON, and tabular status/log commands
+provide CSV. Compatibility aliases for `setup_project`, `edit_project`,
+and `run_project` remain available for existing scripts.

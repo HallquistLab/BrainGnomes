@@ -1,24 +1,43 @@
 # Validate that a brain mask was correctly applied to 4D fMRI data
 
-Checks that voxels outside the mask are zero (no signal leakage) and
-optionally reports voxels inside the mask that are all zero (potentially
-problematic).
+Replays the masking operation in volume chunks and checks that the
+post-mask image equals the pre-mask image inside the mask and is exactly
+zero outside it. Voxels inside the mask that remain zero for the full
+run are reported.
 
 ## Usage
 
 ``` r
-validate_apply_mask(mask_file, data_file)
+validate_apply_mask(
+  pre_file,
+  post_file,
+  mask_file,
+  tolerance = 1e-05,
+  chunk_size = 100L
+)
 ```
 
 ## Arguments
+
+- pre_file:
+
+  Path to the 4D fMRI data before masking.
+
+- post_file:
+
+  Path to the 4D fMRI data after masking.
 
 - mask_file:
 
   Path to the binary mask NIfTI file (1s = brain, 0s = non-brain).
 
-- data_file:
+- tolerance:
 
-  Path to the masked 4D fMRI data file (after `apply_mask` was run).
+  Maximum relative numerical error allowed inside the mask.
+
+- chunk_size:
+
+  Number of volumes compared at a time.
 
 ## Value
 
@@ -35,14 +54,7 @@ Attributes:
 
 ## Details
 
-This function verifies that the masking step was applied correctly by
-checking:
-
-- External violations: voxels where mask == 0 (outside brain) but data
-  has non-zero signal.
-
-- Internal zeros: voxels where mask \> 0 (inside brain) but all
-  timepoints are zero.
-
-Validation passes if `external_violations == 0`. Internal zeros are
-reported but do not cause validation to fail.
+Validation requires the complete post-mask image to equal the exact
+expected transform within `tolerance`. This prevents an all-zero or
+otherwise altered in-mask output from passing merely because nothing
+leaked outside the mask.

@@ -1,6 +1,11 @@
-# Function for diagnosing errors in a run of the pipeline
+# Interactively investigate jobs and logs from pipeline runs
 
-Function for diagnosing errors in a run of the pipeline
+Opens the established guided diagnosis browser. You can start with one
+subject across runs or select one run, follow its job relationships, and
+inspect output or error logs. Diagnosis does not submit jobs or change
+the project. Use
+[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+instead when a script or report needs a prompt-free summary.
 
 ## Usage
 
@@ -12,7 +17,21 @@ diagnose_pipeline(input)
 
 - input:
 
-  A character path to an scfg object or an scfg object itself.
+  A project configuration object or project directory.
+
+## Value
+
+Depending on the selected action, the chosen run's job tree, log
+contents, or invisibly `NULL`.
+
+## See also
+
+[`get_project_runs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_runs.md)
+to find run IDs,
+[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+for a prompt-free summary, and
+[`retry_project_run()`](https://uncdependlab.github.io/BrainGnomes/reference/retry_project_run.md)
+after correcting a failure.
 
 ## Author
 

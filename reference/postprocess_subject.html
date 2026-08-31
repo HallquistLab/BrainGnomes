@@ -35,7 +35,7 @@ a filtered confounds file for downstream analyses."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -112,7 +112,10 @@ reference masks are generated internally with <code><a href="automask.html">auto
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
 intensity-reference provenance, the reference-core mask, a PSC multiplier
-map when requested, and logging to a subject-level log file.</p>
+map when requested, and logging to a subject-level log file. When
+postprocessing validation is enabled, a machine-readable JSON audit is
+written beside the subject log. Newly computed final images remain in the
+scratch workspace until their last-step validation has completed.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

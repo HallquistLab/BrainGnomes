@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,6 +53,7 @@
 <span>  <span class="va">scfg</span>,</span>
 <span>  <span class="va">steps</span>,</span>
 <span>  subject_filter <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  resolved_subjects <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  postprocess_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  extract_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  parent_ids <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -76,6 +77,12 @@
 
 <dt id="arg-subject-filter">subject_filter<a class="anchor" aria-label="anchor" href="#arg-subject-filter"></a></dt>
 <dd><p>Optional subject/session filter (character or data.frame)</p></dd>
+
+
+<dt id="arg-resolved-subjects">resolved_subjects<a class="anchor" aria-label="anchor" href="#arg-resolved-subjects"></a></dt>
+<dd><p>Optional subject/session table already resolved by
+<code>resolve_project_execution()</code>. Deferred Flywheel controllers omit it so
+discovery occurs after synchronization.</p></dd>
 
 
 <dt id="arg-postprocess-streams">postprocess_streams<a class="anchor" aria-label="anchor" href="#arg-postprocess-streams"></a></dt>

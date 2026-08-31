@@ -1,12 +1,19 @@
-# Validate scrub timepoints (output TR count vs censor)
+# Validate scrub timepoints by exact retained-volume replay
 
-Post TRs should equal pre TRs minus scrubbed count. Pass censor read
+The post image must contain exactly the pre-image volumes whose censor
+values are one, in their original order. Pass the censor vector read
 **before** the step if the file is overwritten.
 
 ## Usage
 
 ``` r
-validate_scrub_timepoints(pre_file, post_file, censor_vec)
+validate_scrub_timepoints(
+  pre_file,
+  post_file,
+  censor_vec,
+  tolerance = 1e-05,
+  chunk_size = 100L
+)
 ```
 
 ## Arguments
@@ -22,6 +29,14 @@ validate_scrub_timepoints(pre_file, post_file, censor_vec)
 - censor_vec:
 
   Censor vector length = pre TRs (1 = keep, 0 = drop).
+
+- tolerance:
+
+  Maximum relative numerical error for retained volumes.
+
+- chunk_size:
+
+  Number of retained volumes compared at a time.
 
 ## Value
 

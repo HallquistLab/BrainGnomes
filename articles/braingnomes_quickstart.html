@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -105,8 +105,8 @@ dataset, utilizing the HPC environment</li>
 images for each tool and a working HPC environment. Additional
 information about setting up the compute environment is provided in <a href="building_containers.html">BrainGnomes Singularity container
 setup</a>. This vignette provides example R code snippets, explains
-expected inputs/outputs, and offers troubleshooting tips for common
-issues. By the end of demo, a new user should understand how to
+expected inputs and outputs, and offers troubleshooting tips for common
+issues. By the end of the guide, a new user should understand how to
 configure a study and launch the BrainGnomes pipeline from start to
 finish.</p>
 <p>Full pipeline submission is designed for HPC clusters using SLURM or
@@ -129,17 +129,17 @@ that each subject is processed fully (unless a crash occurs).</p>
 <div class="section level3">
 <h3 id="running-a-subset-of-subject-or-a-subset-of-processing-steps">Running a subset of subject or a subset of processing steps<a class="anchor" aria-label="anchor" href="#running-a-subset-of-subject-or-a-subset-of-processing-steps"></a>
 </h3>
-<p>As detailed below, the <code>run_project</code> function submits fMRI
-processing jobs to the scheduler. Although BrainGnomes is broadly
+<p>As detailed below, the <code><a href="../reference/run_project.html">run_project()</a></code> function submits
+fMRI processing jobs to the scheduler. Although BrainGnomes is broadly
 intended to run all processing steps and all subjects, you can also run
-a subset of subjects. In the intractive mode of
-<code>run_project</code>, you can enter a set of subject IDs to run in
-case you don’t want to run all of them.</p>
-<p>As detailed below, a BrainGnomes project can be configured to only
-run some steps (e.g., fmriprep and postprocessing). In this case, you
-will only be asked about these steps in <code>run_project</code>. Even
-if you have enabled a step, however, you can choose not to run it in
-<code>run_project</code>.</p>
+a subset of subjects. In the interactive mode of
+<code><a href="../reference/run_project.html">run_project()</a></code>, you can enter subject IDs when you do not
+want to run all of them.</p>
+<p>As detailed below, a BrainGnomes project can be configured to run
+only some steps (for example, fMRIPrep and postprocessing). In this
+case, you will be asked only about these steps in
+<code><a href="../reference/run_project.html">run_project()</a></code>. Even if you have enabled a step, however,
+you can choose not to run it in <code><a href="../reference/run_project.html">run_project()</a></code>.</p>
 <p>For example, if you only wish to run postprocessing stream
 “postproc1” on subject 540311, you might respond to the prompts like
 this:</p>
@@ -175,12 +175,10 @@ prompting you.</p>
 </h2>
 <p>BrainGnomes is designed to support end-to-end processing of fMRI
 data, from original DICOM files to postprocessed data ready for
-analysis. That said, you are not required to setup or run any given
-step. For example, if you have data that have already be processed up
-through fmriprep, you could use BrainGnomes only for postprocessing. In
-the setup phase, you will be asked for Singularity containers for all
-analysis steps, but many of these can be skipped if you have no
-intention of running that step (e.g., MRIQC).</p>
+analysis. That said, you are not required to set up or run every step.
+For example, if your data have already been processed through fMRIPrep,
+you can use BrainGnomes only for postprocessing. During setup, container
+questions for steps you do not intend to run can be skipped.</p>
 <p>Before using <code>BrainGnomes</code>, identify the requirements for
 the stages you plan to enable:</p>
 <table class="table">
@@ -307,24 +305,22 @@ configuration.</p>
 <code>setup_project()</code><a class="anchor" aria-label="anchor" href="#creating-a-project-configuration-with-setup_project"></a>
 </h2>
 <p>The first step in using <code>BrainGnomes</code> is to create a
-project configuration, which is essentially a structured list containing
-all the parameters and paths needed for your pipeline. This
-configuration can be created interactively using the
-<code><a href="../reference/setup_project.html">setup_project()</a></code> function. In typical use, you will call
-<code><a href="../reference/setup_project.html">setup_project()</a></code> with no arguments to start a new
-configuration from scratch, and it will interactively prompt you for all
-required information. The function returns an object with your settings,
-and it saves a a YAML configuration file to the root of the project
-directory (<code>$metadata$project_directory</code>) called
-<code>"project_config.yaml"</code>. If you later</p>
+project configuration, which is a structured list containing the
+settings and paths needed for your pipeline. This configuration can be
+created interactively using <code><a href="../reference/setup_project.html">setup_project()</a></code>. In typical
+use, call <code><a href="../reference/setup_project.html">setup_project()</a></code> with no arguments to start a new
+configuration from scratch. It prompts for the required information,
+returns an object with your settings, and saves a YAML file named
+<code>project_config.yaml</code> in the project directory. In later
+sessions, <code><a href="../reference/load_project.html">load_project()</a></code> reloads this file.</p>
 <p>Let’s run <code><a href="../reference/setup_project.html">setup_project()</a></code> to initialize a new project
 config:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Start an interactive setup for a new fMRI project</span></span>
 <span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>This function function will ask a series of questions in the R
-console to gather information about your project. Below we outline the
-typical prompts and how to respond:</p>
+<p>This function asks a series of questions in the R console to gather
+information about your project. Below we outline the typical prompts and
+how to respond:</p>
 <ul>
 <li>Project Name – A short name for your project (used for labeling and
 logging). Example: “MyStudy2025”.</li>
@@ -586,7 +582,8 @@ fmripost-aroma.)</p>
 <div class="section level3">
 <h3 id="postprocessing-setup">Postprocessing setup<a class="anchor" aria-label="anchor" href="#postprocessing-setup"></a>
 </h3>
-<p>Next, will decide whether to include postprocessing in the pipeline:
+<p>Next, you will decide whether to include postprocessing in the
+pipeline:
 <code>Do you want to enable postprocessing of the BOLD data?</code>.
 Postprocessing includes several optional steps, including</p>
 <ul>
@@ -633,8 +630,8 @@ or more atlases/ROI masks. You can also ask BrainGnomes to compute
 correlations among the ROI timeseries for functional connectivity
 analyses.</p>
 <p>The <code><a href="../reference/extract_rois.html">extract_rois()</a></code> function – called using
-<code>run_project</code> – loops over configured atlases and writes out
-ROI time series and correlation matrices to the project’s
+<code><a href="../reference/run_project.html">run_project()</a></code> – loops over configured atlases and writes
+out ROI time series and correlation matrices to the project’s
 <code>data_rois</code> directory using BIDS-style filenames. For more
 details about ROI reduction choices and correlation options, see the <a href="extract_rois.html">Extracting ROIs vignette</a>.</p>
 </div>
@@ -661,128 +658,244 @@ for details.</li>
 <div class="section level3">
 <h3 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>
 </h3>
-<p>After <code>setup_project</code> completes, it will write a file
-called <code>project_config.yaml</code> into your project directory (if
-one exists, you will be prompted whether to overwrite it). This will
-contain all of your settings and can be used in future to load a project
-into R from an existing configuration.</p>
+<p>After <code><a href="../reference/setup_project.html">setup_project()</a></code> completes, it writes
+<code>project_config.yaml</code> into your project directory (if one
+exists, you will be prompted whether to overwrite it). This file
+contains your settings and can be used later to load the project into
+R.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="braingnomes-workflow-in-a-nutshell">BrainGnomes workflow in a nutshell<a class="anchor" aria-label="anchor" href="#braingnomes-workflow-in-a-nutshell"></a>
 </h2>
 <div class="section level3">
-<h3 id="step-1-setup-your-project">Step 1: Setup your project<a class="anchor" aria-label="anchor" href="#step-1-setup-your-project"></a>
+<h3 id="step-1-set-up-the-project">Step 1: Set up the project<a class="anchor" aria-label="anchor" href="#step-1-set-up-the-project"></a>
 </h3>
 <p>Use <code><a href="../reference/setup_project.html">setup_project()</a></code> to interactively complete or correct
 configuration entries:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>This will say a <code>project_config.yaml</code> file in your project
-directory.</p>
+<p>This saves <code>project_config.yaml</code> in the project directory.
+In later R sessions, use
+<code>load_project("/path/to/my/project")</code> to reload it.</p>
 </div>
 <div class="section level3">
-<h3 id="step-2-load-your-configuration">Step 2: Load your configuration<a class="anchor" aria-label="anchor" href="#step-2-load-your-configuration"></a>
+<h3 id="step-2-run-the-project">Step 2: Run the project<a class="anchor" aria-label="anchor" href="#step-2-run-the-project"></a>
 </h3>
-<p>The step above results in an object in your R workspace called
-<code>scfg</code> that contains all of your project settings. This is
-great for now, but if you quit R and come back later, you probably want
-to pick up from where you left off. You can use
-<code><a href="../reference/load_project.html">load_project()</a></code> to load an existing configuration:</p>
+<p>Pass the configuration directly to <code><a href="../reference/run_project.html">run_project()</a></code>. With
+no <code>steps</code> argument, the familiar prompts select subjects,
+stages, streams, debug/force behavior, and log level.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_project.html">load_project</a></span><span class="op">(</span><span class="st">"/path/to/my/project"</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="step-3-edit-configuration">Step 3: Edit configuration<a class="anchor" aria-label="anchor" href="#step-3-edit-configuration"></a>
-</h3>
-<p>Use <code><a href="../reference/edit_project.html">edit_project()</a></code> for a menu-driven interface to modify
-parts of the project configuration.</p>
+<code class="sourceCode R"><span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
+<p>For unattended use, pass explicit selections. A direct run resolves
+its stages, streams, subject/session scope, and force setting
+internally; no separate inspection step is required.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/edit_project.html">edit_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
-<p>Follow the prompts to choose what to edit. This is useful if you want
-to change job resources (e.g., memory or CPU for fMRIPrep) or adjust CLI
-options for specific pipeline steps.</p>
-</div>
-<div class="section level3">
-<h3 id="step-4-run-the-project">Step 4: Run the project<a class="anchor" aria-label="anchor" href="#step-4-run-the-project"></a>
-</h3>
-<p>Once your configuration is complete, you can run the pipeline.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
-<p>By default, this will prompt you whether to run all steps in your
-pipeline. It will also process all available subjects and sessions
-defined in the BIDS directory.</p>
-<p>If you want to run only a subset of subjects, you can use the
-<code>subject_filter</code> argument like:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
-<span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>Likewise, if you want to skip the menu prompts for which step to run,
-you can use the <code>steps</code> argument. For example, to run only
-postprocessing on these subjects:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
-<span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span>, steps<span class="op">=</span><span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
-<p>The available <code>steps</code> are <code>"flywheel_sync"</code>,
+<code class="sourceCode R"><span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span></span>
+<span>  <span class="va">scfg</span>,</span>
+<span>  steps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"postprocess"</span>, <span class="st">"extract_rois"</span><span class="op">)</span>,</span>
+<span>  subject_filter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>The available submitted stages are <code>"flywheel_sync"</code>,
 <code>"bids_conversion"</code>, <code>"mriqc"</code>,
 <code>"fmriprep"</code>, <code>"aroma"</code>,
 <code>"postprocess"</code>, and <code>"extract_rois"</code>. BIDS
-validation is configured with the project but submitted separately
-through <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>. Note that if you request a
-step in <code>run_project</code> that was never configured it will
-result in an error.</p>
-<p>Before submitting work, use <code>dry_run = TRUE</code> to inspect
-the subject/session scope and the resolved settings for every selected
-postprocessing and extraction stream:</p>
+validation is configured with the project but scheduled independently
+through <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>.</p>
+<p>The returned run handle has a stable run ID connecting tracking rows,
+logs, diagnosis, provenance, retry, and cancellation. Before the first
+scheduler submission, BrainGnomes writes a run-specific provenance
+bundle beneath <code>&lt;log_directory&gt;/runs/&lt;run_id&gt;/</code>.
+It captures the resolved request and subjects, exact configuration,
+modeled resources and dependencies, software and host details, scheduler
+identity, and content fingerprints for containers, heuristics, licenses,
+atlases, masks, and other selected execution files.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/get_project_runs.html">get_project_runs</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/get_run_jobs.html">get_run_jobs</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span></span>
+<span><span class="va">provenance</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_run_provenance.html">get_run_provenance</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/find_run_logs.html">find_run_logs</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, failed_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="step-3-diagnose-when-needed">Step 3: Diagnose when needed<a class="anchor" aria-label="anchor" href="#step-3-diagnose-when-needed"></a>
+</h3>
+<p>Diagnosis is not a routine prerequisite. Use the established
+interactive browser when a run needs investigation:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/diagnose_pipeline.html">diagnose_pipeline</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
+<p>For scripts and automated reporting,
+<code>diagnose_project(scfg, run$run_id)</code> returns a
+non-interactive diagnosis object.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="optional-inspection-and-automation-tools">Optional inspection and automation tools<a class="anchor" aria-label="anchor" href="#optional-inspection-and-automation-tools"></a>
+</h2>
+<p>Config, doctor, and plan are not additional required workflow steps.
+They support review, environment inspection, and automation around the
+direct workflow.</p>
+<div class="section level3">
+<h3 id="config-inspect-or-validate-yaml">Config: inspect or validate YAML<a class="anchor" aria-label="anchor" href="#config-inspect-or-validate-yaml"></a>
+</h3>
+<p><code><a href="../reference/validate_project_config.html">validate_project_config()</a></code> reports malformed or
+incomplete configuration without opening the setup wizard or writing
+files. This is useful in scripts, continuous integration, or
+configuration review. <code><a href="../reference/initialize_project.html">initialize_project()</a></code> is also
+available when automation needs to create a portable disabled-stage
+starting configuration without prompts.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_project.html">initialize_project</a></span><span class="op">(</span></span>
+<span>  <span class="st">"my_study"</span>, <span class="st">"/project/my_study"</span>,</span>
+<span>  interactive <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">validation</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/validate_project_config.html">validate_project_config</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="va">validation</span><span class="op">$</span><span class="va">valid</span><span class="op">)</span></span></code></pre></div>
+<p>Direct <code><a href="../reference/run_project.html">run_project()</a></code> calls retain their existing checks
+for the selected stages; separate config validation is optional.</p>
+</div>
+<div class="section level3">
+<h3 id="doctor-inspect-the-submission-environment">Doctor: inspect the submission environment<a class="anchor" aria-label="anchor" href="#doctor-inspect-the-submission-environment"></a>
+</h3>
+<p><code><a href="../reference/doctor.html">doctor()</a></code> performs a broader, non-mutating preflight
+covering scheduler commands, container compatibility, storage
+permissions, stage-specific files, and the job-tracking database. It is
+valuable on a new cluster, after modules, containers, or storage have
+changed, or before an expensive submission.</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="va">preflight</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/doctor.html">doctor</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="va">preflight</span><span class="op">$</span><span class="va">ok</span><span class="op">)</span></span></code></pre></div>
+<p>Pass <code>deep = TRUE</code> to also initialize the active
+reticulate Python and inspect optional modules used by
+template-dependent postprocessing. Doctor never submits jobs or changes
+project files and is not required before <code><a href="../reference/run_project.html">run_project()</a></code>.</p>
+</div>
+<div class="section level3">
+<h3 id="plan-inspect-or-persist-resolved-work">Plan: inspect or persist resolved work<a class="anchor" aria-label="anchor" href="#plan-inspect-or-persist-resolved-work"></a>
+</h3>
+<p>Plans resolve enabled stages, subject/session scope, streams,
+resources, dependencies, and implicit setup jobs before submission.
+Saved plans include their configuration and subject scope, making a
+reviewed request reusable in an approval or automation workflow. A plan
+is an optional view of the execution model that
+<code><a href="../reference/run_project.html">run_project()</a></code> resolves internally.</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plan_project.html">plan_project</a></span><span class="op">(</span></span>
 <span>  <span class="va">scfg</span>,</span>
 <span>  steps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"postprocess"</span>, <span class="st">"extract_rois"</span><span class="op">)</span>,</span>
-<span>  dry_run <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span>  subject_filter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/write_project_plan.html">write_project_plan</a></span><span class="op">(</span><span class="va">plan</span>, <span class="st">"/project/my_study/plans/analysis.yaml"</span><span class="op">)</span></span>
+<span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/submit_project_plan.html">submit_project_plan</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span></span></code></pre></div>
 </div>
+</div>
+<div class="section level2">
+<h2 id="optional-run-operations">Optional run operations<a class="anchor" aria-label="anchor" href="#optional-run-operations"></a>
+</h2>
+<p>Each call to <code><a href="../reference/run_project.html">run_project()</a></code> has a run ID. Use that ID to
+inspect the jobs and logs from one submission without mixing them up
+with earlier runs. If a run fails, diagnose the failure and correct its
+cause before retrying it.</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Summarize failed, blocked, and cancelled jobs and locate their logs.</span></span>
+<span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span></span>
+<span><span class="va">failed_logs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/find_run_logs.html">find_run_logs</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, failed_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Review what would be retried. This does not submit anything.</span></span>
+<span><span class="va">retry_plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># After correcting the cause, submit the retry as a new run.</span></span>
+<span><span class="va">retry_run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p>A retry does not resume or change the original run. It creates a new
+run and reruns the failed or cancelled stages and subjects even if old
+completion files would otherwise cause them to be skipped. The new run’s
+provenance records the source run ID. Jobs marked
+<code>FAILED_BY_EXT</code> did not run because an earlier job failed.
+They are not included by default; set
+<code>include_blocked = TRUE</code> when the new run should include that
+affected downstream work too.</p>
+<p>Cancellation is separate from retry. Preview it first; the second
+call below immediately asks the scheduler to cancel jobs that are still
+queued or running. It does not delete project data or outputs.</p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/cancel_project_run.html">cancel_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/cancel_project_run.html">cancel_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="running-braingnomes-on-the-command-line">Running BrainGnomes on the command line<a class="anchor" aria-label="anchor" href="#running-braingnomes-on-the-command-line"></a>
 </h2>
-<p>BrainGnomes provides a command-line interface for setup,
-configuration editing, pipeline submission, and status reporting. This
-is helpful if you prefer not to start an R session or want to perform
-routine operations from a shell.</p>
+<p>BrainGnomes preserves the same primary workflow without requiring an
+interactive R session. The established command names are shown here;
+<code>init</code> and <code>run</code> are available as shorter
+aliases.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a><span class="co"># Only when a run needs investigation:</span></span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--interactive</span></span></code></pre></div>
+<p>The same optional inspection and automation tools are available at
+the command line. These commands are examples, not prerequisites for
+<code><a href="../reference/run_project.html">run_project()</a></code>:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> config validate /project/my_study</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> doctor /project/my_study</span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> plan /project/my_study <span class="at">--steps</span><span class="op">=</span>all <span class="at">--output</span><span class="op">=</span>/project/my_study/run.yaml</span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> run /project/my_study/run.yaml</span></code></pre></div>
+<p>Run operations support observation and recovery:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--watch</span></span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> provenance /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--format</span><span class="op">=</span>json</span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> logs /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--failed-only</span> <span class="at">--tail</span><span class="op">=</span>50</span>
+<span id="cb21-4"><a href="#cb21-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
+<span id="cb21-5"><a href="#cb21-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span>
+<span id="cb21-6"><a href="#cb21-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
+<span id="cb21-7"><a href="#cb21-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
+<p>Use the run ID reported by <code>status --runs</code> when retrying
+so the source is unambiguous. Retry and cancellation require
+<code>--dry-run</code> or the explicit <code>--yes</code> confirmation
+flag. Use <code>BrainGnomes validate-bids /project/my_study</code> to
+submit the separately configured BIDS validation job.</p>
 <p>To get BrainGnomes on the command line, you need to add the location
 of the package to your Linux path. If you don’t know where it is
 installed, run this in an R session.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/find.package.html" class="external-link">find.package</a></span><span class="op">(</span><span class="st">"BrainGnomes"</span><span class="op">)</span></span></code></pre></div>
 <p>Add that package directory to your path when a terminal starts. If
 you use bash, the following portable form can be added to
 <code>~/.bashrc</code>:</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">'cat(find.package(\"BrainGnomes\"))'</span><span class="va">)</span><span class="st">:</span><span class="va">$PATH</span><span class="st">"</span></span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">'cat(find.package(\"BrainGnomes\"))'</span><span class="va">)</span><span class="st">:</span><span class="va">$PATH</span><span class="st">"</span></span></code></pre></div>
 <p>This enables the <code>BrainGnomes</code> command. The block below is
 generated by running the installed command itself when this vignette is
 built, so it stays synchronized with <code>inst/BrainGnomes</code>:</p>
 <pre><code>Usage: BrainGnomes &lt;command&gt; [options]
 
-Commands:
-  setup_project [project_name] [project_directory]
-  edit_project &lt;project_directory|config.yaml&gt;
-  run_project &lt;project_directory|config.yaml&gt; [--steps=&lt;steps&gt;] [--subject_filter=&lt;ids&gt;] [--extract_streams=&lt;streams&gt;] [--dry-run]
-  status &lt;project_directory|config.yaml&gt; [--sub_id=&lt;id&gt;] [--ses_id=&lt;id&gt;] [--summary]
+Typical workflow:
+  setup_project &lt;project_name&gt; &lt;project_directory&gt; [--non-interactive]
+  run_project &lt;project_directory|config.yaml&gt; [run options]
+  diagnose &lt;project_directory|config.yaml&gt; [--interactive]
+
+Optional inspection and automation:
+  config validate &lt;project_directory|config.yaml&gt; [--format=table|json]
+  config edit &lt;project_directory|config.yaml&gt;
+  config show &lt;project_directory|config.yaml&gt; [--format=table|json]
+  doctor &lt;project_directory|config.yaml&gt; [--steps=&lt;steps&gt;] [--deep]
+  plan &lt;project_directory|config.yaml&gt; [run options] [--output=&lt;plan.yaml&gt;]
+
+Run operations:
+  status &lt;project_directory|config.yaml&gt; [--run=&lt;id|latest&gt;|--runs] [--watch]
+  provenance &lt;project_directory|config.yaml&gt; [--run=&lt;id|latest&gt;] [--format=table|json]
+  logs &lt;project_directory|config.yaml&gt; [--run=&lt;id|latest&gt;] [--failed-only]
+  retry &lt;project_directory|config.yaml&gt; [--run=&lt;id|latest&gt;] --dry-run|--yes
+  cancel &lt;project_directory|config.yaml&gt; [--run=&lt;id|latest&gt;] --dry-run|--yes
+  validate-bids &lt;project_directory|config.yaml&gt; [--outfile=&lt;report.html&gt;]
   help [command]
 
-Examples:
-  BrainGnomes setup_project demo_project /proj/my_study
-  BrainGnomes edit_project /proj/my_study/project_config.yaml
-  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess' --subject_filter='001 002' --force
-  BrainGnomes status /proj/my_study/project_config.yaml --summary
-
-Use 'BrainGnomes &lt;command&gt; --help' for command-specific help.</code></pre>
+Also accepted: init, edit_project, and run.
+Config, doctor, and plan are optional; run_project resolves and submits directly.
+Use 'BrainGnomes help &lt;command&gt;' or 'BrainGnomes &lt;command&gt; --help' for details.</code></pre>
 <p>Use <code>BrainGnomes &lt;command&gt; --help</code> for
-command-specific options and examples. On the CLI, objects such as
-<code>scfg</code> are not persisted in a session; configuration changes
-are saved to <code>project_config.yaml</code> in the project directory.
-BIDS validation remains an R operation configured with the project but
-submitted separately through <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>.</p>
+command-specific options and examples. Table output is intended for
+people; commands that return structured results also provide JSON, and
+tabular status/log commands provide CSV. Compatibility aliases for
+<code>setup_project</code>, <code>edit_project</code>, and
+<code>run_project</code> remain available for existing scripts.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

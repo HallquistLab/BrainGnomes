@@ -9,6 +9,7 @@ submit_subjects(
   scfg,
   steps,
   subject_filter = NULL,
+  resolved_subjects = NULL,
   postprocess_streams = NULL,
   extract_streams = NULL,
   parent_ids = NULL,
@@ -31,6 +32,12 @@ submit_subjects(
 - subject_filter:
 
   Optional subject/session filter (character or data.frame)
+
+- resolved_subjects:
+
+  Optional subject/session table already resolved by
+  `resolve_project_execution()`. Deferred Flywheel controllers omit it
+  so discovery occurs after synchronization.
 
 - postprocess_streams:
 

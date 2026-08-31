@@ -1,7 +1,9 @@
-# Validate confound regression (voxel-sampling replay vs output)
+# Validate confound regression by deterministic spatial replay
 
-Samples ~100 voxels and replays the regression via `lmfit_residuals_mat`
-(`preserve_mean = TRUE`); passes if max abs diff \< 0.05.
+Selects approximately 100 pre-step voxels across normalized image space
+and replays the regression via `lmfit_residuals_mat`
+(`preserve_mean = TRUE`); passes if the maximum absolute difference is
+below 0.05.
 
 ## Usage
 
@@ -11,7 +13,8 @@ validate_confound_regression(
   post_file,
   to_regress,
   censor_file = NULL,
-  n_sample = 100L
+  n_sample = 100L,
+  mask_file = NULL
 )
 ```
 
@@ -36,6 +39,10 @@ validate_confound_regression(
 - n_sample:
 
   Number of voxels to sample (default 100).
+
+- mask_file:
+
+  Optional 3D brain mask used to constrain pre-step sampling.
 
 ## Value
 

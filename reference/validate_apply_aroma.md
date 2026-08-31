@@ -1,8 +1,10 @@
-# Validate AROMA (voxel-sampling replay vs output)
+# Validate AROMA by deterministic spatial replay
 
-Samples ~100 voxels and replays the AROMA regression via
-`lmfit_residuals_mat`; passes if max abs diff \< 0.05 (or skips if no
-noise ICs).
+Selects approximately 100 pre-step voxels across normalized image space
+and replays the AROMA regression via `lmfit_residuals_mat`; passes if
+the maximum absolute difference is below 0.05. If there are no noise
+ICs, validation instead requires the complete post-step image to be
+unchanged.
 
 ## Usage
 
@@ -13,7 +15,8 @@ validate_apply_aroma(
   mixing_file,
   noise_ics,
   nonaggressive = TRUE,
-  n_sample = 100L
+  n_sample = 100L,
+  mask_file = NULL
 )
 ```
 
@@ -42,6 +45,10 @@ validate_apply_aroma(
 - n_sample:
 
   Number of voxels to sample (default 100).
+
+- mask_file:
+
+  Optional 3D brain mask used to constrain pre-step sampling.
 
 ## Value
 

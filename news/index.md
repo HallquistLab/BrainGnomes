@@ -1,5 +1,70 @@
 # Changelog
 
+## BrainGnomes 0.9-2
+
+Released 2026-08-30
+
+- Extend the established
+  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+  -\>
+  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  workflow across the complete R and command-line lifecycle without
+  adding required setup steps. Optional inspection tooling now provides
+  non-mutating configuration validation,
+  [`doctor()`](https://uncdependlab.github.io/BrainGnomes/reference/doctor.md)
+  preflight checks, and serializable execution plans; direct runs
+  resolve the same execution model exposed by plans. Run handles,
+  tracked-run views, log discovery, non-interactive diagnosis,
+  failed-job retry planning, and guarded scheduler cancellation support
+  observation and recovery. Flywheel controller snapshots are now
+  run-specific so concurrent submissions cannot overwrite one another.
+- Record complete provenance before each run begins submission. Every
+  run now retains its resolved request and subject scope, exact
+  configuration, planned resources and dependencies,
+  software/R/host/scheduler identity, and content fingerprints for
+  selected containers and other execution-driving files.
+  [`get_run_provenance()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_provenance.md)
+  and the `BrainGnomes provenance` command expose the record together
+  with current job-tracking rows; plan and retry origins are retained
+  explicitly.
+- Expand applied-user recovery documentation around the established
+  workflow. The Quickstart and diagnosis guide now show how to select
+  one run, inspect its failed jobs, logs, and provenance, preview a
+  retry, submit it as a separate new run, decide whether to include
+  downstream blocked work, and safely preview cancellation. Function and
+  CLI help use the same plain-language behavior and safety guidance.
+- Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
+  distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask
+  conditions. Validation now enforces the selected detrending-plus-MAD
+  estimator, uses up to 96 timepoints deterministically distributed over
+  the complete run (or all timepoints in shorter runs), reads only those
+  volumes with RNifti, and cannot pass by extrapolating across
+  input-mask, kernel-size, voxel-size, or sampling support. Calibration
+  retains the full-run SUSAN threshold, temporal mean, and extents while
+  estimating smoothness from the selected timepoints.
+- Validate the promoted 3–8 mm masked-SUSAN models on independent
+  fMRIPrep 25.2.5 derivatives and a 96-volume postprocessing E2E fixture
+  drawn across the complete run. The 10 mm stress kernel remains outside
+  the supported calibration range.
+- Allow Slurm and PBS fsaverage setup to copy with GNU `cp` when newer
+  fMRIPrep containers do not provide `rsync`, while retaining the
+  existing `rsync` path when present.
+- Strengthen postprocessing validation so masking is replayed exactly,
+  interpolation preserves retained volumes and matches sampled
+  natural-spline values, removed volumes match the censor vector in
+  order, and AROMA/confound regression samples are deterministic,
+  pre-selected, and spatially balanced across image resolutions.
+- Make temporal-filter validation deterministic and pre-selected,
+  require finite per-voxel stopband and passband evidence, verify that
+  no-noise-IC AROMA output is actually unchanged, reject wholly invalid
+  AROMA component requests, and fail every image validator when spatial
+  NIfTI grid metadata change unexpectedly.
+- Route postprocessing checks through a common validation runner:
+  validator errors now obey the configured continue/stop policy, reused
+  intermediates are checked, structured results are retained in a JSON
+  audit beside the subject log, and final images remain staged until
+  last-step validation completes.
+
 ## BrainGnomes 0.9-1
 
 Released 2026-08-27

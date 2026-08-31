@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,6 +81,13 @@
 
         <dt>
 
+          <code><a href="cancel_project_run.html">cancel_project_run()</a></code>
+
+        </dt>
+        <dd>Cancel queued or running jobs from one run</dd>
+
+        <dt>
+
           <code><a href="cluster_job_submit.html">cluster_job_submit()</a></code>
 
         </dt>
@@ -112,7 +119,28 @@
           <code><a href="diagnose_pipeline.html">diagnose_pipeline()</a></code>
 
         </dt>
-        <dd>Function for diagnosing errors in a run of the pipeline</dd>
+        <dd>Interactively investigate jobs and logs from pipeline runs</dd>
+
+        <dt>
+
+          <code><a href="diagnose_project.html">diagnose_project()</a></code>
+
+        </dt>
+        <dd>Summarize failures and logs for one run without prompts</dd>
+
+        <dt>
+
+          <code><a href="doctor.html">doctor()</a></code>
+
+        </dt>
+        <dd>Project preflight shorthand</dd>
+
+        <dt>
+
+          <code><a href="doctor_project.html">doctor_project()</a></code>
+
+        </dt>
+        <dd>Run non-mutating project and runtime preflight checks</dd>
 
         <dt>
 
@@ -144,6 +172,13 @@
 
         <dt>
 
+          <code><a href="find_run_logs.html">find_run_logs()</a></code>
+
+        </dt>
+        <dd>Find output and error logs for one run</dd>
+
+        <dt>
+
           <code><a href="get_fmriprep_outputs.html">get_fmriprep_outputs()</a></code>
 
         </dt>
@@ -158,10 +193,31 @@
 
         <dt>
 
+          <code><a href="get_project_runs.html">get_project_runs()</a></code>
+
+        </dt>
+        <dd>List submitted runs for a project</dd>
+
+        <dt>
+
           <code><a href="get_project_status.html">get_project_status()</a></code>
 
         </dt>
         <dd>Get processing status for all subjects</dd>
+
+        <dt>
+
+          <code><a href="get_run_jobs.html">get_run_jobs()</a></code>
+
+        </dt>
+        <dd>Inspect the jobs submitted for one project run</dd>
+
+        <dt>
+
+          <code><a href="get_run_provenance.html">get_run_provenance()</a></code>
+
+        </dt>
+        <dd>Read the complete provenance record for a project run</dd>
 
         <dt>
 
@@ -190,6 +246,13 @@
 
         </dt>
         <dd>Compute Quantiles from a 3D or 4D NIfTI Image</dd>
+
+        <dt>
+
+          <code><a href="initialize_project.html">initialize_project()</a></code>
+
+        </dt>
+        <dd>Initialize a BrainGnomes project interactively or from portable defaults</dd>
 
         <dt>
 
@@ -242,10 +305,24 @@
 
         <dt>
 
+          <code><a href="plan_project.html">plan_project()</a></code>
+
+        </dt>
+        <dd>Inspect or persist the resolved project execution model</dd>
+
+        <dt>
+
           <code><a href="postprocess_subject.html">postprocess_subject()</a></code>
 
         </dt>
         <dd>Postprocess a single fMRI BOLD image using a configured pipeline</dd>
+
+        <dt>
+
+          <code><a href="read_project_plan.html">read_project_plan()</a></code>
+
+        </dt>
+        <dd>Read a saved execution plan</dd>
 
         <dt>
 
@@ -260,6 +337,13 @@
 
         </dt>
         <dd>Resample TemplateFlow Mask to fMRIPrep Image Using Python</dd>
+
+        <dt>
+
+          <code><a href="retry_project_run.html">retry_project_run()</a></code>
+
+        </dt>
+        <dd>Create a new run for failed work</dd>
 
         <dt>
 
@@ -291,6 +375,13 @@
 
         <dt>
 
+          <code><a href="submit_project_plan.html">submit_project_plan()</a></code>
+
+        </dt>
+        <dd>Submit a saved or in-memory execution plan</dd>
+
+        <dt>
+
           <code><a href="summary.bg_project_cfg.html">summary(<i>&lt;bg_project_cfg&gt;</i>)</a></code>
 
         </dt>
@@ -312,10 +403,31 @@
 
         <dt>
 
+          <code><a href="validate_project_config.html">validate_project_config()</a></code>
+
+        </dt>
+        <dd>Validate a BrainGnomes project configuration without changing it</dd>
+
+        <dt>
+
           <code><a href="wait_for_job.html">wait_for_job()</a></code>
 
         </dt>
         <dd>This function pauses execution of an R script while a scheduled qsub job is not yet complete.</dd>
+
+        <dt>
+
+          <code><a href="write_project_config.html">write_project_config()</a></code>
+
+        </dt>
+        <dd>Write a project configuration without interactive prompts</dd>
+
+        <dt>
+
+          <code><a href="write_project_plan.html">write_project_plan()</a></code>
+
+        </dt>
+        <dd>Save an execution plan to YAML</dd>
       </dl></div>
   </main></div>
 

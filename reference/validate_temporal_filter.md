@@ -14,7 +14,8 @@ validate_temporal_filter(
   band_high_hz = NA_real_,
   mask_file = NULL,
   n_voxels = 30L,
-  passband_loss_fail_db = 3
+  passband_loss_fail_db = 3,
+  minimum_voxel_fraction = 0.8
 )
 ```
 
@@ -51,6 +52,11 @@ validate_temporal_filter(
 - passband_loss_fail_db:
 
   Max allowed passband loss (dB) before fail (default 3).
+
+- minimum_voxel_fraction:
+
+  Minimum fraction of sampled voxels that must show stopband power
+  reduction and remain within the passband-loss limit.
 
 ## Value
 

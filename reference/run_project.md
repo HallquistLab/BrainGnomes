@@ -1,6 +1,13 @@
 # Run the processing pipeline
 
-Run the processing pipeline
+This remains the standard execution path after
+[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+It resolves the same stages, streams, subject/session scope, and force
+setting exposed by
+[`plan_project()`](https://uncdependlab.github.io/BrainGnomes/reference/plan_project.md)
+before submission; calling
+[`plan_project()`](https://uncdependlab.github.io/BrainGnomes/reference/plan_project.md)
+first is optional.
 
 ## Usage
 
@@ -81,13 +88,24 @@ run_project(
 
 ## Value
 
-A logical value indicating whether the processing pipeline was
-successfully run.
+For submitted work, an invisible `bg_project_run` object containing the
+run UUID, scheduler job IDs known at submission time, and the path to
+the complete run provenance record. Dry runs invisibly return `TRUE`
+after printing the resolved plan.
 
 ## See also
 
+[`get_run_provenance()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_provenance.md)
+to read the recorded configuration, execution context, and artifact
+fingerprints;
+[`plan_project()`](https://uncdependlab.github.io/BrainGnomes/reference/plan_project.md)
+for optional inspection or persistence of the resolved request;
 [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
-to submit the BIDS validation configured with the project.
+to submit the BIDS validation configured with the project;
+[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+and
+[`retry_project_run()`](https://uncdependlab.github.io/BrainGnomes/reference/retry_project_run.md)
+for optional recovery after a submitted run fails.
 
 ## Examples
 

@@ -18,10 +18,13 @@ load_project(input = NULL, validate = TRUE)
 - validate:
 
   Logical indicating whether to validate the configuration after
-  loading. Default: TRUE
+  loading. Validation is non-interactive and never changes or saves the
+  configuration. The structured validation result is attached as the
+  `validation` attribute. Default: TRUE.
 
 ## Value
 
 A list representing the project configuration (class
-`"bg_project_cfg"`). If `validate` is TRUE, the returned object is
-validated (missing fields may be set to NULL and noted).
+`"bg_project_cfg"`). If `validate` is TRUE, the returned object has a
+`validation` attribute produced by
+[`validate_project_config()`](https://uncdependlab.github.io/BrainGnomes/reference/validate_project_config.md).

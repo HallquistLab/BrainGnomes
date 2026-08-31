@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,8 @@
 <span>  band_high_hz <span class="op">=</span> <span class="cn">NA_real_</span>,</span>
 <span>  mask_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  n_voxels <span class="op">=</span> <span class="fl">30L</span>,</span>
-<span>  passband_loss_fail_db <span class="op">=</span> <span class="fl">3</span></span>
+<span>  passband_loss_fail_db <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  minimum_voxel_fraction <span class="op">=</span> <span class="fl">0.8</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -95,6 +96,11 @@
 
 <dt id="arg-passband-loss-fail-db">passband_loss_fail_db<a class="anchor" aria-label="anchor" href="#arg-passband-loss-fail-db"></a></dt>
 <dd><p>Max allowed passband loss (dB) before fail (default 3).</p></dd>
+
+
+<dt id="arg-minimum-voxel-fraction">minimum_voxel_fraction<a class="anchor" aria-label="anchor" href="#arg-minimum-voxel-fraction"></a></dt>
+<dd><p>Minimum fraction of sampled voxels that must
+show stopband power reduction and remain within the passband-loss limit.</p></dd>
 
 </dl></div>
     <div class="section level2">

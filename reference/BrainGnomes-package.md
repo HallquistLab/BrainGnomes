@@ -19,3 +19,7 @@ Useful links:
 ## Author
 
 **Maintainer**: Michael Hallquist <michael.hallquist@gmail.com>
+
+Authors:
+
+- Michael Hallquist <michael.hallquist@gmail.com>

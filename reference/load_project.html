@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,13 +61,15 @@
 
 
 <dt id="arg-validate">validate<a class="anchor" aria-label="anchor" href="#arg-validate"></a></dt>
-<dd><p>Logical indicating whether to validate the configuration after loading. Default: TRUE</p></dd>
+<dd><p>Logical indicating whether to validate the configuration after loading. Validation is
+non-interactive and never changes or saves the configuration. The structured validation result is
+attached as the <code>validation</code> attribute. Default: TRUE.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list representing the project configuration (class <code>"bg_project_cfg"</code>). If <code>validate</code> is TRUE,
-the returned object is validated (missing fields may be set to NULL and noted).</p>
+the returned object has a <code>validation</code> attribute produced by <code><a href="validate_project_config.html">validate_project_config()</a></code>.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

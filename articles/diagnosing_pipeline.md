@@ -2,12 +2,12 @@
 
 ## Overview
 
-Running an fMRI pipeline with BrainGnomes typically means launching
-**many** dependent jobs: BIDS conversion, MRIQC, fMRIPrep, ICA‑AROMA,
-one or more postprocessing streams, and optional ROI extraction. Each
-job writes its own logs and completion markers, and jobs depend on one
-another, often across multiple runs (sequences) of the same project.
-Without help, it is hard to answer even basic questions:
+Running an fMRI pipeline with BrainGnomes typically means launching many
+jobs: BIDS conversion, MRIQC, fMRIPrep, ICA-AROMA, one or more
+postprocessing streams, and optional ROI extraction. Some jobs must wait
+for earlier jobs to finish. Each job writes logs and completion markers,
+and a project can have many runs. Without a run-specific view, it is
+hard to answer even basic questions:
 
 - What already succeeded?
 - What is still running or queued?
@@ -15,27 +15,28 @@ Without help, it is hard to answer even basic questions:
   failure?
 - Where should I look next in the logs?
 
-BrainGnomes provides three complementary tools for this:
+BrainGnomes provides two useful levels of information:
 
 - [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
-  gives a project‑wide table of step‑level completion flags and times
+  gives a project-wide table of step-level completion flags and times
   for all subjects.
 - [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
   focuses that same information on a single subject (and session),
   making it easy to see where one subject is stuck.
+- [`get_project_runs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_runs.md),
+  [`get_run_jobs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_jobs.md),
+  [`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md),
+  and
+  [`find_run_logs()`](https://uncdependlab.github.io/BrainGnomes/reference/find_run_logs.md)
+  inspect one submitted run without prompts.
 - [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  ties together the job‑tracking database and log paths into an
-  interactive tree view for deep, log‑driven debugging.
+  provides the established interactive browser when you want to follow
+  job relationships and read logs step by step.
 
 This vignette walks through a practical workflow that starts with the
-high‑level `*_status()` summaries and then uses
-[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-when you need to understand *why* something failed and which specific
-jobs are involved.
-
-The examples below were run on this project:
-
-`/proj/mnhallqlab/projects/bg08test_14feb2026`
+high-level status summaries, narrows the problem to one run, and then
+shows how to inspect provenance, retry failed work, or cancel work that
+is still active.
 
 ### Load the project
 
@@ -43,12 +44,43 @@ The examples below were run on this project:
 
 library(BrainGnomes)
 
-project_dir <- "/proj/mnhallqlab/projects/bg08test_14feb2026"
-scfg <- load_project(project_dir, validate = FALSE)
+project_dir <- "/project/my_study"
+scfg <- load_project(project_dir)
 ```
 
-`validate = FALSE` is useful when loading from non-interactive contexts,
-because validation can otherwise trigger interactive correction prompts.
+Loading a project validates its configuration without opening the setup
+wizard or changing the saved YAML file. This is the same configuration
+object used by
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+and the diagnosis functions below.
+
+## Choose the run you mean
+
+Every submitted
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+call returns a run handle. Its `run_id` is a stable label that connects
+the jobs, logs, diagnosis, and provenance from that submission.
+
+``` r
+
+run <- run_project(scfg)
+run_id <- run$run_id
+```
+
+In a later R session, list previous runs and copy the ID you want to
+inspect:
+
+``` r
+
+runs <- get_project_runs(scfg)
+runs
+run_id <- runs$run_id[[1]]
+```
+
+Most run-based functions also accept `run_id = "latest"`. That shortcut
+is convenient for inspection. For retry or cancellation, an explicit ID
+is safer because another submission could otherwise become the latest
+run.
 
 ## Project-level triage with `get_project_status()`
 
@@ -136,6 +168,53 @@ Captured output:
 
 This is often the fastest way to answer, “Where is subject X stuck?”
 
+## Inspect one run without prompts
+
+Use
+[`get_run_jobs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_jobs.md)
+to see every tracked job in the selected run. The returned table
+includes the processing step, subject, scheduler job number, timing, and
+current status.
+
+``` r
+
+jobs <- get_run_jobs(scfg, run_id)
+jobs[, c("job_id", "job_name", "status", "time_submitted", "time_ended")]
+```
+
+For a shorter failure-focused report, use
+[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md).
+It separates jobs that failed, were cancelled, or could not run because
+an earlier job failed, and it locates their output and error logs when
+those files are present.
+
+``` r
+
+diagnosis <- diagnose_project(scfg, run_id)
+diagnosis$failures
+diagnosis$logs
+
+# Or ask only for the log-file locations.
+failed_logs <- find_run_logs(scfg, run_id, failed_only = TRUE)
+```
+
+Before deciding what to rerun, inspect the settings that produced the
+run:
+
+``` r
+
+provenance <- get_run_provenance(scfg, run_id)
+provenance$request
+provenance$execution$subjects
+provenance$configuration$snapshot_file
+```
+
+The provenance record contains the resolved stages and subjects, a copy
+of the project configuration, requested computing resources, software
+and host details, and checksums that identify containers and other files
+that controlled the run. This makes it easier to answer, “What was
+different about this run?”
+
 ## Interactive diagnosis with `diagnose_pipeline()`
 
 Running a full fMRI preprocessing + postprocessing pipeline generates
@@ -147,10 +226,10 @@ interactive view.
 
 Behind the scenes, every job submitted by
 [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
-is recorded in an SQLite database associated with the project. Each
-record stores:
+is recorded in the project’s job-tracking database. Each record stores:
 
-- the **sequence ID** (a particular end‑to‑end run of the pipeline),
+- the **run ID** (called a sequence ID in some older prompts and
+  records),
 - the **subject**, job name, scheduler ID, and parent/child
   relationships,
 - timestamps (submitted, started, finished),
@@ -159,9 +238,9 @@ record stores:
   `FAILED_BY_EXT`).
 
 [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-reads this SQLite database, reconstructs the job dependency tree, and
-then guides you through it interactively. The function returns that raw
-tree structure invisibly so you can also inspect it yourself:
+reads this job-tracking database, reconstructs the job dependency tree,
+and then guides you through it interactively. The function returns that
+raw tree structure invisibly so you can also inspect it yourself:
 
 ``` r
 
@@ -174,10 +253,10 @@ subject, status, scheduler metadata, and parent/child links. This is the
 same structure BrainGnomes uses internally to understand job
 dependencies.
 
-### Sequence‑level diagnosis
+### Run-level diagnosis
 
 The first prompt asks whether to diagnose by **subject** or by
-**sequence ID**:
+**sequence ID**. Here, sequence ID means the same thing as run ID:
 
     Enter 1 for subject summary or 2 for sequence ID
     > 2
@@ -185,11 +264,11 @@ The first prompt asks whether to diagnose by **subject** or by
     Enter which pipeline run to diagnose. The default is the most recent.
     > [Enter]
 
-Choosing the sequence‑first path lets you pick a specific pipeline run
-(for example, if you re‑ran the project with a different configuration).
-Once you select a sequence,
+Choosing the run-first path lets you pick a specific pipeline run (for
+example, if you re‑ran the project with a different configuration). Once
+you select a run,
 [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-shows all **top‑level jobs** for that run, grouped by subject, with
+shows all **top-level jobs** for that run, grouped by subject, with
 their current status:
 
     Postprocess stream1
@@ -202,7 +281,7 @@ stream, and those in turn have children for each image‑level job (e.g.,
 individual BOLD runs). At a glance you can see which specific image(s)
 caused a stream or subject to fail.
 
-From the sequence‑level view you can choose a job and drill down:
+From the run-level view you can choose a job and drill down:
 
 - show a detailed summary (times, parent/child jobs, exit codes),
 - open the associated stdout or stderr log in the console,
@@ -212,7 +291,7 @@ From the sequence‑level view you can choose a job and drill down:
 This is usually the fastest way to answer, *“Why did this particular run
 of the pipeline fail?”* and *“Which exact job needs debugging?”*
 
-### Subject‑level diagnosis across sequences
+### Subject-level diagnosis across runs
 
 If you already know which subject you care about, you can start with the
 subject‑summary branch:
@@ -226,20 +305,19 @@ subject‑summary branch:
 
 Here,
 [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-looks across **all sequences** in the SQLite database and shows, for the
-chosen subject, which combination of runs produced the best overall
+looks across **all runs** in the job-tracking database and shows, for
+the chosen subject, which combination of runs produced the best overall
 completion pattern. This helps with questions like:
 
 - Did subject `sub-540303` ever complete fMRIPrep + AROMA +
   postprocessing?
-- If so, which sequence (which configuration / run) produced that
-  success?
+- If so, which run and configuration produced that success?
 
 The summary groups jobs by step (BIDS conversion, MRIQC, fMRIPrep,
 AROMA, postprocessing streams, etc.) and highlights, for each step,
-which sequence had the most successful outcome. You can then jump from
-this high‑level summary back into sequence‑ or job‑level inspection for
-detailed debugging.
+which run had the most successful outcome. You can then jump from this
+high‑level summary back into run- or job-level inspection for detailed
+debugging.
 
 Example subject‑level summary for `sub-540303`:
 
@@ -262,14 +340,13 @@ uses the following job‑level statuses:
   dependencies or resources.
 - `FAILED`: the job itself failed (non‑zero exit code or explicit
   failure marker).
-- `FAILED_BY_EXT`: the job was never allowed to run successfully because
-  an upstream dependency failed. For example, if one image‑level
-  postprocess job in a stream fails, its parent stream‑level job and
-  other dependent jobs are marked `FAILED_BY_EXT`.
+- `FAILED_BY_EXT`: the job could not run because an earlier required job
+  failed. For example, postprocessing cannot run if its required
+  fMRIPrep job failed.
 
-This distinction is important: `FAILED_BY_EXT` tells you which jobs are
-*victims* of an upstream problem versus the **true root cause** that
-needs debugging.
+This distinction is important: start with a `FAILED` job, because that
+is often the cause. A `FAILED_BY_EXT` job is usually affected downstream
+work rather than the original problem.
 
 In contrast,
 [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
@@ -284,13 +361,85 @@ outputs. A common workflow is:
     or
     [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
     for a quick overview of which steps are done. These functions do
-    **not** consult the SQLite database; instead they scan the project’s
-    BIDS and log directories for `.complete` marker files and expected
-    outputs, then derive strict `*_complete` flags and completion times
-    per step.
+    **not** consult the job-tracking database; instead they scan the
+    project’s BIDS and log directories for `.complete` marker files and
+    expected outputs, then derive strict `*_complete` flags and
+    completion times per step.
 2.  Use
+    [`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+    and
+    [`find_run_logs()`](https://uncdependlab.github.io/BrainGnomes/reference/find_run_logs.md)
+    for a prompt-free report of one run, or
     [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-    when you need to chase down *why* a particular job or subject failed
-    and which logs to read next. This function *does* read from the
-    SQLite job‑tracking database in order to reconstruct the full job
-    dependency tree and status history across all runs.
+    for guided interactive investigation. These functions read the
+    job-tracking database to connect jobs, statuses, and logs.
+
+## Retry failed work after correcting the cause
+
+A retry creates a **new run**. It does not restart scheduler jobs in
+place and does not change the original run. By default it includes
+stages and subjects whose jobs are `FAILED` or `CANCELLED`. BrainGnomes
+tells the new run to rerun that selected work even if an old completion
+marker would normally skip it.
+
+Always preview the retry first:
+
+``` r
+
+retry_plan <- retry_project_run(scfg, run_id, dry_run = TRUE)
+retry_plan$jobs
+retry_plan$subjects
+```
+
+The preview is a plan only; it submits no jobs. Check that its stages,
+subjects, and streams match what you intend. After correcting the
+underlying problem, submit the retry explicitly:
+
+``` r
+
+retry_run <- retry_project_run(scfg, run_id, dry_run = FALSE)
+retry_run$run_id
+get_run_provenance(scfg, retry_run$run_id)$invocation$parent_run_id
+```
+
+Jobs marked `FAILED_BY_EXT` are excluded by default because they were
+blocked by an earlier failure rather than failing themselves. Use
+`include_blocked = TRUE` when you want the same new run to include those
+affected downstream stages as well:
+
+``` r
+
+retry_plan <- retry_project_run(
+  scfg, run_id, include_blocked = TRUE, dry_run = TRUE
+)
+```
+
+## Cancel work that is still active
+
+Cancellation applies only to tracked jobs that are queued or running. It
+does not delete data, logs, or completed outputs. Preview the scheduler
+commands first, then make a separate explicit call if they are correct:
+
+``` r
+
+cancel_project_run(scfg, run_id, dry_run = TRUE)
+cancel_project_run(scfg, run_id, dry_run = FALSE)
+```
+
+## The same recovery workflow from the command line
+
+The command line requires either `--dry-run` for a preview or `--yes`
+for an action. Use an explicit run ID for retry and cancellation:
+
+``` bash
+BrainGnomes status /project/my_study --runs
+BrainGnomes diagnose /project/my_study --run=<run-id>
+BrainGnomes logs /project/my_study --run=<run-id> --failed-only --tail=50
+BrainGnomes provenance /project/my_study --run=<run-id> --format=json
+
+BrainGnomes retry /project/my_study --run=<run-id> --dry-run
+BrainGnomes retry /project/my_study --run=<run-id> --yes
+
+BrainGnomes cancel /project/my_study --run=<run-id> --dry-run
+BrainGnomes cancel /project/my_study --run=<run-id> --yes
+```
