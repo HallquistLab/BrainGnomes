@@ -98,6 +98,18 @@ test_that("Quickstart renders CLI help from the installed command", {
   expect_match(quickstart_text, "system2(", fixed = TRUE)
   expect_false(grepl("run_project <project_directory|config.yaml> -steps", quickstart_text, fixed = TRUE))
 
+  flow_path <- testthat::test_path(
+    "..", "..", "inst", "extdata", "braingnomes_flow.png"
+  )
+  if (!file.exists(flow_path)) {
+    flow_path <- system.file(
+      "extdata", "braingnomes_flow.png", package = "BrainGnomes"
+    )
+  }
+  expect_true(nzchar(flow_path) && file.exists(flow_path))
+  expect_match(quickstart_text, '"extdata", "braingnomes_flow.png"', fixed = TRUE)
+  expect_match(quickstart_text, 'fig.alt="BrainGnomes pipeline flow"', fixed = TRUE)
+
   optional_heading <- regexpr(
     "# Optional inspection and automation tools", quickstart_text, fixed = TRUE
   )[[1L]]

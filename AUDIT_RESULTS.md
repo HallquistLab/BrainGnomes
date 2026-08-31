@@ -1150,3 +1150,108 @@ Status: OK
 The source-control/reproducibility gate identified earlier in this report is
 therefore complete. No unresolved F01-F15 implementation or artifact blocker
 remains for the 0.9 tag.
+
+## BrainGnomes 0.9-2 release audit
+
+**Status:** Release candidate prepared and verified on 2026-08-31.
+
+### Scope and findings
+
+- Audited the eleven commits after tag `0.9` through `7d750da`, together with
+  the release-candidate corrections made during this audit. The reviewed delta
+  spans 98 tracked paths and covers the 0.9-1 safety fixes, postprocessing
+  validation and orchestration, smoothness recalibration, project lifecycle
+  and run provenance, atomic guided saves, fMRIPrep 25.2.5 E2E evidence,
+  TemplateFlow transform preservation, `image_quantile()` memory reduction,
+  and motion-QC guidance.
+- Confirmed that the established `setup_project()` -> `run_project()` workflow
+  remains the primary user journey. The validation, planning, provenance,
+  status, retry, and cancellation interfaces are additive; CLI submission and
+  cancellation remain guarded. The package has no graphical UI surface.
+- Reviewed the committed fMRIPrep 25.2.5 E2E record. Its 28 postprocessing
+  checks passed, and the two release-qualification issues it identified are
+  resolved in this candidate: the transform-preservation patch is committed
+  and `multitaper` is now a required runtime dependency. The external
+  Slurm/container E2E was not rerun during this local release audit.
+- Accepted deterministic distributed sampling in image validators as an
+  intentional performance and memory tradeoff. The public documentation now
+  states the exact default sampling limits and retains an exhaustive option
+  where supported.
+
+### Release-candidate corrections
+
+- Make the R recovery APIs match their documented safe behavior:
+  `retry_project_run()` and `cancel_project_run()` now default to preview mode,
+  while an explicit `dry_run = FALSE` is required for scheduler mutation.
+- Preserve complete postprocessing and ROI-extraction stream names, including
+  underscores, when reconstructing retry requests from scheduler job names.
+- Promote `multitaper` from `Suggests` to `Imports`, because strict temporal
+  filter validation uses it in ordinary runtime execution.
+- Update `NEWS.md`, generated lifecycle and mask-validation help, the README
+  tagged-install example, the fMRIPrep E2E disposition, and release metadata.
+  `NEWS.md` remains the repository's canonical changelog; no separate
+  `CHANGELOG` file is maintained.
+- Fix a source-package-only Quickstart asset failure. The pipeline graphic now
+  ships from `inst/extdata`, is loaded through `system.file()`, retains its
+  rendered placement, and has explicit alternative text. This avoids both a
+  missing installed-vignette asset and an `inst/doc` packaging note.
+- Make the permission preflight test collect and assert all expected warnings,
+  preventing environment-dependent warning leakage without weakening the
+  production permission checks.
+
+### Documentation and UX verification
+
+- `DESCRIPTION` declares `Version: 0.9-2` and `Date: 2026-08-31`; `NEWS.md`
+  declares the same release and date; the README installs tag `0.9-2`.
+- Every `vignettes/*.Rmd` file has a literal `DD Mon YYYY` date. The edited
+  Quickstart is dated `31 Aug 2026`; every clean vignette date matches its most
+  recent Git commit date.
+- The Quickstart rendered successfully after the asset relocation, and its
+  documentation contract passed 119 assertions. Existing setup/run prompts,
+  dry-run output, command help, and optional recovery guidance remain covered
+  by the complete test suite.
+
+### Verification evidence
+
+The complete development suite passed:
+
+```text
+[ FAIL 0 | WARN 0 | SKIP 2 | PASS 2046 ]
+```
+
+The skips are intentional: one requires the opt-in Slurm/TemplateFlow
+integration environment, and one compares CLI exports against the older
+package installed in the developer library. The installed-package check runs
+the candidate exports and passed.
+
+The final vignette-enabled source archive passed `R CMD check --as-cran`
+through installation, examples, compiled-code checks, all tests, and vignette
+rebuilding:
+
+```text
+0 errors | 1 warning | 1 note
+```
+
+The warning is the absence of host utility `qpdf`; the note is that the
+sandbox could not verify external current time. With the developer's global
+Makevars disabled, all package compilation-flag checks passed. Neither finding
+comes from the BrainGnomes source.
+
+The persistent release artifact is `BrainGnomes_0.9-2.tar.gz` (1,115,197
+bytes), with SHA-256:
+
+```text
+bf322c22bef3ecd59eaedd288ec14e8a61935015cf93e26d6ee62a5973f23190
+```
+
+Tarball inspection found 363 entries, all eight R Markdown vignettes, release
+metadata, and `inst/extdata/braingnomes_flow.png`. It contained zero audit,
+Codex, cache, local-data, temporary-tree, nested-tarball, or misplaced
+`inst/doc/braingnomes_flow.png` entries.
+
+### Release disposition
+
+No unresolved implementation, documentation, CLI/UX, test, vignette, or
+artifact blocker remains for 0.9-2. The candidate source changes still need to
+be committed before creating the `0.9-2` tag; this audit did not publish or tag
+the release.
