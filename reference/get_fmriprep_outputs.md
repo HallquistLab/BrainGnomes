@@ -58,7 +58,7 @@ A named list containing the following elements:
 
 This function assumes filenames follow BIDS Derivatives conventions and
 uses the extracted BIDS entities to reconstruct expected filenames via
-[`construct_bids_filename()`](https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_filename.md).
+[`construct_bids_filename()`](https://hallquistlab.github.io/BrainGnomes/reference/construct_bids_filename.md).
 
 The function checks for two possible confounds files
 (`desc-confounds_timeseries.tsv` and `desc-confounds_regressors.tsv`),
@@ -67,8 +67,8 @@ metrics file (`_desc-aroma_metrics.tsv`) if present.
 
 ## See also
 
-[`extract_bids_info()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.md),
-[`construct_bids_filename()`](https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_filename.md)
+[`extract_bids_info()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_bids_info.md),
+[`construct_bids_filename()`](https://hallquistlab.github.io/BrainGnomes/reference/construct_bids_filename.md)
 
 ## Examples
 

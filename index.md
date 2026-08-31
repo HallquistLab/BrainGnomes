@@ -11,7 +11,7 @@ Flywheel synchronization, DICOM-to-BIDS conversion with HeuDiConv,
 MRIQC, fMRIPrep, ICA-AROMA, postprocessing, and ROI
 time-series/connectivity extraction. BIDS validation is configured with
 the project but submitted separately through
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+[`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md).
 You can begin with raw DICOMs or use it only for later steps when BIDS
 or fMRIPrep outputs already exist.
 
@@ -33,20 +33,20 @@ stages. Requirements are stage-specific:
 | Any scheduled pipeline stage | SLURM or TORQUE/PBS, Bash, shared readable/writable project storage, and site-specific scheduler settings |
 | Flywheel synchronization | Flywheel `fw` CLI and account access |
 | DICOM-to-BIDS conversion | Singularity-compatible HeuDiConv image, source DICOMs, and a study-specific Python heuristic |
-| BIDS validation | BIDS validator executable; configured with the project but submitted separately through [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
+| BIDS validation | BIDS validator executable; configured with the project but submitted separately through [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
 | MRIQC | Singularity-compatible MRIQC image |
 | fMRIPrep | Singularity-compatible fMRIPrep image, BIDS inputs, TemplateFlow cache, and a FreeSurfer license |
 | ICA-AROMA | Singularity-compatible fMRIPost-AROMA image |
 | Postprocessing | Singularity-compatible FSL image; Python 3 with `nibabel`, `nilearn`, and `templateflow` when template-mask resampling is used |
-| ROI extraction | Postprocessed BOLD inputs and compatible atlas/mask NIfTI files; direct [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md) calls can run locally, while project-managed extraction uses the scheduler |
+| ROI extraction | Postprocessed BOLD inputs and compatible atlas/mask NIfTI files; direct [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md) calls can run locally, while project-managed extraction uses the scheduler |
 
 BrainGnomes scripts invoke `singularity`; an Apptainer installation is
 suitable when it provides that compatibility command.
 
 See the
-[Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
+[Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
 for the full configuration workflow, or start with [Local onboarding and
-prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html)
+prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html)
 to inspect a miniature configuration and run examples without a cluster.
 
 ## Installation
@@ -56,7 +56,7 @@ BrainGnomes is installed from GitHub. In R:
 ``` r
 
 install.packages("remotes")  # once, if needed
-remotes::install_github("UNCDEPENdLab/BrainGnomes")
+remotes::install_github("HallquistLab/BrainGnomes")
 
 library(BrainGnomes)
 ```
@@ -68,11 +68,11 @@ development version, supply its tag with `ref`. For example:
 
 ``` r
 
-remotes::install_github("UNCDEPENdLab/BrainGnomes", ref = "0.9")
+remotes::install_github("HallquistLab/BrainGnomes", ref = "0.9")
 ```
 
 See the [available
-tags](https://github.com/UNCDEPENdLab/BrainGnomes/tags) to choose an
+tags](https://github.com/HallquistLab/BrainGnomes/tags) to choose an
 available tag.
 
 ## Typical workflow
@@ -115,26 +115,26 @@ BrainGnomes diagnose /project/my_study --interactive
 ### Optional inspection and automation tools
 
 None of the following is a prerequisite for
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md):
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md):
 
 - **Config**
-  ([`validate_project_config()`](https://uncdependlab.github.io/BrainGnomes/reference/validate_project_config.md)
+  ([`validate_project_config()`](https://hallquistlab.github.io/BrainGnomes/reference/validate_project_config.md)
   or `BrainGnomes config`) provides a non-interactive way to show,
   validate, or edit YAML. It is useful in scripts, CI, and configuration
   review. Direct runs retain their existing selected-stage checks.
 - **Doctor**
-  ([`doctor()`](https://uncdependlab.github.io/BrainGnomes/reference/doctor.md)
+  ([`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
   or `BrainGnomes doctor`) performs a broader, non-mutating
   submission-host preflight. It is valuable on a new cluster, after
   modules, containers, or storage have changed, or before an expensive
   run when an up-front environment report is desirable.
 - **Plan**
-  ([`plan_project()`](https://uncdependlab.github.io/BrainGnomes/reference/plan_project.md)
+  ([`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
   or `BrainGnomes plan`) exposes the stages, streams, subject/session
   scope, resources, dependencies, and implicit setup work that
   BrainGnomes has resolved. It is useful for review, persistence, and
   automated approval workflows.
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   resolves this same execution model internally, so users do not need to
   create or submit a plan first.
 
@@ -160,7 +160,7 @@ Read it with `get_run_provenance(scfg, run$run_id)` or
 `BrainGnomes provenance <project>`.
 
 Each call to
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 has a run ID, which lets you inspect one submission without mixing it up
 with earlier work. `status`, `logs`, provenance, and non-interactive
 diagnosis all accept that ID. If a run fails, first inspect the failed
@@ -192,47 +192,47 @@ BrainGnomes retry /project/my_study --run=<run-id> --yes
 Cancellation follows the same preview-first pattern and affects only
 queued or running scheduler jobs; it does not delete project data or
 outputs. BIDS validation remains independently schedulable with
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+[`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md)
 or `BrainGnomes validate-bids`. The
-[Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
+[Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
 shows the primary workflow and these optional tools.
 
 ## Documentation
 
-The [package website](https://uncdependlab.github.io/BrainGnomes/)
+The [package website](https://hallquistlab.github.io/BrainGnomes/)
 includes function reference pages, release notes, and the following
 guides:
 
 - [BrainGnomes
-  Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
+  Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
   — set up a project and run an end-to-end workflow.
 - [Local onboarding and
-  prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html)
+  prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html)
   — inspect an installed example configuration and run a first task
   without scheduler or container access.
 - [Building Singularity containers for
-  BrainGnomes](https://uncdependlab.github.io/BrainGnomes/articles/building_containers.html)
+  BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/building_containers.html)
   — create the container images used by pipeline stages.
 - [Postprocessing
-  Walkthrough](https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.html)
+  Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.html)
   — configure masking, smoothing, AROMA, filtering, scrubbing, intensity
   normalization, and confound regression.
 - [Extracting ROI Timeseries and
-  Connectivity](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.html)
+  Connectivity](https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.html)
   — configure atlas/mask ROI extraction and connectivity outputs.
 - [Diagnosing Pipeline
-  Runs](https://uncdependlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html)
+  Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html)
   — triage project or subject status and investigate failures from
   job-tracking records and logs.
 - [Run-wise Intensity
-  Normalization](https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.html)
+  Normalization](https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.html)
   — understand the robust reference-core approach, targets, provenance,
   quality checks, and troubleshooting.
 
 ## Getting help and contributing
 
 Please [open an
-issue](https://github.com/UNCDEPENdLab/BrainGnomes/issues) for bugs,
+issue](https://github.com/HallquistLab/BrainGnomes/issues) for bugs,
 questions, or feature requests. Contributions are welcome; see
-[CONTRIBUTING.md](https://uncdependlab.github.io/BrainGnomes/CONTRIBUTING.md)
+[CONTRIBUTING.md](https://hallquistlab.github.io/BrainGnomes/CONTRIBUTING.md)
 for the development workflow.

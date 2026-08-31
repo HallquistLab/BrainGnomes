@@ -25,4 +25,4 @@ submit_project_plan(plan, debug = FALSE, log_level = "INFO")
 ## Value
 
 A `bg_project_run` object returned by
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md).

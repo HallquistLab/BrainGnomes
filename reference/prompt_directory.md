@@ -53,7 +53,7 @@ prompt_directory(
 - ...:
 
   Additional args forwarded to
-  [`prompt_input()`](https://uncdependlab.github.io/BrainGnomes/reference/prompt_input.md)
+  [`prompt_input()`](https://hallquistlab.github.io/BrainGnomes/reference/prompt_input.md)
   (e.g., `instruct`, `prompt`).
 
 ## Value

@@ -2,7 +2,7 @@
 
 BIDS validation is configured with the project but submitted separately
 through this function. It is not a
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 stage and can be invoked whenever validation of the project BIDS
 directory is desired.
 
@@ -17,9 +17,9 @@ run_bids_validation(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL)
 - scfg:
 
   A `bg_project_cfg` object returned by
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
   or
-  [`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md).
+  [`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md).
 
 - outfile:
 

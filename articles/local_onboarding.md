@@ -7,7 +7,7 @@ Configuration inspection, BIDS filename utilities, status-table
 handling, and native image helpers do not submit jobs and do not require
 SLURM, TORQUE/PBS, or a container runtime. Full project execution is
 different:
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 coordinates HPC jobs and therefore requires a supported scheduler,
 shared storage, and the external software for every selected stage.
 
@@ -70,7 +70,7 @@ scfg <- edit_project(scfg)
 
 Do not submit the unchanged example: its `/path/to/...` values are not
 real. Interactive
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 remains the recommended way to create a complete configuration because
 it records only the stages and resources you choose.
 
@@ -103,7 +103,7 @@ stopifnot(identical(construct_bids_filename(bids_info), filenames))
 
 ## Exercise a native image helper locally
 
-[`image_quantile()`](https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.md)
+[`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md)
 is compiled with the package but does not invoke a scheduler or
 container. Here it reads a tiny synthetic NIfTI image:
 
@@ -152,7 +152,7 @@ trustworthy plan.
 |----|----|
 | Flywheel synchronization | Flywheel `fw` CLI and account access |
 | DICOM-to-BIDS conversion | HeuDiConv container, DICOM inputs, and Python heuristic |
-| BIDS validation | BIDS validator; configured with the project and submitted separately through [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
+| BIDS validation | BIDS validator; configured with the project and submitted separately through [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
 | MRIQC | MRIQC container |
 | fMRIPrep | fMRIPrep container, BIDS inputs, TemplateFlow cache, and FreeSurfer license |
 | ICA-AROMA | fMRIPost-AROMA container |

@@ -50,7 +50,7 @@
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json">
 </form></li>
-<li class="nav-item"><a class="external-link nav-link" href="https://github.com/UNCDEPENdLab/BrainGnomes/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/HallquistLab/BrainGnomes/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -124,7 +124,7 @@
 </tbody>
 </table>
 <p>BrainGnomes scripts invoke <code>singularity</code>; an Apptainer installation is suitable when it provides that compatibility command.</p>
-<p>See the <a href="https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> for the full configuration workflow, or start with <a href="https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html">Local onboarding and prerequisites</a> to inspect a miniature configuration and run examples without a cluster.</p>
+<p>See the <a href="https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> for the full configuration workflow, or start with <a href="https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html">Local onboarding and prerequisites</a> to inspect a miniature configuration and run examples without a cluster.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -132,16 +132,16 @@
 <p>BrainGnomes is installed from GitHub. In R:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span>  <span class="co"># once, if needed</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"UNCDEPENdLab/BrainGnomes"</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"HallquistLab/BrainGnomes"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span></code></pre></div>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="install-a-specific-release">Install a specific release<a class="anchor" aria-label="anchor" href="#install-a-specific-release"></a>
 </h3>
 <p>To install a particular tagged release rather than the latest development version, supply its tag with <code>ref</code>. For example:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"UNCDEPENdLab/BrainGnomes"</span>, ref <span class="op">=</span> <span class="st">"0.9"</span><span class="op">)</span></span></code></pre></div>
-<p>See the <a href="https://github.com/UNCDEPENdLab/BrainGnomes/tags" class="external-link">available tags</a> to choose an available tag.</p>
+<code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"HallquistLab/BrainGnomes"</span>, ref <span class="op">=</span> <span class="st">"0.9"</span><span class="op">)</span></span></code></pre></div>
+<p>See the <a href="https://github.com/HallquistLab/BrainGnomes/tags" class="external-link">available tags</a> to choose an available tag.</p>
 </div>
 </div>
 <div class="section level2">
@@ -149,7 +149,7 @@
 </h2>
 <p>The established R workflow remains the primary path. Set up a project once, then run it directly; use diagnosis only when a run needs investigation.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
@@ -202,41 +202,41 @@
 <p>The CLI requires an explicit choice between a preview and action:</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
 <span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
-<p>Cancellation follows the same preview-first pattern and affects only queued or running scheduler jobs; it does not delete project data or outputs. BIDS validation remains independently schedulable with <code><a href="reference/run_bids_validation.html">run_bids_validation()</a></code> or <code>BrainGnomes validate-bids</code>. The <a href="https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> shows the primary workflow and these optional tools.</p>
+<p>Cancellation follows the same preview-first pattern and affects only queued or running scheduler jobs; it does not delete project data or outputs. BIDS validation remains independently schedulable with <code><a href="reference/run_bids_validation.html">run_bids_validation()</a></code> or <code>BrainGnomes validate-bids</code>. The <a href="https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> shows the primary workflow and these optional tools.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
 </h2>
-<p>The <a href="https://uncdependlab.github.io/BrainGnomes/">package website</a> includes function reference pages, release notes, and the following guides:</p>
+<p>The <a href="https://hallquistlab.github.io/BrainGnomes/">package website</a> includes function reference pages, release notes, and the following guides:</p>
 <ul>
 <li>
-<a href="https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a> — set up a project and run an end-to-end workflow.</li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a> — set up a project and run an end-to-end workflow.</li>
 <li>
-<a href="https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html">Local onboarding and prerequisites</a> — inspect an installed example configuration and run a first task without scheduler or container access.</li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html">Local onboarding and prerequisites</a> — inspect an installed example configuration and run a first task without scheduler or container access.</li>
 <li>
-<a href="https://uncdependlab.github.io/BrainGnomes/articles/building_containers.html">Building Singularity containers for BrainGnomes</a> — create the container images used by pipeline stages.</li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/building_containers.html">Building Singularity containers for BrainGnomes</a> — create the container images used by pipeline stages.</li>
 <li>
-<a href="https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.html">Postprocessing Walkthrough</a> — configure masking, smoothing, AROMA, filtering, scrubbing, intensity normalization, and confound regression.</li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.html">Postprocessing Walkthrough</a> — configure masking, smoothing, AROMA, filtering, scrubbing, intensity normalization, and confound regression.</li>
 <li>
-<a href="https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a> — configure atlas/mask ROI extraction and connectivity outputs.</li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a> — configure atlas/mask ROI extraction and connectivity outputs.</li>
 <li>
-<a href="https://uncdependlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a> — triage project or subject status and investigate failures from job-tracking records and logs.</li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a> — triage project or subject status and investigate failures from job-tracking records and logs.</li>
 <li>
-<a href="https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.html">Run-wise Intensity Normalization</a> — understand the robust reference-core approach, targets, provenance, quality checks, and troubleshooting.</li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.html">Run-wise Intensity Normalization</a> — understand the robust reference-core approach, targets, provenance, quality checks, and troubleshooting.</li>
 </ul>
 </div>
 <div class="section level2">
 <h2 id="getting-help-and-contributing">Getting help and contributing<a class="anchor" aria-label="anchor" href="#getting-help-and-contributing"></a>
 </h2>
-<p>Please <a href="https://github.com/UNCDEPENdLab/BrainGnomes/issues" class="external-link">open an issue</a> for bugs, questions, or feature requests. Contributions are welcome; see <a href="CONTRIBUTING.html">CONTRIBUTING.md</a> for the development workflow.</p>
+<p>Please <a href="https://github.com/HallquistLab/BrainGnomes/issues" class="external-link">open an issue</a> for bugs, questions, or feature requests. Contributions are welcome; see <a href="CONTRIBUTING.html">CONTRIBUTING.md</a> for the development workflow.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/UNCDEPENdLab/BrainGnomes/" class="external-link">Browse source code</a></li>
-<li><a href="https://github.com/UNCDEPENdLab/BrainGnomes/issues" class="external-link">Report a bug</a></li>
+<li><a href="https://github.com/HallquistLab/BrainGnomes/" class="external-link">Browse source code</a></li>
+<li><a href="https://github.com/HallquistLab/BrainGnomes/issues" class="external-link">Report a bug</a></li>
 </ul>
 </div>
 
@@ -271,8 +271,8 @@
 <div class="dev-status">
 <h2 data-toc-skip>Dev status</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
-<li><a href="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/pkgdown.yaml" class="external-link"><img src="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a></li>
+<li><a href="https://github.com/HallquistLab/BrainGnomes/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/HallquistLab/BrainGnomes/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+<li><a href="https://github.com/HallquistLab/BrainGnomes/actions/workflows/pkgdown.yaml" class="external-link"><img src="https://github.com/HallquistLab/BrainGnomes/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a></li>
 </ul>
 </div>
 

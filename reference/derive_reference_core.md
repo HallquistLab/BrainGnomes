@@ -37,7 +37,7 @@ derive_reference_core(
 - candidate_mask:
 
   Required 3D functional candidate mask, normally from
-  [`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
+  [`automask()`](https://hallquistlab.github.io/BrainGnomes/reference/automask.md)
   applied to the original positive-scale BOLD data with
   `fill_holes = FALSE` and `dilate_steps = 0`.
 

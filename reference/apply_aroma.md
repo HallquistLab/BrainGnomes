@@ -2,7 +2,7 @@
 
 Performs ICA-AROMA denoising by regressing out identified noise
 components from an fMRI time series using the internal
-[`lmfit_residuals_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md)
+[`lmfit_residuals_4d()`](https://hallquistlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md)
 helper. When `nonaggressive = TRUE` (the default) only the unique
 variance attributable to the specified components is removed, matching
 FSL's non-aggressive `fsl_regfilt` behavior. Set `nonaggressive = FALSE`

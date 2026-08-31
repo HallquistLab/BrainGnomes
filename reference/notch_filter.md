@@ -3,7 +3,7 @@
 Uses `iirnotch_r()` to design a single-frequency notch filter that
 suppresses respiratory-related oscillations in the six rigid-body motion
 parameters. The function filters the requested columns with
-[`filtfilt_cpp()`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)
+[`filtfilt_cpp()`](https://hallquistlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)
 (zero-phase), and optionally writes the updated confounds table to disk.
 
 ## Usage
@@ -60,7 +60,7 @@ notch_filter(
 - padtype:
 
   Passed to
-  [`filtfilt_cpp()`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md);
+  [`filtfilt_cpp()`](https://hallquistlab.github.io/BrainGnomes/reference/filtfilt_cpp.md);
   governs how the edges are padded before filtering. One of
   `"constant"`, `"odd"`, `"even"`, or `"zero"`. Defaults to `"constant"`
   to match SciPy.
@@ -68,16 +68,16 @@ notch_filter(
 - padlen:
 
   Optional integer pad length forwarded to
-  [`filtfilt_cpp()`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md).
+  [`filtfilt_cpp()`](https://hallquistlab.github.io/BrainGnomes/reference/filtfilt_cpp.md).
   If `NULL`, the default inside
-  [`filtfilt_cpp()`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)
+  [`filtfilt_cpp()`](https://hallquistlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)
   (`-1L`) is used.
 
 - use_zi:
 
   Logical; whether to initialise the filter state using steady-state
   conditions (the default in
-  [`filtfilt_cpp()`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)).
+  [`filtfilt_cpp()`](https://hallquistlab.github.io/BrainGnomes/reference/filtfilt_cpp.md)).
 
 - lg:
 

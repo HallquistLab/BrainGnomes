@@ -1,7 +1,7 @@
 # Parse CLI-style arguments into a nested list using args_to_df()
 
 This function tokenizes command-line arguments using
-[`args_to_df()`](https://uncdependlab.github.io/BrainGnomes/reference/args_to_df.md)
+[`args_to_df()`](https://hallquistlab.github.io/BrainGnomes/reference/args_to_df.md)
 and builds a nested list by interpreting forward slashes in keys (e.g.,
 `--a/b=10 11`) as nested structure.
 

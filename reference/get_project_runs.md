@@ -1,9 +1,9 @@
 # List submitted runs for a project
 
 A run is one submission from
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 or
-[`retry_project_run()`](https://uncdependlab.github.io/BrainGnomes/reference/retry_project_run.md).
+[`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md).
 Use this function to find the run ID needed by the status, log,
 diagnosis, provenance, retry, and cancellation functions. The newest run
 is listed first.
@@ -27,7 +27,7 @@ times, number of tracked jobs, and overall status.
 
 ## See also
 
-[`get_run_jobs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_jobs.md)
+[`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md)
 to inspect the jobs in one run.
 
 ## Examples

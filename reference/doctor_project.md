@@ -5,7 +5,7 @@ the submission environment changes, or before an expensive run.
 `doctor_project()` checks configuration, scheduler commands, container
 runtime, enabled-stage files, project storage, and the job-tracking
 database. It is not required before
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 and does not submit work, create directories, or modify the
 configuration.
 

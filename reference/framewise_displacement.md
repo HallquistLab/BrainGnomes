@@ -58,7 +58,7 @@ framewise_displacement(
 
   Replacement applied to any remaining `NA` values after subsetting.
   Defaults to `0`, matching the behavior used in
-  [`notch_filter()`](https://uncdependlab.github.io/BrainGnomes/reference/notch_filter.md).
+  [`notch_filter()`](https://hallquistlab.github.io/BrainGnomes/reference/notch_filter.md).
 
 ## Value
 

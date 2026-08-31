@@ -9,7 +9,7 @@ articles:
   intensity_normalization: intensity_normalization.html
   local_onboarding: local_onboarding.html
   postprocessing: postprocessing.html
-last_built: 2026-08-31T13:39Z
+last_built: 2026-08-31T17:05Z
 urls:
-  reference: https://uncdependlab.github.io/BrainGnomes/reference
-  article: https://uncdependlab.github.io/BrainGnomes/articles
+  reference: https://hallquistlab.github.io/BrainGnomes/reference
+  article: https://hallquistlab.github.io/BrainGnomes/articles

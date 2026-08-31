@@ -27,4 +27,4 @@ load_project(input = NULL, validate = TRUE)
 A list representing the project configuration (class
 `"bg_project_cfg"`). If `validate` is TRUE, the returned object has a
 `validation` attribute produced by
-[`validate_project_config()`](https://uncdependlab.github.io/BrainGnomes/reference/validate_project_config.md).
+[`validate_project_config()`](https://hallquistlab.github.io/BrainGnomes/reference/validate_project_config.md).

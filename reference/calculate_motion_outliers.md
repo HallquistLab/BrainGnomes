@@ -33,9 +33,9 @@ calculate_motion_outliers(
 - scfg:
 
   Optional project configuration object produced by
-  [`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md)
+  [`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md)
   or
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
   If provided, the fMRIPrep directory is taken from
   `scfg$metadata$fmriprep_directory`.
 

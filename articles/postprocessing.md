@@ -8,15 +8,15 @@ can be applied *after* fMRIPrep has generated preprocessed BOLD files.
 These operations include masking, spatial smoothing, ICA‑AROMA
 denoising, scrubbing, temporal filtering, intensity normalisation and
 confound handling. Configuration of these steps occurs via
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 when a project is first created or later through
-[`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md).
+[`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md).
 
 To get started, make sure you have created a project configuration
 object (here, we will call it `scfg`) using
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 or loaded one with
-[`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md).
+[`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md).
 
 ``` r
 
@@ -27,7 +27,7 @@ library(BrainGnomes)
 ## Enabling Postprocessing
 
 During
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 you will be asked whether to enable postprocessing for BOLD data. You
 can toggle this choice later with `edit_project(scfg)`.
 
@@ -120,7 +120,7 @@ enable it, and key options the setup functions will prompt for.
 
 ### Applying a Brain Mask
 
-[`setup_apply_mask()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_apply_mask.md)
+[`setup_apply_mask()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_apply_mask.md)
 controls whether to apply a binary brain mask to all BOLD runs. The
 prompt explains the rationale and lets you provide a mask file and
 output prefix.
@@ -167,7 +167,7 @@ only voxels of similar intensities. Technical details are
 For ICA-AROMA denoising to be applied during postprocessing, you must
 enable it in the project configuration and it must have been run at some
 point (i.e., `Run ICA-AROMA?` in
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)).
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)).
 This will produce a set of output files, including
 `*_desc-MELODIC_mixing.tsv` (the mixing matrix), which contains the
 spatiotemporal components identified both as noise and signal by the
@@ -369,7 +369,7 @@ postprocessed confounds file (if relevant).
 
 ### Intensity Normalisation
 
-[`setup_intensity_normalization()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_intensity_normalization.md)
+[`setup_intensity_normalization()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_intensity_normalization.md)
 offers two modes. `run_scalar` multiplies every value in a run by one
 robust run-specific constant; its user-selected `target` defaults to
 10,000. `voxel_psc` applies denominator-guarded voxelwise scaling with a
@@ -516,14 +516,14 @@ before temporal denoising, not to force every final image summary to a
 particular value.
 
 See the dedicated
-[`Intensity Normalization in BrainGnomes`](https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.md)
+[`Intensity Normalization in BrainGnomes`](https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.md)
 vignette for configuration, equations, internal safeguards, outputs, QA,
 and limitations.
 
 ### Confound Calculation and Regression
 
 Two steps handle confounds.
-[`setup_confound_calculate()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_confound_calculate.md)
+[`setup_confound_calculate()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_confound_calculate.md)
 creates a TSV file of nuisance regressors (motion parameters, CompCor
 components, DVARS, global signal, etc.) that may be filtered to match
 the BOLD data. Columns to include are selected with patterns that can
@@ -597,10 +597,10 @@ instance `^trans_` matches all six translational motion parameters and
 filtered and unfiltered sets may use these patterns, giving fine-grained
 control over nuisance regressors.
 
-[`setup_confound_regression()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_confound_regression.md)
+[`setup_confound_regression()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_confound_regression.md)
 optionally performs voxelwise regression of these confounds. If
 scrubbing is enabled, the censor file written during
-[`setup_scrubbing()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_scrubbing.md)
+[`setup_scrubbing()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_scrubbing.md)
 is passed to the regression step so that model fits are computed using
 only volumes marked as “good.”【F:R/postprocess_functions.R†L748-L764】
 The residuals are written to new NIfTI files with a chosen prefix.
@@ -620,7 +620,7 @@ below.【F:R/setup_postprocess.R†L321-L358】
 ## Running Postprocessing
 
 After configuration, running
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 will execute the selected postprocessing steps for each subject.
 
 ``` r
@@ -643,9 +643,9 @@ inspect intermediate stages of processing, you acn
 ## Summary
 
 Postprocessing in BrainGnomes is fully configurable. Using
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 or
-[`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md)
+[`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
 you can enable or disable each operation, control parameters such as
 smoothing kernel and filtering cutoffs, and decide the order in which
 steps occur. Running the project then applies these settings

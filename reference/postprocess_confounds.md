@@ -3,7 +3,7 @@
 Handles optional spike regression file creation, filtering of confound
 time series and writing of postprocessed confounds/regressor files. This
 is used internally by
-[`postprocess_subject()`](https://uncdependlab.github.io/BrainGnomes/reference/postprocess_subject.md).
+[`postprocess_subject()`](https://hallquistlab.github.io/BrainGnomes/reference/postprocess_subject.md).
 
 ## Usage
 
@@ -23,7 +23,7 @@ postprocess_confounds(
 - proc_files:
 
   List of files returned by
-  [`get_fmriprep_outputs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.md).
+  [`get_fmriprep_outputs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.md).
 
 - cfg:
 

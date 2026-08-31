@@ -18,7 +18,7 @@ setup_project_metadata(scfg = NULL, fields = NULL)
 - scfg:
 
   A project configuration object created by
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
 
 - fields:
 

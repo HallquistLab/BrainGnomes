@@ -1,7 +1,7 @@
 # Construct BIDS-Compatible Filenames from Extracted Entity Data
 
 Given a data frame of BIDS entities (as returned by
-[`extract_bids_info()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.md)),
+[`extract_bids_info()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_bids_info.md)),
 this function reconstructs filenames following the BIDS specification.
 It supports standard BIDS entities including subject, session, task,
 run, acquisition, space, resolution, and description, along with the
@@ -42,7 +42,7 @@ internally.
 
 ## See also
 
-[`extract_bids_info()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.md)
+[`extract_bids_info()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_bids_info.md)
 for extracting BIDS fields from filenames.
 
 ## Examples

@@ -2,10 +2,10 @@
 
 This optional inspection entry point is useful for scripts, continuous
 integration, and configuration review. It is not required before
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md),
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md),
 which retains its selected-stage checks. Unlike the historical repair
 path in
-[`validate_project()`](https://uncdependlab.github.io/BrainGnomes/reference/validate_project.md),
+[`validate_project()`](https://hallquistlab.github.io/BrainGnomes/reference/validate_project.md),
 this function never opens the setup wizard and never writes the
 configuration.
 

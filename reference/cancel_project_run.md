@@ -20,9 +20,9 @@ cancel_project_run(input, run_id = "latest", dry_run = FALSE)
 - run_id:
 
   Run ID returned by
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   or
-  [`get_project_runs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_runs.md).
+  [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md).
   An explicit ID is recommended for cancellation.
 
 - dry_run:
@@ -36,7 +36,7 @@ A data frame describing each cancellation attempt.
 
 ## See also
 
-[`get_run_jobs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_jobs.md)
+[`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md)
 to inspect current job states before cancellation.
 
 ## Examples

@@ -17,19 +17,19 @@ hard to answer even basic questions:
 
 BrainGnomes provides two useful levels of information:
 
-- [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+- [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
   gives a project-wide table of step-level completion flags and times
   for all subjects.
-- [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+- [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
   focuses that same information on a single subject (and session),
   making it easy to see where one subject is stuck.
-- [`get_project_runs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_runs.md),
-  [`get_run_jobs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_jobs.md),
-  [`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md),
+- [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md),
+  [`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md),
+  [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md),
   and
-  [`find_run_logs()`](https://uncdependlab.github.io/BrainGnomes/reference/find_run_logs.md)
+  [`find_run_logs()`](https://hallquistlab.github.io/BrainGnomes/reference/find_run_logs.md)
   inspect one submitted run without prompts.
-- [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+- [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
   provides the established interactive browser when you want to follow
   job relationships and read logs step by step.
 
@@ -51,13 +51,13 @@ scfg <- load_project(project_dir)
 Loading a project validates its configuration without opening the setup
 wizard or changing the saved YAML file. This is the same configuration
 object used by
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 and the diagnosis functions below.
 
 ## Choose the run you mean
 
 Every submitted
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 call returns a run handle. Its `run_id` is a stable label that connects
 the jobs, logs, diagnosis, and provenance from that submission.
 
@@ -116,9 +116,9 @@ and MRIQC are complete for all subjects, while downstream steps are not
 yet complete.
 
 Under the hood,
-[`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+[`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
 and
-[`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md):
+[`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md):
 
 - look in the project’s BIDS directory to discover which
   subjects/sessions exist, and
@@ -171,7 +171,7 @@ This is often the fastest way to answer, “Where is subject X stuck?”
 ## Inspect one run without prompts
 
 Use
-[`get_run_jobs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_jobs.md)
+[`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md)
 to see every tracked job in the selected run. The returned table
 includes the processing step, subject, scheduler job number, timing, and
 current status.
@@ -183,7 +183,7 @@ jobs[, c("job_id", "job_name", "status", "time_submitted", "time_ended")]
 ```
 
 For a shorter failure-focused report, use
-[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md).
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md).
 It separates jobs that failed, were cancelled, or could not run because
 an earlier job failed, and it locates their output and error logs when
 those files are present.
@@ -220,12 +220,12 @@ different about this run?”
 Running a full fMRI preprocessing + postprocessing pipeline generates
 many jobs, log files, and potential failure points. Manually chasing
 SLURM job IDs and log files quickly becomes unmanageable. The goal of
-[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 is to wrap all of this job-tracking information into a single,
 interactive view.
 
 Behind the scenes, every job submitted by
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 is recorded in the project’s job-tracking database. Each record stores:
 
 - the **run ID** (called a sequence ID in some older prompts and
@@ -237,7 +237,7 @@ is recorded in the project’s job-tracking database. Each record stores:
 - and a derived **status** (`COMPLETED`, `STARTED`, `QUEUED`, `FAILED`,
   `FAILED_BY_EXT`).
 
-[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 reads this job-tracking database, reconstructs the job dependency tree,
 and then guides you through it interactively. The function returns that
 raw tree structure invisibly so you can also inspect it yourself:
@@ -267,7 +267,7 @@ The first prompt asks whether to diagnose by **subject** or by
 Choosing the run-first path lets you pick a specific pipeline run (for
 example, if you re‑ran the project with a different configuration). Once
 you select a run,
-[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 shows all **top-level jobs** for that run, grouped by subject, with
 their current status:
 
@@ -304,7 +304,7 @@ subject‑summary branch:
     > 3
 
 Here,
-[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 looks across **all runs** in the job-tracking database and shows, for
 the chosen subject, which combination of runs produced the best overall
 completion pattern. This helps with questions like:
@@ -329,7 +329,7 @@ Example subject‑level summary for `sub-540303`:
 
 ### Interpreting job statuses
 
-[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 uses the following job‑level statuses:
 
 - `COMPLETED`: the job finished successfully (based on scheduler status
@@ -349,28 +349,28 @@ is often the cause. A `FAILED_BY_EXT` job is usually affected downstream
 work rather than the original problem.
 
 In contrast,
-[`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+[`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
 and
-[`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+[`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
 report simple `*_complete` flags per step; these are stricter than raw
 scheduler status and rely on BrainGnomes completion markers and expected
 outputs. A common workflow is:
 
 1.  Use
-    [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+    [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
     or
-    [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+    [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
     for a quick overview of which steps are done. These functions do
     **not** consult the job-tracking database; instead they scan the
     project’s BIDS and log directories for `.complete` marker files and
     expected outputs, then derive strict `*_complete` flags and
     completion times per step.
 2.  Use
-    [`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+    [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
     and
-    [`find_run_logs()`](https://uncdependlab.github.io/BrainGnomes/reference/find_run_logs.md)
+    [`find_run_logs()`](https://hallquistlab.github.io/BrainGnomes/reference/find_run_logs.md)
     for a prompt-free report of one run, or
-    [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+    [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
     for guided interactive investigation. These functions read the
     job-tracking database to connect jobs, statuses, and logs.
 

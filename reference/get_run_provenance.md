@@ -24,9 +24,9 @@ get_run_provenance(input, run_id = "latest")
 - run_id:
 
   Run ID returned by
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   or
-  [`get_project_runs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_runs.md).
+  [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md).
   Use `"latest"` for the most recently recorded run.
 
 ## Value
@@ -35,9 +35,9 @@ A `bg_run_provenance` object.
 
 ## See also
 
-[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
 to inspect failures and
-[`retry_project_run()`](https://uncdependlab.github.io/BrainGnomes/reference/retry_project_run.md)
+[`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
 to create a new run from failed work.
 
 ## Examples

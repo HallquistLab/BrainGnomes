@@ -3,7 +3,7 @@
 ## Overview
 
 The
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
 function – called via `run_project` – summarizes postprocessed BOLD data
 within atlas‑defined regions and can also compute ROI‑to‑ROI
 connectivity matrices. It is run after postprocessing completes and
@@ -12,18 +12,18 @@ ROI extraction requires that postprocessing be included in the pipeline
 because postprocessed files serve as the inputs to ROI extraction.
 
 ROI extraction is enabled during
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 or
-[`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md).
+[`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md).
 During the setup, you will be asked about how to reduce voxels within
 ROIs to an aggregated time series and how to compute correlations among
 them. Once configured,
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 will schedule extraction jobs.
 
 Each successful scheduled extraction writes a job-specific manifest
 containing the exact timeseries and connectivity files returned by
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md).
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md).
 Status checks verify those paths and file sizes beneath the shared
 `data_rois` directory. Outputs from other subjects, sessions, or
 extraction streams are not used as evidence that the job completed.
@@ -60,7 +60,7 @@ specification is matched only with `desc-clean`, and the n-back
 specification only with `desc-denoised`. It does not search the
 cross-product of all input specifications and descriptions. The
 lower-level
-[`get_postproc_output_files()`](https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_output_files.md)
+[`get_postproc_output_files()`](https://hallquistlab.github.io/BrainGnomes/reference/get_postproc_output_files.md)
 function follows the same rule when supplied equal-length vectors. A
 single `bids_desc` may be applied to several input specifications; all
 other length mismatches are errors.
@@ -114,12 +114,12 @@ Supported correlation options include:
   points.
 
 For scheduled extraction,
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 stores the selected methods under
 `extract_rois/<stream>/correlation/method`;
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 passes those nested settings to the extraction helper. The direct
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
 interface uses the `cor_method` argument instead.
 
 ## Other settings
@@ -223,14 +223,14 @@ atlas-sized square matrix, with every value set to `NA`.
 
 ## Summary
 
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
 provides a flexible way to derive ROI signals and functional
 connectivity from postprocessed fMRI data. By selecting appropriate
 reduction and correlation methods, you can tailor ROI analyses to the
 needs of your study.
 
 *Note*: You can technically call
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
 directly, but this is recommended only for testing because it runs the
 compute directly within the R session, rather than scheduling jobs on
 the HPC.

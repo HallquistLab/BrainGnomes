@@ -51,7 +51,7 @@ validate_spatial_smooth(
 - smoother:
 
   Character; `"susan"` (default, matches
-  [`spatial_smooth()`](https://uncdependlab.github.io/BrainGnomes/reference/spatial_smooth.md))
+  [`spatial_smooth()`](https://hallquistlab.github.io/BrainGnomes/reference/spatial_smooth.md))
   or `"gaussian"`.
 
 - used_mask:

@@ -1,12 +1,12 @@
 # Run the processing pipeline
 
 This remains the standard execution path after
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
 It resolves the same stages, streams, subject/session scope, and force
 setting exposed by
-[`plan_project()`](https://uncdependlab.github.io/BrainGnomes/reference/plan_project.md)
+[`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
 before submission; calling
-[`plan_project()`](https://uncdependlab.github.io/BrainGnomes/reference/plan_project.md)
+[`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
 first is optional.
 
 ## Usage
@@ -40,7 +40,7 @@ run_project(
   all enabled stages. If `NULL`, the user will be prompted for which
   stages to run. BIDS validation is configured with the project but
   submitted separately through
-  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md);
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md);
   it is not a `run_project()` stage.
 
 - subject_filter:
@@ -95,16 +95,16 @@ after printing the resolved plan.
 
 ## See also
 
-[`get_run_provenance()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_provenance.md)
+[`get_run_provenance()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_provenance.md)
 to read the recorded configuration, execution context, and artifact
 fingerprints;
-[`plan_project()`](https://uncdependlab.github.io/BrainGnomes/reference/plan_project.md)
+[`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
 for optional inspection or persistence of the resolved request;
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+[`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md)
 to submit the BIDS validation configured with the project;
-[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
 and
-[`retry_project_run()`](https://uncdependlab.github.io/BrainGnomes/reference/retry_project_run.md)
+[`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
 for optional recovery after a submitted run fails.
 
 ## Examples

@@ -90,7 +90,7 @@ integration test and does not concern smoothness calibration.
   connectivity path before writing output; reject duplicate paths
   instead of silently reusing or overwriting another estimator’s matrix.
 - Extend
-  [`bids_camelcase()`](https://uncdependlab.github.io/BrainGnomes/reference/bids_camelcase.md)
+  [`bids_camelcase()`](https://hallquistlab.github.io/BrainGnomes/reference/bids_camelcase.md)
   to treat periods, hyphens, and underscores as word boundaries, and
   normalize every correlation-method name with that shared helper. This
   encodes `cor.shrink` as `cor-corShrink`, supports future punctuated
@@ -165,7 +165,7 @@ not concern F02.
   accept matching nested and legacy settings, and reject contradictory
   or missing method settings before creating extraction outputs.
 - Forward the configured `save_ts` setting to
-  [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+  [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
   while retaining its existing `TRUE` default when older configurations
   omit the option.
 - `R/extract_rois.R`: serialize connectivity matrices with
@@ -243,7 +243,7 @@ under F05 below.
 ### Changes
 
 - `R/setup_postprocess.R`: allow
-  [`get_postproc_output_files()`](https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_output_files.md)
+  [`get_postproc_output_files()`](https://hallquistlab.github.io/BrainGnomes/reference/get_postproc_output_files.md)
   to accept either one `bids_desc` for all input specifications or one
   description per specification. Equal-length vectors are matched
   positionally, not as a cross-product, and ambiguous length
@@ -367,7 +367,7 @@ AUDIT_F05_TOTALS: files=2 contexts=14 passed=80 failed=0 errors=0 warnings=0 ski
 ```
 
 The package was freshly installed into a temporary library. Its public
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
 function and installed `extract_cli.R`, launched in a separate `Rscript`
 process with `correlation: {method: none}`, both completed successfully:
 
@@ -401,7 +401,7 @@ integration test and does not concern F05.
   missing-value sentinels with `validate_char(..., empty_value = NULL)`,
   allowing an existing mask to be intentionally removed consistently
   with
-  [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md).
+  [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md).
 - `tests/testthat/test-setup_extract.R`: verify mask selection for both
   existing and newly created extraction streams, actual project YAML
   save/load, and all supported empty-mask responses.
@@ -523,7 +523,7 @@ AUDIT_F07_TOTALS: files=2 contexts=17 passed=137 failed=0 errors=0 warnings=0 sk
 
 The package was freshly installed into an isolated temporary library.
 Its public
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
 function was exercised with partially masked, completely masked, and
 single-ROI atlases; the installed `extract_cli.R` was also launched in a
 separate `Rscript` process with a fully masked atlas and both Pearson
@@ -553,9 +553,9 @@ integration test and does not concern F07.
 ### Changes
 
 - `R/status_functions.R`: include every enabled ROI-extraction stream in
-  [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+  [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
   and therefore
-  [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md),
+  [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md),
   with logical completion and POSIXct timestamp columns.
 - Namespace extraction columns as `extract_rois_<stream>_complete` and
   `extract_rois_<stream>_time`. Existing postprocessing columns retain
@@ -563,7 +563,7 @@ integration test and does not concern F07.
   remain independently visible as `shared_*` and
   `extract_rois_shared_*`.
 - `R/pipeline_functions.R`: extend
-  [`is_step_complete()`](https://uncdependlab.github.io/BrainGnomes/reference/is_step_complete.md)
+  [`is_step_complete()`](https://hallquistlab.github.io/BrainGnomes/reference/is_step_complete.md)
   to recognize `step_name = "extract_rois"`, accept `ex_stream`, query
   stream/session-specific SQLite job names, and check the corresponding
   completion and failure markers.
@@ -661,14 +661,14 @@ integration test and does not concern F08.
 ### Changes
 
 - `R/job_tracking_functions.R`: extend
-  [`capture_output_manifest()`](https://uncdependlab.github.io/BrainGnomes/reference/capture_output_manifest.md)
+  [`capture_output_manifest()`](https://hallquistlab.github.io/BrainGnomes/reference/capture_output_manifest.md)
   with an explicit-file mode. The selected files must exist beneath the
   configured output root and are stored as deterministic relative paths
   with sizes and modification times. Directory scanning remains the
   default for existing callers.
 - `inst/extract_cli.R`: collect the exact timeseries and connectivity
   paths returned by every
-  [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+  [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
   call in the job, reject a requested manifest when no outputs were
   produced or a reported path is missing, and install the completed JSON
   manifest via a same-directory temporary file.
@@ -739,7 +739,7 @@ integration test and does not concern extraction manifests.
 ### Changes
 
 - `inst/extract_cli.R` forwards the configured `save_ts` value to
-  [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md).
+  [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md).
   Configurations that predate this field retain the documented `TRUE`
   default.
 - The installed-helper regression fixture now covers all output modes
@@ -772,12 +772,12 @@ AUDIT_F09_F11_FOCUSED: files=3 contexts=22 passed=143 failed=0 errors=0 warnings
 - `inst/BrainGnomes` no longer includes `bids_validation` in any
   `run_project --steps` example. The help identifies BIDS validation as
   the standalone
-  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md)
   operation it actually is.
 - Add and document `--extract_streams=<streams>` alongside
   `--postprocess_streams`.
 - Move
-  command-line-to-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  command-line-to-[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   translation into the testable internal `.run_project_cli()` adapter.
   The adapter forwards selected extraction streams as well as steps,
   subject filters, postprocessing streams, and flags.
@@ -794,7 +794,7 @@ A parsed command containing:
 ```
 
 reaches
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 with `extract_streams = c("rest", "task")` and `dry_run = TRUE`. Both
 global and command-specific help exit successfully, contain no `--steps`
 example mentioning `bids_validation`, and expose the new option. These
@@ -809,30 +809,30 @@ under F09.
 
 - Add explicit usage signatures at the C++ roxygen source for all seven
   affected exported native-backed functions:
-  [`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md),
-  [`filtfilt_cpp()`](https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.md),
-  [`image_quantile()`](https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.md),
-  [`lmfit_residuals_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md),
-  [`natural_spline_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_4d.md),
-  [`natural_spline_interp()`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_interp.md),
+  [`automask()`](https://hallquistlab.github.io/BrainGnomes/reference/automask.md),
+  [`filtfilt_cpp()`](https://hallquistlab.github.io/BrainGnomes/reference/filtfilt_cpp.md),
+  [`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md),
+  [`lmfit_residuals_4d()`](https://hallquistlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md),
+  [`natural_spline_4d()`](https://hallquistlab.github.io/BrainGnomes/reference/natural_spline_4d.md),
+  [`natural_spline_interp()`](https://hallquistlab.github.io/BrainGnomes/reference/natural_spline_interp.md),
   and
-  [`remove_nifti_volumes()`](https://uncdependlab.github.io/BrainGnomes/reference/remove_nifti_volumes.md);
+  [`remove_nifti_volumes()`](https://hallquistlab.github.io/BrainGnomes/reference/remove_nifti_volumes.md);
   regenerate `R/RcppExports.R` and their `.Rd` files.
 - Make `automask(outfile = "")` genuinely optional, correct its argument
   name from `image` to `img`, and replace the nonexistent
   `automask_rcpp()` example.
 - Correct the
-  [`image_quantile()`](https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.md)
+  [`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md)
   median example to use the named `quantiles = 0.5` argument.
 - Replace the nonexistent `run_project(prompt = TRUE)` argument with a
   supported `steps = "fmriprep"` example and repair malformed stream
   documentation. The `steps` help now enumerates the seven stages
   accepted by the implementation, distinguishes the `"all"` selector
   from those stages, and cross-links standalone
-  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md)
   from both the parameter text and `\seealso`.
 - Correct
-  [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+  [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
   scientific-output documentation: ordinary correlations range from `-1`
   to `1`, Fisher-transformed values are unbounded, and transformed
   diagonals are written as `NA`, not `15`.
@@ -854,11 +854,11 @@ under F09.
 
 The usage/example assertions are included in the focused result under
 F09. The documentation contract additionally requires every supported
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 stage, rejects the nonexistent `prompt` argument, and verifies the
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+[`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md)
 `\seealso` cross-reference. A separate runtime regression also calls
-[`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
+[`automask()`](https://hallquistlab.github.io/BrainGnomes/reference/automask.md)
 without `outfile` and confirms that it returns the expected
 three-dimensional image.
 
@@ -941,15 +941,15 @@ integration test and does not concern F09–F12.
   schema when `drop_unused = TRUE`, because there are no observations
   from which unused entities can be inferred.
 - Centralize the configured status specification shared by
-  [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+  [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
   and the empty-project path in
-  [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md).
+  [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md).
   An empty project now returns a zero-row `bg_status_df` containing
   character `sub_id`/`ses_id`, logical completion columns, and POSIXct
   time columns for every enabled ordinary stage, postprocessing stream,
   and ROI-extraction stream.
 - Validate
-  [`image_quantile()`](https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.md)
+  [`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md)
   probabilities before image I/O. Empty vectors, `NA`, `NaN`, `Inf`, and
   `-Inf` now produce argument-specific errors; finite values outside
   `[0, 1]` retain the existing range error.
@@ -984,7 +984,7 @@ integration test.
 
 - Adapt the legacy script’s useful ROI voxel-retention concept into the
   supported
-  [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+  [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
   implementation as the opt-in `save_diagnostics` setting.
 - Write a per-atlas `_roidiagnostics.tsv` with stable rows for every
   positive atlas label. It separately reports total atlas voxels, voxels
@@ -1084,7 +1084,7 @@ development test suite was also rerun successfully after this removal.
 - Documentation contracts require the local vignette’s executable
   configuration, BIDS, and image examples, its dry-run boundary, and the
   separately submitted
-  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md)
   guidance.
 - The vignette rendered successfully with all executable chunks:
 
@@ -1111,17 +1111,17 @@ integration test.
 
 - Describe BIDS validation consistently as configured with the project
   but submitted separately through
-  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md).
   This boundary is now explicit in the README, Quickstart, interactive
   setup guidance, CLI help, and the generated help for
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   and
-  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md).
 - Replace the Quickstart’s copied August 2025 CLI transcript with an
   evaluated vignette chunk that locates
   `system.file("BrainGnomes", package = "BrainGnomes")` and executes its
   real `--help` output. The Quickstart now lists all seven supported
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   stages and documents the current double-dash options, `status`,
   command-specific help, and a portable PATH expression.
 - Expand `run_project(dry_run = TRUE)` into a resolved plan. For each

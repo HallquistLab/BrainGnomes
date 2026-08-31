@@ -29,7 +29,7 @@
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json"></form></li>
-<li class="nav-item"><a class="external-link nav-link" href="https://github.com/UNCDEPENdLab/BrainGnomes/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/HallquistLab/BrainGnomes/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul></div>
 
 
@@ -39,7 +39,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>BrainGnomes pre-release audit</h1>
-      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/AUDIT.md" class="external-link"><code>AUDIT.md</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/AUDIT.md" class="external-link"><code>AUDIT.md</code></a></small>
     </div>
 
 <div id="braingnomes-pre-release-audit" class="section level1">
@@ -658,7 +658,7 @@ These were most likely included in error.</code></pre>
 <h2 id="appendix-a-minimal-reusable-roi-fixture">Appendix A. Minimal reusable ROI fixture<a class="anchor" aria-label="anchor" href="#appendix-a-minimal-reusable-roi-fixture"></a></h2>
 <p>The following fixture recreates two ROI time series for which Pearson and Spearman correlations are materially different. It can be used to build regression tests for F02, F03, F05, F06, F07, and F09.</p>
 <div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">root</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"braingnomes-audit-"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">root</span><span class="op">)</span></span>

@@ -12,9 +12,9 @@ operations may also use Python and TemplateFlow.
 
 Useful links:
 
-- <https://uncdependlab.github.io/BrainGnomes/>
+- <https://hallquistlab.github.io/BrainGnomes/>
 
-- Report bugs at <https://github.com/UNCDEPENdLab/BrainGnomes/issues>
+- Report bugs at <https://github.com/HallquistLab/BrainGnomes/issues>
 
 ## Author
 

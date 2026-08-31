@@ -16,7 +16,7 @@ setup_postprocess_streams(scfg = list(), fields = NULL)
 - scfg:
 
   A project configuration object, as produced by
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
 
 - fields:
 
@@ -56,5 +56,5 @@ functions to collect postprocessing parameters.
 
 Interactively manage multiple postprocessing configurations. Users can
 add, edit, or delete postprocessing streams. This wrapper is called by
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 and invokes `setup_postprocess_stream()` for each stream.

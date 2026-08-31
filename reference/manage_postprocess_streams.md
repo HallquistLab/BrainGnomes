@@ -2,9 +2,9 @@
 
 Presents options to add, edit, delete, show, or finish editing
 postprocessing streams. Used by both
-[`setup_postprocess_streams()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_postprocess_streams.md)
+[`setup_postprocess_streams()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_postprocess_streams.md)
 and
-[`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md).
+[`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md).
 
 ## Usage
 
@@ -17,7 +17,7 @@ manage_postprocess_streams(scfg, allow_empty = FALSE)
 - scfg:
 
   A project configuration object, as produced by
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
 
 - allow_empty:
 

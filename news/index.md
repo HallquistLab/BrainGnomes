@@ -5,13 +5,13 @@
 Released 2026-08-30
 
 - Extend the established
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
   -\>
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   workflow across the complete R and command-line lifecycle without
   adding required setup steps. Optional inspection tooling now provides
   non-mutating configuration validation,
-  [`doctor()`](https://uncdependlab.github.io/BrainGnomes/reference/doctor.md)
+  [`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
   preflight checks, and serializable execution plans; direct runs
   resolve the same execution model exposed by plans. Run handles,
   tracked-run views, log discovery, non-interactive diagnosis,
@@ -23,7 +23,7 @@ Released 2026-08-30
   configuration, planned resources and dependencies,
   software/R/host/scheduler identity, and content fingerprints for
   selected containers and other execution-driving files.
-  [`get_run_provenance()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_provenance.md)
+  [`get_run_provenance()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_provenance.md)
   and the `BrainGnomes provenance` command expose the record together
   with current job-tracking rows; plan and retry origins are retained
   explicitly.
@@ -34,9 +34,9 @@ Released 2026-08-30
   downstream blocked work, and safely preview cancellation. Function and
   CLI help use the same plain-language behavior and safety guidance.
 - Make guided
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
   and
-  [`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md)
+  [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
   saves use the same atomic configuration writer as non-interactive
   lifecycle tooling after the user confirms replacement of an existing
   file.
@@ -115,11 +115,11 @@ Released 2026-08-25
 - Honor `save_ts = FALSE` in scheduled extraction and reject
   contradictory extraction configurations before output is created.
 - Align the CLI,
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   help, examples, and vignettes with the seven supported submitted
   stages. BIDS validation remains project-configured but is submitted
   separately with
-  [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md);
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md);
   stream selection and dry-run output now expose resolved settings.
 - Harden public and native interfaces with complete help signatures,
   working examples, stable empty data-frame schemas, finite
@@ -132,9 +132,9 @@ Released 2026-08-25
   voxel-retention diagnostics into supported ROI extraction.
 - Stabilize empty-result contracts: `extract_bids_info(character())` now
   returns its complete typed BIDS schema, and
-  [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+  [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
   returns configured status columns even before any subject jobs exist.
-  [`image_quantile()`](https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.md)
+  [`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md)
   now rejects empty, missing, NaN, and infinite probability vectors
   before reading image data.
 - Improve onboarding and release hygiene: generate Quickstart CLI help
@@ -143,7 +143,7 @@ Released 2026-08-25
   stream settings during dry runs, and remove the obsolete
   `ROI_TempCorr.R` installed entry point after migrating its useful
   diagnostics into
-  [`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md).
+  [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md).
 - Add optional per-ROI voxel-retention diagnostics to ROI extraction.
   Reports separately track atlas size, optional-mask survival,
   BOLD-valid voxels, minimum-voxel requirements, retention status, and
@@ -174,12 +174,12 @@ Released 2026-08-25
   `target` convention, robust reference-core policy, provenance outputs,
   QA, and limitations.
 - Replace
-  [`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)’s
+  [`automask()`](https://hallquistlab.github.io/BrainGnomes/reference/automask.md)’s
   background-sensitive positive-voxel quantile interpolation with an
   iterative AFNI-style clip estimator and a smoothly varying local
   threshold field.
 - Match AFNI’s
-  [`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
+  [`automask()`](https://hallquistlab.github.io/BrainGnomes/reference/automask.md)
   peeling more closely with a 17-of-18 NN2 survival rule, layer-aware
   restoration, and post-peel face-connected reclustering.
 - Replace postprocessing’s late 4D-median intensity estimate with an
@@ -198,7 +198,7 @@ Released 2026-08-25
 - Add additional templates to prefetch needed by MRIQC
 - Preserve user-specified `metadata/sqlite_db` values and expose
   `sqlite_db` in
-  [`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md).
+  [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md).
 - Clean postprocessing scratch workspaces and temporary automask files
   on errors as well as successful exits.
 - Use exit-time cleanup for temporary FSL postprocessing files generated
@@ -262,10 +262,10 @@ Released 2026-02-17
 - Job failures and other errors can now be investigated using
   `diagnose_pipeline`
 - Added a new vignette, “Diagnosing Pipeline Runs”, that walks through
-  [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md),
-  [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md),
+  [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md),
+  [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md),
   and interactive use of
-  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 - Improved error logging in HPC scripts so that success and failure are
   indicated more clearly
 - Stale .fail files are removed when a newer .complete file exists,
@@ -283,7 +283,7 @@ Released 2026-02-17
 - Added extensive checks on write/permission issues with directories and
   files
 - bugfix: Get CSF probseg image for MRIQC during prefetch
-- [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+- [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   now skips TemplateFlow prefetch only when a prior successful prefetch
   covers requested spaces and the TemplateFlow manifest in job tracking
   still verifies; missing/deleted template files trigger re-prefetch.
@@ -296,15 +296,15 @@ Released 2026-02-17
   When motion filtering is enabled, FD is recomputed from the filtered
   motion automatically.
 - Increase consistency of instructions and formatting in
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 - bugfix: avoid spurious “Already disconnected” warnings on exit from
-  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 - bugfix:
-  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
   now respects configured `metadata/log_directory` instead of assuming
   `<project_directory>/logs`
 - bugfix:
-  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
   now matches subjects by exact `sub-<id>` tokens to avoid accidental
   partial matches
 - bugfix: `run_bg_and_wait()` now suppresses and restores `ERR` trap
@@ -314,11 +314,11 @@ Released 2026-02-17
   update to `FAILED` before exit, reducing `_fail`/DB mismatch after
   abrupt failures.
 - bugfix:
-  [`update_tracked_job_status()`](https://uncdependlab.github.io/BrainGnomes/reference/update_tracked_job_status.md)
+  [`update_tracked_job_status()`](https://hallquistlab.github.io/BrainGnomes/reference/update_tracked_job_status.md)
   now warns when no tracking rows are updated for a job_id (instead of
   failing silently).
 - bugfix:
-  [`check_status_reconciliation()`](https://uncdependlab.github.io/BrainGnomes/reference/check_status_reconciliation.md)
+  [`check_status_reconciliation()`](https://hallquistlab.github.io/BrainGnomes/reference/check_status_reconciliation.md)
   now checks `.fail` markers against DB status and reports mismatch
   details.
 

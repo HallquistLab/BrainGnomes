@@ -48,4 +48,4 @@ requests. For details on structure, style, and commands, see AGENTS.md.
 
 - Repo guidelines: `AGENTS.md`
 - README and examples: `README.md`
-- Package site: <https://uncdependlab.github.io/BrainGnomes/>
+- Package site: <https://hallquistlab.github.io/BrainGnomes/>

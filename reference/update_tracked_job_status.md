@@ -37,7 +37,7 @@ update_tracked_job_status(
 
   Character string. Optional JSON manifest of output files to store when
   status is `"COMPLETED"`. See
-  [`capture_output_manifest`](https://uncdependlab.github.io/BrainGnomes/reference/capture_output_manifest.md).
+  [`capture_output_manifest`](https://hallquistlab.github.io/BrainGnomes/reference/capture_output_manifest.md).
 
 - cascade:
 
@@ -73,7 +73,7 @@ verification.
 
 If `cascade = TRUE`, and the status is `"FAILED"` or `"FAILED_BY_EXT"`,
 any dependent jobs (as determined via
-[`get_tracked_job_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_tracked_job_status.md))
+[`get_tracked_job_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_tracked_job_status.md))
 will be recursively marked as `"FAILED_BY_EXT"`, unless their status is
 already `"FAILED"` or they are listed in `exclude`.
 

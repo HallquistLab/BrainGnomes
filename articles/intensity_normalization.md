@@ -422,7 +422,7 @@ volume.
 ### 2. Generate a conservative functional automask
 
 BrainGnomes runs
-[`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
+[`automask()`](https://hallquistlab.github.io/BrainGnomes/reference/automask.md)
 on the input 4D BOLD image that retains its positive temporal baseline.
 The 4D image is collapsed to a mean functional image and thresholded
 using an AFNI-style iterative intensity-threshold estimator. Local

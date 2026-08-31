@@ -37,7 +37,7 @@ postprocess_subject(in_file, cfg = NULL)
   (`cfg$log_file`), and paths to resources such as singularity images
   (`cfg$fsl_img`). Processing and intensity- reference masks are
   generated internally with
-  [`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
+  [`automask()`](https://hallquistlab.github.io/BrainGnomes/reference/automask.md)
   for their distinct roles.
 
 ## Value

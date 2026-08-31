@@ -3,16 +3,16 @@
 ### All vignettes
 
 - [BrainGnomes
-  Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.md):
+  Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.md):
 - [Building Singularity containers for
-  BrainGnomes](https://uncdependlab.github.io/BrainGnomes/articles/building_containers.md):
+  BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/building_containers.md):
 - [Diagnosing Pipeline
-  Runs](https://uncdependlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md):
+  Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md):
 - [Extracting ROI Timeseries and
-  Connectivity](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.md):
+  Connectivity](https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.md):
 - [Intensity Normalization in
-  BrainGnomes](https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.md):
+  BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.md):
 - [Local onboarding and
-  prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.md):
+  prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.md):
 - [Postprocessing
-  Walkthrough](https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.md):
+  Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.md):

@@ -15,7 +15,7 @@ summary(object, ...)
 - object:
 
   A data.frame produced by
-  [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md).
+  [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md).
 
 - ...:
 

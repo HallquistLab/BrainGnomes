@@ -2,7 +2,7 @@
 
 A retry does not resume scheduler jobs in place and does not change the
 original run. It creates a new
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 submission containing the failed or cancelled stages and subjects found
 in the source run. The selected work is rerun even if old completion
 markers would normally skip it, and the new provenance record identifies
@@ -28,9 +28,9 @@ retry_project_run(
 - run_id:
 
   Source run ID returned by
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   or
-  [`get_project_runs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_runs.md).
+  [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md).
   An explicit ID is recommended for retry.
 
 - include_blocked:
@@ -56,9 +56,9 @@ begins immediately and the function returns the new run handle.
 
 ## See also
 
-[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
 to inspect the source failure and
-[`get_run_provenance()`](https://uncdependlab.github.io/BrainGnomes/reference/get_run_provenance.md)
+[`get_run_provenance()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_provenance.md)
 to compare the original and retry runs.
 
 ## Examples

@@ -19,9 +19,9 @@ find_run_logs(input, run_id = "latest", failed_only = FALSE)
 - run_id:
 
   Run ID returned by
-  [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   or
-  [`get_project_runs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_runs.md).
+  [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md).
   Use `"latest"` for the most recently recorded run.
 
 - failed_only:
@@ -35,7 +35,7 @@ A data frame mapping jobs to stdout/stderr log files.
 
 ## See also
 
-[`diagnose_project()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_project.md)
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
 for a run summary that includes these logs.
 
 ## Examples

@@ -66,5 +66,5 @@ beginning or end of the series uses the nearest valid value (i.e.,
 `edge_nn = TRUE`).
 
 This function relies on a lower-level Rcpp function
-[`natural_spline_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_4d.md)
+[`natural_spline_4d()`](https://hallquistlab.github.io/BrainGnomes/reference/natural_spline_4d.md)
 that performs the actual interpolation.

@@ -10,7 +10,7 @@ control), fMRIPrep (preprocessing pipeline), and ICA-AROMA (automatic
 removal of motion artifacts), orchestrating their execution in a
 coherent pipeline. BIDS validation is configured with the project but
 submitted separately through
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+[`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md).
 The package also provides additional processing steps for preparing fMRI
 data for analysis, such as spatial smoothing, temporal filtering, and
 confound regression. BrainGnomes uses containerized software
@@ -31,7 +31,7 @@ Along the way, we assume you have the required Singularity container
 images for each tool and a working HPC environment. Additional
 information about setting up the compute environment is provided in
 [BrainGnomes Singularity container
-setup](https://uncdependlab.github.io/BrainGnomes/articles/building_containers.md).
+setup](https://hallquistlab.github.io/BrainGnomes/articles/building_containers.md).
 This vignette provides example R code snippets, explains expected inputs
 and outputs, and offers troubleshooting tips for common issues. By the
 end of the guide, a new user should understand how to configure a study
@@ -42,7 +42,7 @@ TORQUE/PBS. The package itself can be installed and loaded on a standard
 computer, where configuration inspection, BIDS helpers, status-table
 handling, and native imaging helpers remain available. See [Local
 onboarding and
-prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.md)
+prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.md)
 for an executable no-cluster introduction.
 
 ### Basic process flow of BrainGnomes
@@ -60,21 +60,21 @@ BrainGnomes flow
 ### Running a subset of subject or a subset of processing steps
 
 As detailed below, the
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 function submits fMRI processing jobs to the scheduler. Although
 BrainGnomes is broadly intended to run all processing steps and all
 subjects, you can also run a subset of subjects. In the interactive mode
 of
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md),
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md),
 you can enter subject IDs when you do not want to run all of them.
 
 As detailed below, a BrainGnomes project can be configured to run only
 some steps (for example, fMRIPrep and postprocessing). In this case, you
 will be asked only about these steps in
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md).
 Even if you have enabled a step, however, you can choose not to run it
 in
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md).
 
 For example, if you only wish to run postprocessing stream “postproc1”
 on subject 540311, you might respond to the prompts like this:
@@ -124,7 +124,7 @@ plan to enable:
 | Any scheduled stage | SLURM or TORQUE/PBS, Bash, and accessible project, scratch, and log storage |
 | Flywheel synchronization | Flywheel `fw` CLI and account access |
 | DICOM-to-BIDS conversion | HeuDiConv container, DICOM inputs, and a study heuristic |
-| BIDS validation | BIDS validator; submitted separately through [`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
+| BIDS validation | BIDS validator; submitted separately through [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
 | MRIQC | MRIQC container |
 | fMRIPrep | fMRIPrep container, BIDS inputs, TemplateFlow cache, and FreeSurfer license |
 | ICA-AROMA | fMRIPost-AROMA container |
@@ -143,7 +143,7 @@ The corresponding setup checklist is:
 ``` r
 
 # Install (if needed) and load BrainGnomes
-# devtools::install_github("UNCDEPENdLab/BrainGnomes")
+# devtools::install_github("HallquistLab/BrainGnomes")
 library(BrainGnomes)
 ```
 
@@ -196,18 +196,18 @@ The first step in using `BrainGnomes` is to create a project
 configuration, which is a structured list containing the settings and
 paths needed for your pipeline. This configuration can be created
 interactively using
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
 In typical use, call
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 with no arguments to start a new configuration from scratch. It prompts
 for the required information, returns an object with your settings, and
 saves a YAML file named `project_config.yaml` in the project directory.
 In later sessions,
-[`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md)
+[`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md)
 reloads this file.
 
 Let’s run
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 to initialize a new project config:
 
 ``` r
@@ -267,9 +267,9 @@ download DICOMs to your project so that BIDS conversion (and later
 steps) operate on a complete, current dataset.
 
 - Enable in setup: Answer “Run Flywheel sync?” with yes in
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
   (or use
-  [`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md)
+  [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
   → “Flywheel Sync”). You will be prompted for:
   - Flywheel project URL (`source_url`), for example:
     `fw://hallquistm/momentum/`. Watch out for the trailing slash!
@@ -514,7 +514,7 @@ like this:
 
 For additional details about postprocessing, see (in progress)
 [Postprocessing
-vignette](https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.md).
+vignette](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.md).
 
 ### ROI time series extraction and functional connectivity calculation
 
@@ -526,21 +526,21 @@ correlations among the ROI timeseries for functional connectivity
 analyses.
 
 The
-[`extract_rois()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.md)
+[`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
 function – called using
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 – loops over configured atlases and writes out ROI time series and
 correlation matrices to the project’s `data_rois` directory using
 BIDS-style filenames. For more details about ROI reduction choices and
 correlation options, see the [Extracting ROIs
-vignette](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.md).
+vignette](https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.md).
 
 ### BIDS validation setup
 
 BIDS validation is configured with the project, but it is not a
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 stage. Submit it separately through
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md)
+[`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md)
 whenever validation of the BIDS directory is desired, usually after BIDS
 conversion. Saying yes to the prompt
 `Enable BIDS validation? (yes/no; Press enter to accept default: yes)`
@@ -558,7 +558,7 @@ asked for:
 ### Conclusion
 
 After
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 completes, it writes `project_config.yaml` into your project directory
 (if one exists, you will be prompted whether to overwrite it). This file
 contains your settings and can be used later to load the project into R.
@@ -568,7 +568,7 @@ contains your settings and can be used later to load the project into R.
 ### Step 1: Set up the project
 
 Use
-[`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 to interactively complete or correct configuration entries:
 
 ``` r
@@ -582,7 +582,7 @@ sessions, use `load_project("/path/to/my/project")` to reload it.
 ### Step 2: Run the project
 
 Pass the configuration directly to
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md).
 With no `steps` argument, the familiar prompts select subjects, stages,
 streams, debug/force behavior, and log level.
 
@@ -608,7 +608,7 @@ The available submitted stages are `"flywheel_sync"`,
 `"bids_conversion"`, `"mriqc"`, `"fmriprep"`, `"aroma"`,
 `"postprocess"`, and `"extract_rois"`. BIDS validation is configured
 with the project but scheduled independently through
-[`run_bids_validation()`](https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.md).
+[`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md).
 
 The returned run handle has a stable run ID connecting tracking rows,
 logs, diagnosis, provenance, retry, and cancellation. Before the first
@@ -649,11 +649,11 @@ direct workflow.
 
 ### Config: inspect or validate YAML
 
-[`validate_project_config()`](https://uncdependlab.github.io/BrainGnomes/reference/validate_project_config.md)
+[`validate_project_config()`](https://hallquistlab.github.io/BrainGnomes/reference/validate_project_config.md)
 reports malformed or incomplete configuration without opening the setup
 wizard or writing files. This is useful in scripts, continuous
 integration, or configuration review.
-[`initialize_project()`](https://uncdependlab.github.io/BrainGnomes/reference/initialize_project.md)
+[`initialize_project()`](https://hallquistlab.github.io/BrainGnomes/reference/initialize_project.md)
 is also available when automation needs to create a portable
 disabled-stage starting configuration without prompts.
 
@@ -668,13 +668,13 @@ stopifnot(validation$valid)
 ```
 
 Direct
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 calls retain their existing checks for the selected stages; separate
 config validation is optional.
 
 ### Doctor: inspect the submission environment
 
-[`doctor()`](https://uncdependlab.github.io/BrainGnomes/reference/doctor.md)
+[`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
 performs a broader, non-mutating preflight covering scheduler commands,
 container compatibility, storage permissions, stage-specific files, and
 the job-tracking database. It is valuable on a new cluster, after
@@ -691,7 +691,7 @@ Pass `deep = TRUE` to also initialize the active reticulate Python and
 inspect optional modules used by template-dependent postprocessing.
 Doctor never submits jobs or changes project files and is not required
 before
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md).
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md).
 
 ### Plan: inspect or persist resolved work
 
@@ -700,7 +700,7 @@ dependencies, and implicit setup jobs before submission. Saved plans
 include their configuration and subject scope, making a reviewed request
 reusable in an approval or automation workflow. A plan is an optional
 view of the execution model that
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 resolves internally.
 
 ``` r
@@ -717,7 +717,7 @@ run <- submit_project_plan(plan)
 ## Optional run operations
 
 Each call to
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 has a run ID. Use that ID to inspect the jobs and logs from one
 submission without mixing them up with earlier runs. If a run fails,
 diagnose the failure and correct its cause before retrying it.
@@ -769,7 +769,7 @@ BrainGnomes diagnose /project/my_study --interactive
 
 The same optional inspection and automation tools are available at the
 command line. These commands are examples, not prerequisites for
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md):
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md):
 
 ``` bash
 BrainGnomes config validate /project/my_study

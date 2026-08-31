@@ -15,9 +15,9 @@ setup_aroma(scfg, fields = NULL)
 - scfg:
 
   A project configuration object, as produced by
-  [`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md)
+  [`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md)
   or
-  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md).
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
 
 - fields:
 

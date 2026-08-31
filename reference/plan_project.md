@@ -3,7 +3,7 @@
 `plan_project()` is optional inspection and automation tooling. It
 exposes the stages, streams, subject/session scope, resources,
 dependencies, and implicit setup work resolved for a request.
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 resolves the same execution model internally, so creating or submitting
 a plan is not required for a direct run.
 
@@ -63,5 +63,5 @@ A serializable `bg_project_plan` object.
 
 ## See also
 
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
 for the standard direct execution path.
