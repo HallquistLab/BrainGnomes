@@ -5,7 +5,8 @@
 #' directory exists, offering to create it or allowing the user to select
 #' an alternate location. If a configuration file already exists, the
 #' user is shown a summary of differences and asked whether to overwrite
-#' the file.
+#' the file. After confirmation, the final save uses [write_project_config()]
+#' so the destination is replaced atomically.
 #'
 #' @param scfg A `bg_project_cfg` object.
 #' @param file Optional path for the YAML output. Defaults to
@@ -88,7 +89,7 @@ save_project_config <- function(scfg, file = NULL) {
   }
 
   if (overwrite) {
-    yaml::write_yaml(scfg, file)
+    scfg <- write_project_config(scfg, file = file, overwrite = TRUE)
     message("Configuration saved to ", file)
   } else {
     message("Leaving configuration file unchanged: ", file)

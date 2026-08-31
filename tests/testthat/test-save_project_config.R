@@ -43,6 +43,45 @@ test_that("save_project_config updates YAML path when file argument supplied", {
   expect_path_identical(attr(result, "yaml_file"), new_yaml)
 })
 
+test_that("save_project_config delegates confirmed saves to the atomic writer", {
+  tmp_dir <- tempfile("bg_cfg_atomic_save_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+  yaml_path <- file.path(tmp_dir, "project_config.yaml")
+  yaml::write_yaml(list(value = "old"), yaml_path)
+  scfg <- structure(
+    list(
+      value = "new",
+      metadata = list(project_directory = tmp_dir)
+    ),
+    class = "bg_project_cfg"
+  )
+  observed <- new.env(parent = emptyenv())
+  observed$called <- FALSE
+
+  local_mocked_bindings(
+    prompt_input = function(...) TRUE,
+    write_project_config = function(input, file = NULL, overwrite = FALSE) {
+      observed$called <- TRUE
+      observed$file <- file
+      observed$overwrite <- overwrite
+      attr(input, "yaml_file") <- normalizePath(
+        file, winslash = "/", mustWork = FALSE
+      )
+      invisible(input)
+    },
+    .package = "BrainGnomes"
+  )
+
+  result <- save_project_config(scfg, file = yaml_path)
+
+  expect_true(observed$called)
+  expect_path_identical(observed$file, yaml_path)
+  expect_true(observed$overwrite)
+  expect_path_identical(attr(result, "yaml_file"), yaml_path)
+})
+
 test_that("validate_char normalizes blank fmriprep output_spaces to NULL", {
   # Normalization now happens via validate_char (called in validate_project and
 

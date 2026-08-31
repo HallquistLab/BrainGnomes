@@ -24,6 +24,9 @@ Released 2026-08-30
   new run, decide whether to include downstream blocked work, and safely preview
   cancellation. Function and CLI help use the same plain-language behavior and
   safety guidance.
+* Make guided `setup_project()` and `edit_project()` saves use the same atomic
+  configuration writer as non-interactive lifecycle tooling after the user
+  confirms replacement of an existing file.
 * Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
   distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask conditions.
   Validation now enforces the selected detrending-plus-MAD estimator, uses up
