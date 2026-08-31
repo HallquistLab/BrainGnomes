@@ -5,7 +5,9 @@ the project's root directory. The function verifies that the output
 directory exists, offering to create it or allowing the user to select
 an alternate location. If a configuration file already exists, the user
 is shown a summary of differences and asked whether to overwrite the
-file.
+file. After confirmation, the final save uses
+[`write_project_config()`](https://uncdependlab.github.io/BrainGnomes/reference/write_project_config.md)
+so the destination is replaced atomically.
 
 ## Usage
 

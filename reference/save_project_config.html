@@ -4,12 +4,14 @@ the project's root directory. The function verifies that the output
 directory exists, offering to create it or allowing the user to select
 an alternate location. If a configuration file already exists, the
 user is shown a summary of differences and asked whether to overwrite
-the file."><meta property="og:description" content="Writes the configuration to a file named project_config.yaml inside
+the file. After confirmation, the final save uses write_project_config()
+so the destination is replaced atomically."><meta property="og:description" content="Writes the configuration to a file named project_config.yaml inside
 the project's root directory. The function verifies that the output
 directory exists, offering to create it or allowing the user to select
 an alternate location. If a configuration file already exists, the
 user is shown a summary of differences and asked whether to overwrite
-the file."></head><body>
+the file. After confirmation, the final save uses write_project_config()
+so the destination is replaced atomically."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -59,7 +61,8 @@ the project's root directory. The function verifies that the output
 directory exists, offering to create it or allowing the user to select
 an alternate location. If a configuration file already exists, the
 user is shown a summary of differences and asked whether to overwrite
-the file.</p>
+the file. After confirmation, the final save uses <code><a href="write_project_config.html">write_project_config()</a></code>
+so the destination is replaced atomically.</p>
     </div>
 
     <div class="section level2">
