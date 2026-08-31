@@ -21,6 +21,7 @@ the project's root directory. The function verifies that the output
 directory exists, offering to create it or allowing the user to select
 an alternate location. If a configuration file already exists, the
 user is shown a summary of differences and asked whether to overwrite
-the file.
+the file. After confirmation, the final save uses \code{\link[=write_project_config]{write_project_config()}}
+so the destination is replaced atomically.
 }
 \keyword{internal}
