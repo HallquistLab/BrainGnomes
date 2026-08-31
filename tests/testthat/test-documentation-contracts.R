@@ -14,6 +14,14 @@ rd_tag_text <- function(rd, tag) {
   paste(unlist(rd[matching]), collapse = "")
 }
 
+get_vignette_sources <- function() {
+  source_dir <- testthat::test_path("..", "..", "vignettes")
+  if (!dir.exists(source_dir)) {
+    source_dir <- system.file("doc", package = "BrainGnomes")
+  }
+  list.files(source_dir, pattern = "[.]Rmd$", full.names = TRUE)
+}
+
 test_that("exported native-backed help topics contain real usage signatures", {
   expected_formals <- list(
     automask = c(
@@ -186,4 +194,79 @@ test_that("applied-user recovery documentation explains safe run-based actions",
   expect_match(retry_plain, "could not run because an earlier", fixed = TRUE)
   expect_match(cancel_plain, "does not delete project data", fixed = TRUE)
   expect_match(cancel_plain, "immediately sends cancellation requests", fixed = TRUE)
+})
+
+test_that("vignette metadata and local assets remain publication-ready", {
+  vignette_files <- get_vignette_sources()
+  expect_gt(length(vignette_files), 0L)
+
+  for (vignette_file in vignette_files) {
+    lines <- readLines(vignette_file, warn = FALSE)
+    vignette_text <- paste(lines, collapse = "\n")
+    info <- basename(vignette_file)
+
+    frontmatter_end <- which(lines[-1L] == "---")[[1L]] + 1L
+    frontmatter <- lines[seq_len(frontmatter_end)]
+    date_lines <- grep(
+      '^date: "[0-9]{2} [A-Z][a-z]{2} [0-9]{4}"$',
+      frontmatter,
+      value = TRUE
+    )
+    expect_true(
+      length(date_lines) == 1L,
+      info = paste(info, "must have one literal date")
+    )
+
+    expect_false(
+      grepl("\u3010F:|\u2020L[0-9]", vignette_text, perl = TRUE),
+      info = paste(info, "must not contain internal source-citation markers")
+    )
+    expect_false(
+      grepl("[(]in progress[)]|vignette[^\\n]*in progress", vignette_text,
+        ignore.case = TRUE, perl = TRUE
+      ),
+      info = paste(info, "must not contain a stale in-progress label")
+    )
+
+    image_markup <- regmatches(
+      vignette_text,
+      gregexpr("!\\[[^]]*\\]\\([^)]+\\)", vignette_text, perl = TRUE)
+    )[[1L]]
+    if (length(image_markup) && !identical(image_markup, character(0))) {
+      image_targets <- sub("^.*\\]\\(([^)[:space:]]+).*$", "\\1", image_markup)
+      image_targets <- image_targets[!grepl(
+        "^[a-z][a-z0-9+.-]*:", image_targets, ignore.case = TRUE
+      )]
+      for (image_target in image_targets) {
+        expect_true(
+          file.exists(file.path(dirname(vignette_file), image_target)),
+          info = paste(info, "references missing image", image_target)
+        )
+      }
+    }
+  }
+})
+
+test_that("motion QC guide covers summaries, exports, and scrubbing boundaries", {
+  motion_qc_path <- testthat::test_path("..", "..", "vignettes", "motion_qc.Rmd")
+  if (!file.exists(motion_qc_path)) {
+    motion_qc_path <- system.file("doc", "motion_qc.Rmd", package = "BrainGnomes")
+  }
+  expect_true(nzchar(motion_qc_path) && file.exists(motion_qc_path))
+  motion_qc_text <- paste(readLines(motion_qc_path, warn = FALSE), collapse = "\n")
+
+  expected_guidance <- c(
+    "calculate_motion_outliers(",
+    "# Raw FD threshold summaries",
+    "include_filtered = TRUE",
+    "fd_filt_",
+    "all(is.na(skipped_qc",
+    "# Export a QC or exclusion table",
+    "output_file = summary_file",
+    "# Relationship to postprocessing scrubbing",
+    "does **not** submit jobs"
+  )
+  for (guidance in expected_guidance) {
+    expect_match(motion_qc_text, guidance, fixed = TRUE)
+  }
 })

@@ -42,6 +42,9 @@
 #'   are included when requested). Filtered summary values are `NA` when motion
 #'   filtering was requested but could not be applied.
 #'
+#' @seealso `vignette("motion_qc", package = "BrainGnomes")` for a complete
+#'   run-level QC workflow and its relationship to postprocessing scrubbing.
+#'
 #' @examples
 #' \dontrun{
 #' scfg <- load_project("/path/to/project_config.yaml")

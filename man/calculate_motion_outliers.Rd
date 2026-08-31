@@ -96,3 +96,7 @@ out_filt <- calculate_motion_outliers(
 }
 
 }
+\seealso{
+\code{vignette("motion_qc", package = "BrainGnomes")} for a complete
+run-level QC workflow and its relationship to postprocessing scrubbing.
+}

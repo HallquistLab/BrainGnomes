@@ -24,6 +24,10 @@ Released 2026-08-30
   new run, decide whether to include downstream blocked work, and safely preview
   cancellation. Function and CLI help use the same plain-language behavior and
   safety guidance.
+* Add an executable motion-QC vignette for `calculate_motion_outliers()`. It
+  demonstrates raw and filtered FD summaries, strict threshold interpretation,
+  unavailable-filter handling, run-level QC/exclusion exports, and the boundary
+  between interactive QC summaries and postprocessing scrubbing.
 * Make guided `setup_project()` and `edit_project()` saves use the same atomic
   configuration writer as non-interactive lifecycle tooling after the user
   confirms replacement of an existing file.

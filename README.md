@@ -169,6 +169,7 @@ The [package website](https://hallquistlab.github.io/BrainGnomes/) includes func
 - [Local onboarding and prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html) — inspect an installed example configuration and run a first task without scheduler or container access.
 - [Building Singularity containers for BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/building_containers.html) — create the container images used by pipeline stages.
 - [Postprocessing Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.html) — configure masking, smoothing, AROMA, filtering, scrubbing, intensity normalization, and confound regression.
+- [Motion Quality Control and Framewise Displacement Summaries](https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.html) — compare raw and filtered FD, summarize thresholds, export run-level QC decisions, and connect those decisions to scrubbing.
 - [Extracting ROI Timeseries and Connectivity](https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.html) — configure atlas/mask ROI extraction and connectivity outputs.
 - [Diagnosing Pipeline Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html) — triage project or subject status and investigate failures from job-tracking records and logs.
 - [Run-wise Intensity Normalization](https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.html) — understand the robust reference-core approach, targets, provenance, quality checks, and troubleshooting.

@@ -1,6 +1,7 @@
 ---
 title: "Intensity Normalization in BrainGnomes"
 author: "Michael Hallquist"
+date: "31 Aug 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
