@@ -53,10 +53,15 @@ postprocessing and extraction stream settings without submitting any jobs.}
 \code{TRACE}, \code{DEBUG}, \code{INFO}, \code{WARN}, \code{ERROR}, or \code{FATAL}.}
 }
 \value{
-A logical value indicating whether the processing pipeline was successfully run.
+For submitted work, an invisible \code{bg_project_run} object containing
+the run UUID, scheduler job IDs known at submission time, and the path to
+the complete run provenance record. Dry runs invisibly return \code{TRUE} after
+printing the resolved plan.
 }
 \description{
-Run the processing pipeline
+This remains the standard execution path after \code{\link[=setup_project]{setup_project()}}. It resolves
+the same stages, streams, subject/session scope, and force setting exposed by
+\code{\link[=plan_project]{plan_project()}} before submission; calling \code{plan_project()} first is optional.
 }
 \examples{
   \dontrun{
@@ -65,6 +70,10 @@ Run the processing pipeline
   }
 }
 \seealso{
-\code{\link[=run_bids_validation]{run_bids_validation()}} to submit the BIDS validation configured
-with the project.
+\code{\link[=get_run_provenance]{get_run_provenance()}} to read the recorded configuration,
+execution context, and artifact fingerprints; \code{\link[=plan_project]{plan_project()}} for optional
+inspection or persistence of the resolved request; \code{\link[=run_bids_validation]{run_bids_validation()}}
+to submit the BIDS validation configured with the project;
+\code{\link[=diagnose_project]{diagnose_project()}} and \code{\link[=retry_project_run]{retry_project_run()}} for optional recovery after
+a submitted run fails.
 }

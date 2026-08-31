@@ -71,6 +71,7 @@ test_that("corrected public examples and scientific output contracts stay docume
   }
   run_project_seealso <- rd_tag_text(run_project_topic, "\\seealso")
   expect_match(run_project_seealso, "run_bids_validation", fixed = TRUE)
+  expect_match(run_project_seealso, "get_run_provenance", fixed = TRUE)
   expect_match(extract_rd, "range from -1 to 1", fixed = TRUE)
   expect_match(extract_rd, "use NA on the diagonal", fixed = TRUE)
   expect_false(grepl("becomes 15", extract_rd, fixed = TRUE))
@@ -88,4 +89,101 @@ test_that("Quickstart renders CLI help from the installed command", {
   expect_match(quickstart_text, 'system.file("BrainGnomes", package = "BrainGnomes")', fixed = TRUE)
   expect_match(quickstart_text, "system2(", fixed = TRUE)
   expect_false(grepl("run_project <project_directory|config.yaml> -steps", quickstart_text, fixed = TRUE))
+
+  optional_heading <- regexpr(
+    "# Optional inspection and automation tools", quickstart_text, fixed = TRUE
+  )[[1L]]
+  expect_gt(optional_heading, 0L)
+  primary_workflow <- substr(quickstart_text, 1L, optional_heading - 1L)
+  expect_match(primary_workflow, "scfg <- setup_project()", fixed = TRUE)
+  expect_match(primary_workflow, "run <- run_project(scfg)", fixed = TRUE)
+  expect_match(primary_workflow, "diagnose_pipeline(scfg)", fixed = TRUE)
+  expect_false(grepl("validate_project_config(", primary_workflow, fixed = TRUE))
+  expect_false(grepl("doctor(", primary_workflow, fixed = TRUE))
+  expect_false(grepl("plan_project(", primary_workflow, fixed = TRUE))
+
+  expect_match(quickstart_text, "## Config: inspect or validate YAML", fixed = TRUE)
+  expect_match(quickstart_text, "## Doctor: inspect the submission environment", fixed = TRUE)
+  expect_match(quickstart_text, "## Plan: inspect or persist resolved work", fixed = TRUE)
+  expect_match(
+    quickstart_text,
+    "A plan is an optional view of the execution\nmodel that `run_project()` resolves internally.",
+    fixed = TRUE
+  )
+  expect_match(quickstart_text, "get_run_provenance(scfg, run$run_id)", fixed = TRUE)
+  expect_match(
+    quickstart_text,
+    "BrainGnomes provenance /project/my_study --run=latest --format=json",
+    fixed = TRUE
+  )
+  expect_match(
+    quickstart_text,
+    "retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)",
+    fixed = TRUE
+  )
+  expect_match(quickstart_text, "A retry does not resume or change the original run", fixed = TRUE)
+  expect_match(quickstart_text, "include_blocked = TRUE", fixed = TRUE)
+  expect_match(
+    quickstart_text,
+    "BrainGnomes retry /project/my_study --run=<run-id> --yes",
+    fixed = TRUE
+  )
+  expect_match(
+    quickstart_text,
+    "BrainGnomes diagnose /project/my_study --interactive",
+    fixed = TRUE
+  )
+  expect_false(grepl(
+    "BrainGnomes diagnose /project/my_study --run=latest --interactive",
+    quickstart_text, fixed = TRUE
+  ))
+})
+
+test_that("applied-user recovery documentation explains safe run-based actions", {
+  diagnosis_path <- testthat::test_path(
+    "..", "..", "vignettes", "diagnosing_pipeline.Rmd"
+  )
+  if (!file.exists(diagnosis_path)) {
+    diagnosis_path <- system.file(
+      "doc", "diagnosing_pipeline.Rmd", package = "BrainGnomes"
+    )
+  }
+  expect_true(nzchar(diagnosis_path) && file.exists(diagnosis_path))
+  diagnosis_text <- paste(readLines(diagnosis_path, warn = FALSE), collapse = "\n")
+  diagnosis_plain <- gsub("[[:space:]]+", " ", diagnosis_text)
+
+  expected_guidance <- c(
+    "# Choose the run you mean",
+    "# Inspect one run without prompts",
+    "get_run_provenance(scfg, run_id)",
+    "# Retry failed work after correcting the cause",
+    "A retry creates a **new run**",
+    "retry_plan <- retry_project_run(scfg, run_id, dry_run = TRUE)",
+    "retry_run <- retry_project_run(scfg, run_id, dry_run = FALSE)",
+    "include_blocked = TRUE",
+    "# Cancel work that is still active",
+    "BrainGnomes retry /project/my_study --run=<run-id> --yes"
+  )
+  for (guidance in expected_guidance) {
+    expect_match(diagnosis_text, guidance, fixed = TRUE)
+  }
+  expect_false(grepl(
+    "validation can otherwise trigger interactive correction prompts",
+    diagnosis_text, fixed = TRUE
+  ))
+  expect_match(
+    diagnosis_plain,
+    "does not delete data, logs, or completed outputs",
+    fixed = TRUE
+  )
+
+  retry_rd <- paste(unlist(get_topic_rd("retry_project_run")), collapse = "")
+  cancel_rd <- paste(unlist(get_topic_rd("cancel_project_run")), collapse = "")
+  retry_plain <- gsub("[[:space:]]+", " ", retry_rd)
+  cancel_plain <- gsub("[[:space:]]+", " ", cancel_rd)
+  expect_match(retry_plain, "does not change the original run", fixed = TRUE)
+  expect_match(retry_plain, "submission begins immediately", fixed = TRUE)
+  expect_match(retry_plain, "could not run because an earlier", fixed = TRUE)
+  expect_match(cancel_plain, "does not delete project data", fixed = TRUE)
+  expect_match(cancel_plain, "immediately sends cancellation requests", fixed = TRUE)
 })

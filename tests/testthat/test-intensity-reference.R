@@ -166,18 +166,18 @@ test_that("prepare_intensity_reference explains denominator-guarded PSC policy",
 })
 
 test_that("intensity normalization order brackets spatial and temporal steps", {
-  expect_invisible(.validate_intensity_normalization_order(c(
+  expect_invisible(validate_intensity_normalization_order(c(
     "apply_mask", "spatial_smooth", "intensity_normalize",
     "apply_aroma", "temporal_filter", "confound_regression"
   )))
   expect_error(
-    .validate_intensity_normalization_order(c(
+    validate_intensity_normalization_order(c(
       "apply_mask", "apply_aroma", "intensity_normalize"
     )),
     "after apply_mask/spatial_smooth"
   )
   expect_error(
-    .validate_intensity_normalization_order(c(
+    validate_intensity_normalization_order(c(
       "intensity_normalize", "spatial_smooth", "confound_regression"
     )),
     "after apply_mask/spatial_smooth"

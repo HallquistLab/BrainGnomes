@@ -2,9 +2,15 @@
 % Please edit documentation in R/postproc_checks.R
 \name{validate_scrub_timepoints}
 \alias{validate_scrub_timepoints}
-\title{Validate scrub timepoints (output TR count vs censor)}
+\title{Validate scrub timepoints by exact retained-volume replay}
 \usage{
-validate_scrub_timepoints(pre_file, post_file, censor_vec)
+validate_scrub_timepoints(
+  pre_file,
+  post_file,
+  censor_vec,
+  tolerance = 1e-05,
+  chunk_size = 100L
+)
 }
 \arguments{
 \item{pre_file}{Path to 4D BOLD before \code{scrub_timepoints}.}
@@ -12,12 +18,18 @@ validate_scrub_timepoints(pre_file, post_file, censor_vec)
 \item{post_file}{Path to 4D BOLD after \code{scrub_timepoints}.}
 
 \item{censor_vec}{Censor vector length = pre TRs (1 = keep, 0 = drop).}
+
+\item{tolerance}{Maximum relative numerical error for retained volumes.}
+
+\item{chunk_size}{Number of retained volumes compared at a time.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
 Attributes: \code{message}, \code{details} (\code{n_pre_t}, \code{n_post_t}, \code{n_removed}).
 }
 \description{
-Post TRs should equal pre TRs minus scrubbed count. Pass censor read \strong{before} the step if the file is overwritten.
+The post image must contain exactly the pre-image volumes whose censor values
+are one, in their original order. Pass the censor vector read \strong{before} the
+step if the file is overwritten.
 }
 \keyword{internal}

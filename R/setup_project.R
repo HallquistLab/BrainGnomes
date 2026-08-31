@@ -1,8 +1,10 @@
 #' Load a project configuration from a file
 #' @param input A path to a YAML file, or a project directory containing \code{project_config.yaml}.
-#' @param validate Logical indicating whether to validate the configuration after loading. Default: TRUE
+#' @param validate Logical indicating whether to validate the configuration after loading. Validation is
+#'   non-interactive and never changes or saves the configuration. The structured validation result is
+#'   attached as the `validation` attribute. Default: TRUE.
 #' @return A list representing the project configuration (class `"bg_project_cfg"`). If `validate` is TRUE,
-#'   the returned object is validated (missing fields may be set to NULL and noted).
+#'   the returned object has a `validation` attribute produced by [validate_project_config()].
 #' @importFrom yaml read_yaml
 #' @export
 load_project <- function(input = NULL, validate = TRUE) {
@@ -15,7 +17,10 @@ load_project <- function(input = NULL, validate = TRUE) {
   scfg <- read_yaml(yaml_path)
   class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
   attr(scfg, "yaml_file") <- yaml_path
-  if (validate) scfg <- validate_project(scfg, correct_problems = TRUE)
+  if (validate) {
+    validation <- validate_project_config(scfg, quiet = TRUE)
+    attr(scfg, "validation") <- validation[c("valid", "issues", "messages")]
+  }
 
   return(scfg)
 }
@@ -79,6 +84,7 @@ setup_project <- function(input = NULL, fields = NULL) {
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     class(scfg) <- c(class(scfg), "bg_project_cfg")
   }
+  if (is.null(scfg$schema_version)) scfg$schema_version <- 1L
 
   # run through configuration of each step
   scfg <- setup_project_metadata(scfg, fields)

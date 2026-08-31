@@ -1,13 +1,13 @@
 
 # Format one resolved configuration value for concise dry-run output.
-.dry_run_value <- function(x, default = "<not configured>") {
+dry_run_value <- function(x, default = "<not configured>") {
   if (is.null(x) || length(x) == 0L || all(is.na(x))) return(default)
   if (is.logical(x)) return(tolower(as.character(x)))
   paste(as.character(x), collapse = ", ")
 }
 
 # Resolve the same default postprocessing order used by postprocess_subject().
-.dry_run_postprocess_sequence <- function(cfg) {
+dry_run_postprocess_sequence <- function(cfg) {
   mask_file <- cfg$apply_mask$mask_file
   has_usable_mask <- isTRUE(cfg$apply_mask$enable) &&
     checkmate::test_string(mask_file) && !is.na(mask_file) &&
@@ -35,22 +35,22 @@
   sequence
 }
 
-.print_postprocess_dry_run_plan <- function(scfg, streams) {
+print_postprocess_dry_run_plan <- function(scfg, streams) {
   cat("Resolved postprocess plan:\n")
   for (stream in streams) {
     cfg <- scfg$postprocess[[stream]]
-    sequence <- .dry_run_postprocess_sequence(cfg)
+    sequence <- dry_run_postprocess_sequence(cfg)
     cat("  - ", stream, "\n", sep = "")
-    cat("      input query: ", .dry_run_value(cfg$input_regex, "desc:preproc suffix:bold"), "\n", sep = "")
-    cat("      output description: ", .dry_run_value(cfg$bids_desc), "\n", sep = "")
-    cat("      processing order: ", .dry_run_value(sequence, "<no processing steps enabled>"), "\n", sep = "")
-    cat("      output root: ", .dry_run_value(scfg$metadata$postproc_directory), "\n", sep = "")
-    cat("      overwrite: ", .dry_run_value(cfg$overwrite, "false"), "\n", sep = "")
+    cat("      input query: ", dry_run_value(cfg$input_regex, "desc:preproc suffix:bold"), "\n", sep = "")
+    cat("      output description: ", dry_run_value(cfg$bids_desc), "\n", sep = "")
+    cat("      processing order: ", dry_run_value(sequence, "<no processing steps enabled>"), "\n", sep = "")
+    cat("      output root: ", dry_run_value(scfg$metadata$postproc_directory), "\n", sep = "")
+    cat("      overwrite: ", dry_run_value(cfg$overwrite, "false"), "\n", sep = "")
   }
   invisible(NULL)
 }
 
-.print_extract_dry_run_plan <- function(scfg, streams) {
+print_extract_dry_run_plan <- function(scfg, streams) {
   cat("Resolved extraction plan:\n")
   for (stream in streams) {
     cfg <- scfg$extract_rois[[stream]]
@@ -59,28 +59,33 @@
     input_streams <- cfg$input_streams
     sources <- vapply(input_streams, function(input_stream) {
       input_cfg <- scfg$postprocess[[input_stream]]
-      input_regex <- .dry_run_value(input_cfg$input_regex, "desc:preproc suffix:bold")
-      bids_desc <- .dry_run_value(input_cfg$bids_desc)
+      input_regex <- dry_run_value(input_cfg$input_regex, "desc:preproc suffix:bold")
+      bids_desc <- dry_run_value(input_cfg$bids_desc)
       paste0(input_stream, " [", input_regex, " -> desc:", bids_desc, "]")
     }, character(1))
 
     cat("  - ", stream, "\n", sep = "")
-    cat("      inputs: ", .dry_run_value(sources), "\n", sep = "")
-    cat("      atlases: ", .dry_run_value(cfg$atlases), "\n", sep = "")
-    cat("      mask: ", .dry_run_value(cfg$mask_file, "<none; BOLD-valid voxels only>"), "\n", sep = "")
-    cat("      ROI reduction: ", .dry_run_value(cfg$roi_reduce, "mean"), "\n", sep = "")
-    cat("      correlation methods: ", .dry_run_value(methods), "\n", sep = "")
-    cat("      minimum voxels per ROI: ", .dry_run_value(cfg$min_vox_per_roi, "5"), "\n", sep = "")
-    cat("      save time series: ", .dry_run_value(cfg$save_ts, "true"), "\n", sep = "")
-    cat("      save ROI diagnostics: ", .dry_run_value(cfg$save_diagnostics, "false"), "\n", sep = "")
-    cat("      Fisher r-to-z: ", .dry_run_value(cfg$rtoz, "false"), "\n", sep = "")
-    cat("      output root: ", .dry_run_value(scfg$metadata$rois_directory), "\n", sep = "")
-    cat("      overwrite: ", .dry_run_value(cfg$overwrite, "false"), "\n", sep = "")
+    cat("      inputs: ", dry_run_value(sources), "\n", sep = "")
+    cat("      atlases: ", dry_run_value(cfg$atlases), "\n", sep = "")
+    cat("      mask: ", dry_run_value(cfg$mask_file, "<none; BOLD-valid voxels only>"), "\n", sep = "")
+    cat("      ROI reduction: ", dry_run_value(cfg$roi_reduce, "mean"), "\n", sep = "")
+    cat("      correlation methods: ", dry_run_value(methods), "\n", sep = "")
+    cat("      minimum voxels per ROI: ", dry_run_value(cfg$min_vox_per_roi, "5"), "\n", sep = "")
+    cat("      save time series: ", dry_run_value(cfg$save_ts, "true"), "\n", sep = "")
+    cat("      save ROI diagnostics: ", dry_run_value(cfg$save_diagnostics, "false"), "\n", sep = "")
+    cat("      Fisher r-to-z: ", dry_run_value(cfg$rtoz, "false"), "\n", sep = "")
+    cat("      output root: ", dry_run_value(scfg$metadata$rois_directory), "\n", sep = "")
+    cat("      overwrite: ", dry_run_value(cfg$overwrite, "false"), "\n", sep = "")
   }
   invisible(NULL)
 }
 
 #' Run the processing pipeline
+#'
+#' This remains the standard execution path after [setup_project()]. It resolves
+#' the same stages, streams, subject/session scope, and force setting exposed by
+#' [plan_project()] before submission; calling `plan_project()` first is optional.
+#'
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param steps Character vector of pipeline stages to execute. Supported stages
 #'   are `"flywheel_sync"`, `"bids_conversion"`, `"mriqc"`, `"fmriprep"`,
@@ -108,15 +113,22 @@
 #' @param log_level Character string controlling log verbosity. One of
 #'   `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, or `FATAL`.
 #' 
-#' @return A logical value indicating whether the processing pipeline was successfully run.
+#' @return For submitted work, an invisible `bg_project_run` object containing
+#'   the run UUID, scheduler job IDs known at submission time, and the path to
+#'   the complete run provenance record. Dry runs invisibly return `TRUE` after
+#'   printing the resolved plan.
 #' @export
 #' @examples
 #'   \dontrun{
 #'     # Assuming you have a valid project configuration list named `study_config`
 #'     run_project(study_config, steps = "fmriprep", force = FALSE)
 #'   }
-#' @seealso [run_bids_validation()] to submit the BIDS validation configured
-#'   with the project.
+#' @seealso [get_run_provenance()] to read the recorded configuration,
+#'   execution context, and artifact fingerprints; [plan_project()] for optional
+#'   inspection or persistence of the resolved request; [run_bids_validation()]
+#'   to submit the BIDS validation configured with the project;
+#'   [diagnose_project()] and [retry_project_run()] for optional recovery after
+#'   a submitted run fails.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
@@ -125,6 +137,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")) {
 
   checkmate::assert_class(scfg, "bg_project_cfg")
+  provenance_context <- attr(scfg, "provenance_context", exact = TRUE)
   checkmate::assert_character(steps, null.ok = TRUE)
   checkmate::assert(
     checkmate::check_character(subject_filter, any.missing = FALSE, null.ok = TRUE),
@@ -147,9 +160,6 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   all_pp_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
   all_ex_streams <- get_extract_stream_names(scfg) # vector of potential extraction streams
 
-  checkmate::assert_subset(postprocess_streams, choices = all_pp_streams, empty.ok = TRUE)
-  checkmate::assert_subset(extract_streams, choices = all_ex_streams, empty.ok = TRUE)
-
   # Shared permission-check cache: setup_project_directories primes it with
   # verified-writable dirs; downstream preflight checks get instant hits.
   permission_check_cache <- new.env(parent = emptyenv())
@@ -166,27 +176,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   # by passing steps, user is asking for unattended execution
   prompt <- is.null(steps)
-  supported_steps <- c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
 
-  if (isFALSE(prompt)) {   
-    user_steps <- unique(tolower(trimws(steps)))
-    user_steps <- user_steps[!is.na(user_steps) & nzchar(user_steps)]
-    if (length(user_steps) == 0L) {
-      stop("No processing steps were requested in run_project.")
-    }
-    if ("all" %in% user_steps) {
-      user_steps <- supported_steps[vapply(supported_steps, function(step_name) {
-        isTRUE(scfg[[step_name]]$enable)
-      }, logical(1))]
-      if (length(user_steps) == 0L) {
-        stop("No enabled processing steps are available in this configuration.")
-      }
-    }
-    unknown_steps <- setdiff(user_steps, supported_steps)
-    if (length(unknown_steps) > 0L) {
-      stop("Unknown processing step(s): ", paste(unknown_steps, collapse = ", "),
-           ". Valid choices are: ", paste(c("all", supported_steps), collapse = ", "))
-    }
+  if (isFALSE(prompt)) {
+    selection <- resolve_project_selection(
+      scfg, steps, postprocess_streams, extract_streams, force
+    )
+    user_steps <- selection$steps
+    postprocess_streams <- selection$postprocess_streams
+    extract_streams <- selection$extract_streams
 
     if ("flywheel_sync" %in% user_steps) {
       if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
@@ -209,20 +206,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     
     if ("postprocess" %in% user_steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
-      if (length(all_pp_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
-      if (is.null(postprocess_streams)) postprocess_streams <- all_pp_streams # run all streams if no specifics were requested
     }
 
     if ("extract_rois" %in% user_steps) {
       if (!isTRUE(scfg$extract_rois$enable)) stop("extract_rois was requested, but it is disabled in the configuration.")
-      if (length(all_ex_streams) == 0L) stop("Cannot run extraction without at least one extract_rois configuration.")
-      if (is.null(extract_streams)) extract_streams <- all_ex_streams # run all streams if no specifics were requested
     }
 
-    # convert steps to logicals to match downstream expectations (e.g., in process_subject)
-    steps <- rep(FALSE, length(supported_steps))
-    names(steps) <- supported_steps
-    for (s in user_steps) steps[s] <- TRUE
+    # Downstream scheduling uses the same resolved stage flags exposed by plans.
+    steps <- selection$step_flags
     
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
@@ -318,17 +309,29 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     stop("Cannot run postprocessing without a valid FSL container.")
   }
 
+  execution <- resolve_project_execution(
+    scfg,
+    steps = names(steps)[steps],
+    subject_filter = subject_filter,
+    postprocess_streams = postprocess_streams,
+    extract_streams = extract_streams,
+    force = isTRUE(scfg$force)
+  )
+  steps <- execution$step_flags
+  postprocess_streams <- execution$postprocess_streams
+  extract_streams <- execution$extract_streams
+
   if (isTRUE(scfg$dry_run)) {
     dry_requested <- names(steps)[steps]
     cat("\nDry run enabled. No jobs will be submitted.\n")
     cat("Requested steps:", paste(dry_requested, collapse = ", "), "\n")
     if (length(postprocess_streams) > 0L) {
       cat("Postprocess streams:", paste(postprocess_streams, collapse = ", "), "\n")
-      .print_postprocess_dry_run_plan(scfg, postprocess_streams)
+      print_postprocess_dry_run_plan(scfg, postprocess_streams)
     }
     if (length(extract_streams) > 0L) {
       cat("Extraction streams:", paste(extract_streams, collapse = ", "), "\n")
-      .print_extract_dry_run_plan(scfg, extract_streams)
+      print_extract_dry_run_plan(scfg, extract_streams)
     }
     if (isTRUE(steps["flywheel_sync"])) {
       cat("Would submit: flywheel_sync\n")
@@ -337,9 +340,12 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       }
     }
 
-    if (any(steps[names(steps) != "flywheel_sync"])) {
+    if (isTRUE(execution$scope_deferred)) {
+      cat("Subject/session discovery will occur after Flywheel synchronization.\n")
+    } else if (any(steps[names(steps) != "flywheel_sync"])) {
       submit_subjects(
         scfg = scfg, steps = steps, subject_filter = subject_filter,
+        resolved_subjects = execution$subjects,
         postprocess_streams = postprocess_streams, extract_streams = extract_streams,
         parent_ids = NULL, sequence_id = NULL,
         permission_check_cache = permission_check_cache,
@@ -352,12 +358,27 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # generate sequence ID for job tracking
   sequence_id <- uuid::UUIDgenerate()
   scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
+  if (!is.null(provenance_context)) {
+    attr(scfg, "provenance_context") <- provenance_context
+  }
+  provenance_file <- record_run_provenance(
+    scfg = scfg,
+    run_id = sequence_id,
+    execution = execution,
+    debug = isTRUE(scfg$debug),
+    log_level = scfg$log_level
+  )
 
   flywheel_id <- NULL
   if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg, sequence_id = sequence_id)
 
   # If only sync was requested, don't enter subject-level processing
-  if (!any(steps[names(steps) != "flywheel_sync"])) return(invisible(TRUE))
+  if (!any(steps[names(steps) != "flywheel_sync"])) {
+    return(invisible(new_project_run(
+      scfg, sequence_id, submitted_ids = flywheel_id,
+      provenance_file = provenance_file
+    )))
+  }
 
   # Submit fsaverage setup early (used by fmriprep) to avoid race conditions
   fsaverage_id <- NULL
@@ -382,8 +403,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       parent_ids = parent_ids,
       sequence_id = sequence_id
     )
-    snap_file <- file.path(scfg$metadata$log_directory, "run_project_snapshot.rds")
-    dir.create(dirname(snap_file), showWarnings = FALSE, recursive = TRUE)
+    run_dir <- file.path(scfg$metadata$log_directory, "runs", sequence_id)
+    snap_file <- file.path(run_dir, "run_project_snapshot.rds")
+    dir.create(run_dir, showWarnings = FALSE, recursive = TRUE)
     saveRDS(snapshot, snap_file)
 
     # Lightweight controller job to schedule subjects after flywheel completes
@@ -404,7 +426,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       stderr_log = stderr_log,
       log_level = scfg$log_level
     )
-    cluster_job_submit(
+    controller_id <- cluster_job_submit(
       sched_script,
       scheduler = scfg$compute_environment$scheduler,
       sched_args = sched_args,
@@ -412,22 +434,36 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       wait_jobs = flywheel_id,
       echo = FALSE
     )
-    return(invisible(TRUE))
+    return(invisible(new_project_run(
+      scfg, sequence_id,
+      submitted_ids = c(flywheel_id, fsaverage_id, prefetch_id, controller_id),
+      deferred = TRUE,
+      provenance_file = provenance_file
+    )))
   }
 
   # No flywheel sync: schedule subjects immediately
   submit_subjects(
-    scfg = scfg, steps = steps, subject_filter = subject_filter, postprocess_streams = postprocess_streams, 
+    scfg = scfg, steps = steps, subject_filter = subject_filter,
+    resolved_subjects = execution$subjects,
+    postprocess_streams = postprocess_streams,
     extract_streams = extract_streams, parent_ids = parent_ids, sequence_id = sequence_id,
     permission_check_cache = permission_check_cache
   )
-  return(invisible(TRUE))
+  return(invisible(new_project_run(
+    scfg, sequence_id,
+    submitted_ids = c(fsaverage_id, prefetch_id),
+    provenance_file = provenance_file
+  )))
 }
 
 #' Schedule subject-level processing
 #' @param scfg A bg_project_cfg object
 #' @param steps Named logical vector of steps
 #' @param subject_filter Optional subject/session filter (character or data.frame)
+#' @param resolved_subjects Optional subject/session table already resolved by
+#'   `resolve_project_execution()`. Deferred Flywheel controllers omit it so
+#'   discovery occurs after synchronization.
 #' @param postprocess_streams Optional character vector of postprocess streams
 #' @param extract_streams Optional character vector of extraction streams
 #' @param parent_ids Optional character vector of job IDs to depend on
@@ -441,65 +477,34 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 #'   This function is not meant to be called by users! Instead, it is called internally
 #'   after flywheel sync completes.
 #' @keywords internal
-submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
+submit_subjects <- function(scfg, steps, subject_filter = NULL,
+  resolved_subjects = NULL, postprocess_streams = NULL,
   extract_streams = NULL, parent_ids = NULL, sequence_id = NULL,
   permission_check_cache = NULL, dry_run = FALSE) {
 
   checkmate::assert_flag(dry_run)
+  checkmate::assert_data_frame(resolved_subjects, null.ok = TRUE)
 
-  # look for subject directories in the DICOM directory
-  subject_dicom_dirs <- data.frame(
-    sub_id = character(), ses_id = character(),
-    dicom_sub_dir = character(), dicom_ses_dir = character(), stringsAsFactors = FALSE
-  )
-
-  if (isTRUE(steps["bids_conversion"])) {
-    subject_dicom_dirs <- get_subject_dirs(
-      scfg$metadata$dicom_directory,
-      sub_regex = scfg$bids_conversion$sub_regex,
-      sub_id_match = scfg$bids_conversion$sub_id_match,
-      ses_regex = scfg$bids_conversion$ses_regex,
-      ses_id_match = scfg$bids_conversion$ses_id_match,
-      full.names = TRUE
+  subject_dirs <- if (is.null(resolved_subjects)) {
+    discover_project_subjects(
+      scfg,
+      steps = names(steps)[steps],
+      subject_filter = subject_filter,
+      allow_empty = FALSE
     )
-
-    if (nrow(subject_dicom_dirs) == 0L) {
-      warning(glue("Cannot find any valid subject folders inside the DICOM directory: {scfg$metadata$dicom_directory}"))
-    } else {
-      names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))
-    }
+  } else {
+    resolved_subjects
+  }
+  if (nrow(subject_dirs) == 0L) {
+    stop("No subject/session inputs match the requested run.", call. = FALSE)
   }
 
-  # look for all existing subject BIDS directories
-  subject_bids_dirs <- get_subject_dirs(
-    scfg$metadata$bids_directory,
-    sub_regex = "^sub-.+", ses_regex = "^ses-.+",
-    sub_id_match = "sub-(.*)", ses_id_match = "ses-(.*)", full.names = TRUE
-  )
-  names(subject_bids_dirs) <- sub("(sub|ses)_dir", "bids_\\1_dir", names(subject_bids_dirs))
-
-  subject_dirs <- merge(subject_dicom_dirs, subject_bids_dirs, by = c("sub_id", "ses_id"), all = TRUE)
-
   if (!is.null(subject_filter)) {
-    if (is.data.frame(subject_filter)) {
-      checkmate::assert_names(names(subject_filter), must.include = "sub_id")
-      by_cols <- intersect(c("sub_id", "ses_id"), names(subject_filter))
-      subject_dirs <- merge(subject_dirs, subject_filter[, by_cols, drop = FALSE], by = by_cols)
-    } else {
-      subject_dirs <- subject_dirs[subject_dirs$sub_id %in% subject_filter, , drop = FALSE]
-    }
-
-    if (nrow(subject_dirs) == 0L) stop("No subject directories match the provided subject_filter")
-
     msg_df <- unique(subject_dirs[, c("sub_id", "ses_id")])
     msg_lines <- apply(msg_df, 1, function(rr) {
       if (!is.na(rr["ses_id"])) glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}") else glue("  sub-{rr['sub_id']}")
     })
     cat("Processing the following subjects:\n", paste(msg_lines, collapse = "\n"), "\n")
-  }
-
-  if (nrow(subject_dirs) == 0L) {
-    stop(glue("Cannot find any valid subject folders in bids directory: {scfg$metadata$bids_directory}"))
   }
 
   if (isTRUE(dry_run)) {
@@ -525,7 +530,7 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_stre
     )
   }
 
-  invisible(TRUE)
+  invisible(do.call(rbind, subject_dirs))
 }
 
 #' submit Flywheel sync job -- superordinate to subjects

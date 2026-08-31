@@ -16,7 +16,10 @@ reference masks are generated internally with \code{automask()} for their distin
 \value{
 The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
 intensity-reference provenance, the reference-core mask, a PSC multiplier
-map when requested, and logging to a subject-level log file.
+map when requested, and logging to a subject-level log file. When
+postprocessing validation is enabled, a machine-readable JSON audit is
+written beside the subject log. Newly computed final images remain in the
+scratch workspace until their last-step validation has completed.
 }
 \description{
 Applies a sequence of postprocessing operations to a single subject-level BOLD NIfTI file, as specified by

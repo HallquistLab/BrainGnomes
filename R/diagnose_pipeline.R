@@ -1,6 +1,16 @@
-#' Function for diagnosing errors in a run of the pipeline
+#' Interactively investigate jobs and logs from pipeline runs
 #'
-#' @param input A character path to an scfg object or an scfg object itself.
+#' Opens the established guided diagnosis browser. You can start with one
+#' subject across runs or select one run, follow its job relationships, and
+#' inspect output or error logs. Diagnosis does not submit jobs or change the
+#' project. Use [diagnose_project()] instead when a script or report needs a
+#' prompt-free summary.
+#'
+#' @param input A project configuration object or project directory.
+#' @return Depending on the selected action, the chosen run's job tree, log
+#'   contents, or invisibly `NULL`.
+#' @seealso [get_project_runs()] to find run IDs, [diagnose_project()] for a
+#'   prompt-free summary, and [retry_project_run()] after correcting a failure.
 #'
 #' @importFrom cli cli_abort cli_warn cli_inform cli_alert no qty
 #' @export
@@ -589,7 +599,7 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
     return(invisible(NULL))
   }
   
-  status_priority <- c("COMPLETED" = 5, "STARTED" = 4, "QUEUED" = 3, "FAILED_BY_EXT" = 2, "FAILED" = 1)
+  status_priority <- c("COMPLETED" = 6, "STARTED" = 5, "QUEUED" = 4, "CANCELLED" = 3, "FAILED_BY_EXT" = 2, "FAILED" = 1)
   
   # Build trees to get hierarchy structure
   trees <- tracking_df_to_tree(subject_jobs_df)
@@ -891,6 +901,7 @@ get_status_symbol <- Vectorize(
            "STARTED" = cli::col_yellow("\u22ef"), # ellipsis
            "FAILED" = cli::col_red("\u2717"), # X mark
            "FAILED_BY_EXT" = cli::col_red("\u2717"), # X mark
+           "CANCELLED" = cli::col_red("\u25a0"), # stop square
            cli::col_yellow("?")) # unknown/unrecognized status
   },
   USE.NAMES = FALSE
@@ -910,6 +921,7 @@ get_status_color <- Vectorize(
            "STARTED" = cli::col_yellow(status),
            "FAILED" = cli::col_red(status),
            "FAILED_BY_EXT" = cli::col_red(status),
+           "CANCELLED" = cli::col_red(status),
            status)
   },
   USE.NAMES = FALSE

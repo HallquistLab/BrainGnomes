@@ -1,5 +1,5 @@
 #' @noRd
-.validate_intensity_normalization_order <- function(processing_sequence) {
+validate_intensity_normalization_order <- function(processing_sequence) {
   normalization_index <- which(processing_sequence == "intensity_normalize")
   if (length(normalization_index) == 0L) return(invisible(TRUE))
   if (length(normalization_index) != 1L) {
@@ -38,6 +38,27 @@
   invisible(TRUE)
 }
 
+smoothness_input_mask_condition <- function(completed_steps, mask_setting,
+                                             resolved_mask_file = NULL) {
+  if (!"apply_mask" %in% completed_steps) return("none")
+  if (checkmate::test_string(mask_setting) &&
+      identical(tolower(mask_setting), "template")) {
+    return("template")
+  }
+  mask_name <- if (checkmate::test_string(resolved_mask_file)) {
+    basename(resolved_mask_file)
+  } else {
+    ""
+  }
+  if (grepl("templatemask\\.nii(?:\\.gz)?$", mask_name, ignore.case = TRUE)) {
+    return("template")
+  }
+  if (grepl("desc-brain_mask\\.nii(?:\\.gz)?$", mask_name, ignore.case = TRUE)) {
+    return("fmriprep")
+  }
+  "custom"
+}
+
 #' Create the standard postprocessing whole-brain mask
 #'
 #' Centralizes the automask configuration shared by `postprocess_subject()` and
@@ -45,12 +66,119 @@
 #'
 #' @keywords internal
 #' @noRd
-.postprocess_automask <- function(in_file, outfile) {
+postprocess_automask <- function(in_file, outfile) {
   automask(
     in_file, outfile = outfile, clfrac = 0.5, NN = 1L,
     SIhh = 0, peels = 1L, fill_holes = TRUE, dilate_steps = 1L
   )
   outfile
+}
+
+#' Evaluate one postprocessing validator with a stable result contract
+#'
+#' Validator warnings and errors are captured so that orchestration can apply
+#' `stop_on_failed_validation` consistently. A validator error is distinct from
+#' a validator returning `FALSE`, and an intentional skip is distinct from a
+#' pass.
+#'
+#' @keywords internal
+#' @noRd
+evaluate_postproc_validation <- function(step_name, validator,
+                                          input_file, output_file,
+                                          output_source = "computed") {
+  checkmate::assert_string(step_name, min.chars = 1L)
+  checkmate::assert_function(validator)
+  checkmate::assert_string(input_file, min.chars = 1L)
+  checkmate::assert_string(output_file, min.chars = 1L)
+  checkmate::assert_choice(
+    output_source,
+    c("computed", "reused_workspace", "reused_destination")
+  )
+
+  started_at <- Sys.time()
+  warning_messages <- character()
+  value <- tryCatch(
+    withCallingHandlers(
+      validator(),
+      warning = function(condition) {
+        warning_messages <<- c(warning_messages, conditionMessage(condition))
+        invokeRestart("muffleWarning")
+      }
+    ),
+    error = function(condition) condition
+  )
+  elapsed_seconds <- as.numeric(difftime(Sys.time(), started_at, units = "secs"))
+
+  if (inherits(value, "error")) {
+    status <- "error"
+    passed <- FALSE
+    message <- paste0("Validator error: ", conditionMessage(value))
+    details <- list(
+      error_class = class(value),
+      error_message = conditionMessage(value)
+    )
+  } else if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+    status <- "error"
+    passed <- FALSE
+    message <- "Validator returned an invalid result; expected one nonmissing logical value."
+    details <- list(
+      returned_class = class(value),
+      returned_length = length(value)
+    )
+  } else {
+    passed <- isTRUE(value)
+    details <- attr(value, "details", exact = TRUE)
+    if (is.null(details)) details <- list()
+    if (!is.list(details)) details <- list(value = details)
+    skipped <- passed && isTRUE(details$skipped)
+    status <- if (skipped) "skipped" else if (passed) "passed" else "failed"
+    message <- attr(value, "message", exact = TRUE)
+    if (!checkmate::test_string(message, min.chars = 1L)) {
+      message <- switch(
+        status,
+        passed = "Validation passed.",
+        failed = "Validation failed.",
+        skipped = "Validation was intentionally skipped."
+      )
+    }
+  }
+
+  list(
+    step = step_name,
+    output_source = output_source,
+    status = status,
+    passed = passed,
+    message = message,
+    warnings = unique(warning_messages),
+    input_file = input_file,
+    output_file = output_file,
+    started_at = format(started_at, "%Y-%m-%dT%H:%M:%OS3%z"),
+    elapsed_seconds = elapsed_seconds,
+    details = details
+  )
+}
+
+#' Write a durable postprocessing-validation summary
+#'
+#' @keywords internal
+#' @noRd
+write_postproc_validation_summary <- function(path, summary) {
+  checkmate::assert_string(path, min.chars = 1L)
+  checkmate::assert_list(summary)
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  if (!dir.exists(dirname(path))) return(FALSE)
+
+  temporary_path <- tempfile(
+    pattern = paste0(".", basename(path), "-"),
+    tmpdir = dirname(path), fileext = ".tmp"
+  )
+  on.exit(unlink(temporary_path), add = TRUE)
+  json <- jsonlite::toJSON(
+    summary, auto_unbox = TRUE, pretty = TRUE, digits = NA,
+    null = "null", na = "null"
+  )
+  writeLines(json, con = temporary_path, useBytes = TRUE)
+  isTRUE(file.copy(temporary_path, path, overwrite = TRUE))
 }
 
 #' Postprocess a single fMRI BOLD image using a configured pipeline
@@ -83,7 +211,10 @@
 #'
 #' @return The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
 #'   intensity-reference provenance, the reference-core mask, a PSC multiplier
-#'   map when requested, and logging to a subject-level log file.
+#'   map when requested, and logging to a subject-level log file. When
+#'   postprocessing validation is enabled, a machine-readable JSON audit is
+#'   written beside the subject log. Newly computed final images remain in the
+#'   scratch workspace until their last-step validation has completed.
 #'
 #' @details
 #' Required `cfg` entries:
@@ -233,6 +364,70 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   final_bids_info <- modifyList(input_bids_info, list(description = cfg$bids_desc, directory = cfg$output_dir))
   final_filename <- construct_bids_filename(final_bids_info, full.names = TRUE)
   workspace_bids_info <- modifyList(final_bids_info, list(directory = workspace_dir))
+  validation_summary_file <- file.path(
+    log_dir,
+    sub(
+      "\\.nii(?:\\.gz)?$", "_postproc-validation.json",
+      basename(final_filename), perl = TRUE
+    )
+  )
+  validation_records <- list()
+  validation_pipeline_completed <- FALSE
+  validation_orchestration_started <- FALSE
+  validation_started_at <- Sys.time()
+  processing_sequence <- character()
+
+  write_validation_summary <- function() {
+    if (!validation_orchestration_started) return(invisible(FALSE))
+    statuses <- vapply(
+      validation_records,
+      function(record) record$status,
+      character(1)
+    )
+    overall_status <- if (!length(statuses)) {
+      "not_run"
+    } else if (any(statuses == "error")) {
+      "error"
+    } else if (any(statuses == "failed")) {
+      "failed"
+    } else if (all(statuses == "skipped")) {
+      "skipped"
+    } else {
+      "passed"
+    }
+    summary <- list(
+      schema_version = "postproc-validation-v1",
+      input_file = in_file,
+      intended_final_file = final_filename,
+      validation_enabled = isTRUE(cfg$validate_postproc_steps),
+      stop_on_failed_validation = isTRUE(cfg$stop_on_failed_validation),
+      pipeline_completed = validation_pipeline_completed,
+      overall_status = overall_status,
+      processing_steps = processing_sequence,
+      started_at = format(
+        validation_started_at, "%Y-%m-%dT%H:%M:%OS3%z"
+      ),
+      updated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%OS3%z"),
+      checks = validation_records
+    )
+    ok <- tryCatch(
+      write_postproc_validation_summary(validation_summary_file, summary),
+      error = function(condition) {
+        to_log(
+          lg, "warn",
+          "Unable to write postprocessing validation summary {validation_summary_file}: {conditionMessage(condition)}"
+        )
+        FALSE
+      }
+    )
+    if (!isTRUE(ok)) {
+      to_log(
+        lg, "warn",
+        "Unable to persist postprocessing validation summary: {validation_summary_file}"
+      )
+    }
+    invisible(ok)
+  }
 
   # determine if final output file already exists
   if (checkmate::test_file_exists(final_filename)) {
@@ -243,8 +438,55 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       file.remove(final_filename)
     } else {
       to_log(lg, "info", "Skipping postprocessing for {in_file} because postprocessed file already exists")
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        prior_summary <- if (file.exists(validation_summary_file)) {
+          tryCatch(
+            jsonlite::fromJSON(
+              validation_summary_file, simplifyVector = FALSE
+            ),
+            error = function(condition) NULL
+          )
+        } else {
+          NULL
+        }
+        prior_status <- prior_summary$overall_status
+        if (checkmate::test_string(prior_status, min.chars = 1L)) {
+          prior_level <- if (prior_status %in% c("failed", "error")) {
+            "warn"
+          } else {
+            "info"
+          }
+          to_log(
+            lg, prior_level,
+            paste0(
+              "Per-step validation was not rerun because only the existing ",
+              "final output is available. Prior audit status is ",
+              "'{prior_status}': {validation_summary_file}."
+            )
+          )
+        } else {
+          to_log(
+            lg, "warn",
+            paste0(
+              "Per-step validation was not rerun because only the existing ",
+              "final output is available, and no readable prior validation ",
+              "audit was found at {validation_summary_file}."
+            )
+          )
+        }
+      }
       return(final_filename)
     }
+  }
+
+  if (isTRUE(cfg$validate_postproc_steps)) {
+    validation_orchestration_started <- TRUE
+    write_validation_summary()
+    on.exit(write_validation_summary(), add = TRUE)
+    to_log(
+      lg, "info",
+      "Postprocessing validation audit will be written to {validation_summary_file}."
+    )
   }
 
   # location of FSL singularity container
@@ -264,7 +506,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   # Intensity normalization constructs a separate conservative reference mask.
   brain_mask <- tempfile(fileext = ".nii.gz")
   temp_files_to_cleanup <- c(temp_files_to_cleanup, brain_mask)
-  .postprocess_automask(proc_files$bold, brain_mask)
+  postprocess_automask(proc_files$bold, brain_mask)
 
   # if apply_mask is enabled, determine which mask file to apply
   apply_mask_file <- NULL
@@ -313,7 +555,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   if (is.null(apply_mask_file)) {
     processing_sequence <- processing_sequence[processing_sequence != "apply_mask"]
   }
-  .validate_intensity_normalization_order(processing_sequence)
+  validate_intensity_normalization_order(processing_sequence)
 
   to_log(lg, "info", "Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
 
@@ -405,21 +647,144 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   n_steps <- length(processing_sequence)
 
-  postproc_validate_or_stop <- function(step_name, v_ok) {
-    v_msg <- attr(v_ok, "message")
-    if (isTRUE(v_ok)) {
-      to_log(lg, "info", glue("{step_name} validation passed: {v_msg}"))
+  make_postproc_validator <- function(step_name, pre_file, post_file,
+                                      step_index, context = list()) {
+    completed_steps <- if (step_index > 1L) {
+      processing_sequence[seq_len(step_index - 1L)]
     } else {
-      to_log(lg, "error", glue("{step_name} validation failed: {v_msg}"))
-      if (isTRUE(cfg$stop_on_failed_validation)) {
-        stop(
-          glue(
-            "{step_name} validation failed: {v_msg} ",
-            "stop_on_failed_validation is TRUE. STOPPING postprocessing for this dataset."
+      character()
+    }
+    switch(
+      step_name,
+      apply_mask = function() {
+        validate_apply_mask(
+          pre_file = pre_file, post_file = post_file,
+          mask_file = apply_mask_file
+        )
+      },
+      spatial_smooth = function() {
+        validate_spatial_smooth(
+          pre_file = pre_file,
+          post_file = post_file,
+          mask_file = brain_mask,
+          fwhm_mm = cfg$spatial_smooth$fwhm_mm,
+          input_mask = smoothness_input_mask_condition(
+            completed_steps,
+            mask_setting = cfg$apply_mask$mask_file,
+            resolved_mask_file = apply_mask_file
           )
+        )
+      },
+      apply_aroma = function() {
+        nonaggressive_value <- cfg$apply_aroma$nonaggressive
+        nonaggressive_flag <- if (
+          is.null(nonaggressive_value) || is.na(nonaggressive_value)
+        ) TRUE else isTRUE(nonaggressive_value)
+        validate_apply_aroma(
+          pre_file = pre_file,
+          post_file = post_file,
+          mixing_file = proc_files$melodic_mix,
+          noise_ics = proc_files$noise_ics,
+          nonaggressive = nonaggressive_flag,
+          mask_file = brain_mask
+        )
+      },
+      scrub_interpolate = function() {
+        validate_scrub_interpolate(
+          pre_file = pre_file, post_file = post_file,
+          censor_file = censor_file
+        )
+      },
+      temporal_filter = function() {
+        validate_temporal_filter(
+          pre_file = pre_file,
+          post_file = post_file,
+          tr = cfg$tr,
+          band_low_hz = cfg$temporal_filter$high_pass_hz,
+          band_high_hz = cfg$temporal_filter$low_pass_hz,
+          mask_file = brain_mask
+        )
+      },
+      confound_regression = function() {
+        validate_confound_regression(
+          pre_file = pre_file,
+          post_file = post_file,
+          to_regress = to_regress,
+          censor_file = censor_file,
+          mask_file = brain_mask
+        )
+      },
+      scrub_timepoints = function() {
+        validate_scrub_timepoints(
+          pre_file = pre_file,
+          post_file = post_file,
+          censor_vec = context$censor_vec
+        )
+      },
+      intensity_normalize = function() {
+        validate_intensity_normalize(
+          pre_file = pre_file,
+          post_file = post_file,
+          mode = normalization_mode,
+          reference_location = normalization_reference$reference_location,
+          target = normalization_reference$target,
+          scale_factor = normalization_reference$scale_factor,
+          scale_file = normalization_reference$scale_file,
+          core_file = normalization_reference$core_file,
+          include_frames = normalization_reference$include_frames,
+          tolerance = 1e-5
+        )
+      },
+      stop("No postprocessing validator is registered for step: ", step_name)
+    )
+  }
+
+  postproc_validate_or_stop <- function(step_name, validator, input_file,
+                                        output_file,
+                                        output_source = "computed") {
+    record <- evaluate_postproc_validation(
+      step_name = step_name,
+      validator = validator,
+      input_file = input_file,
+      output_file = output_file,
+      output_source = output_source
+    )
+    record$sequence_index <- length(validation_records) + 1L
+    validation_records[[length(validation_records) + 1L]] <<- record
+
+    if (length(record$warnings)) {
+      for (warning_message in record$warnings) {
+        to_log(
+          lg, "warn",
+          "{step_name} validation warning: {warning_message}"
         )
       }
     }
+    log_level <- if (record$status %in% c("failed", "error")) {
+      "error"
+    } else {
+      "info"
+    }
+    to_log(
+      lg, log_level,
+      paste0(
+        "{step_name} validation {record$status} ",
+        "[{record$output_source}; {format(record$elapsed_seconds, digits = 4)} s]: ",
+        "{record$message}"
+      )
+    )
+    write_validation_summary()
+
+    if (record$status %in% c("failed", "error") &&
+        isTRUE(cfg$stop_on_failed_validation)) {
+      stop(
+        glue(
+          "{step_name} validation {record$status}: {record$message} ",
+          "stop_on_failed_validation is TRUE. STOPPING postprocessing for this dataset."
+        )
+      )
+    }
+    invisible(record)
   }
 
   #### Loop over fMRI processing steps in sequence
@@ -446,11 +811,18 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     # determine output file path in postprocessing directory
     bids_info <- as.list(extract_bids_info(cur_file))
     bids_info$description <- if (is_last_step) cfg$bids_desc else out_desc
-    bids_info$directory <- if (is_last_step) cfg$output_dir else workspace_dir # workspace staging area
+    # Every newly computed image, including the final image, remains in scratch
+    # until its validator has run. This prevents a failed last-step validation
+    # from publishing an output that a later run could mistake for complete.
+    bids_info$directory <- workspace_dir
     out_file <- construct_bids_filename(bids_info, full.names = TRUE)
-    dest_out_file <- if (is_last_step) out_file else file.path(cfg$output_dir, basename(out_file))
+    dest_out_file <- if (is_last_step) {
+      final_filename
+    } else {
+      file.path(cfg$output_dir, basename(out_file))
+    }
     if (is_last_step) {
-      to_log(lg, "debug", "Step {step}: input {cur_file}, output {out_file}, prefix chain {prefix_chain}")
+      to_log(lg, "debug", "Step {step}: input {cur_file}, staged final output {out_file}, destination {dest_out_file}, prefix chain {prefix_chain}")
     } else {
       to_log(lg, "debug", "Step {step}: input {cur_file}, workspace output {out_file}, destination {dest_out_file}, prefix chain {prefix_chain}")
     }
@@ -481,25 +853,57 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
     }
 
-    existing_workspace <- !is_last_step && file.exists(out_file)
+    pre_step_file <- cur_file
+    validation_context <- list()
+    if (step == "scrub_timepoints") {
+      validation_context$censor_vec <- if (
+        checkmate::test_file_exists(censor_file)
+      ) {
+        as.integer(readLines(censor_file))
+      } else {
+        integer()
+      }
+    }
+
+    existing_workspace <- file.exists(out_file)
     existing_destination <- file.exists(dest_out_file)
 
-    if (!is_last_step && existing_workspace && !isTRUE(cfg$overwrite)) {
+    if (existing_workspace && !isTRUE(cfg$overwrite)) {
       to_log(lg, "info", "Skipping {step}; workspace file exists: {out_file}")
       cur_file <- out_file
       intermediate_outputs[[out_file]] <- dest_out_file
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        postproc_validate_or_stop(
+          step_name = step,
+          validator = make_postproc_validator(
+            step, pre_step_file, cur_file, ii, validation_context
+          ),
+          input_file = pre_step_file,
+          output_file = cur_file,
+          output_source = "reused_workspace"
+        )
+      }
       next
     }
 
     if (!existing_workspace && existing_destination && !isTRUE(cfg$overwrite)) {
       to_log(lg, "info", "Reusing existing {step} output from {dest_out_file}")
       cur_file <- dest_out_file
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        postproc_validate_or_stop(
+          step_name = step,
+          validator = make_postproc_validator(
+            step, pre_step_file, cur_file, ii, validation_context
+          ),
+          input_file = pre_step_file,
+          output_file = cur_file,
+          output_source = "reused_destination"
+        )
+      }
       next
     }
 
     if (existing_workspace && isTRUE(cfg$overwrite)) {
-      unlink(out_file)
-    } else if (is_last_step && file.exists(out_file) && isTRUE(cfg$overwrite)) {
       unlink(out_file)
     }
 
@@ -513,66 +917,29 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         out_file = out_file,
         overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
-      
-      
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        v_ok <- validate_apply_mask(mask_file = apply_mask_file, data_file = cur_file)
-        postproc_validate_or_stop("apply_mask", v_ok)
-      }
     } else if (step == "spatial_smooth") {
-      pre_spatial_smooth_file <- cur_file
       cur_file <- spatial_smooth(cur_file,
         out_file = out_file,
         brain_mask = brain_mask, fwhm_mm = cfg$spatial_smooth$fwhm_mm,
         overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        v_ok <- validate_spatial_smooth(
-          pre_file = pre_spatial_smooth_file,
-          post_file = cur_file,
-          mask_file = brain_mask,
-          fwhm_mm = cfg$spatial_smooth$fwhm_mm
-        )
-        postproc_validate_or_stop("spatial_smooth", v_ok)
-      }
     } else if (step == "apply_aroma") {
       to_log(lg, "info", "Removing AROMA noise components from fMRI data")
       nonaggressive_val <- cfg$apply_aroma$nonaggressive
       nonaggressive_flag <- if (is.null(nonaggressive_val) || is.na(nonaggressive_val)) TRUE else isTRUE(nonaggressive_val)
-      pre_apply_aroma_file <- cur_file
       cur_file <- apply_aroma(cur_file,
         out_file = out_file,
         mixing_file = proc_files$melodic_mix,
         noise_ics = proc_files$noise_ics,
         overwrite=cfg$overwrite, lg=lg, nonaggressive = nonaggressive_flag
       )
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        v_ok <- validate_apply_aroma(
-          pre_file = pre_apply_aroma_file,
-          post_file = cur_file,
-          mixing_file = proc_files$melodic_mix,
-          noise_ics = proc_files$noise_ics,
-          nonaggressive = nonaggressive_flag
-        )
-        postproc_validate_or_stop("apply_aroma", v_ok)
-      }
     } else if (step == "scrub_interpolate") {
-      pre_scrub_interpolate_file <- cur_file
       cur_file <- scrub_interpolate(cur_file,
         out_file = out_file,
         censor_file = censor_file, confound_files = to_regress,
         overwrite=cfg$overwrite, lg=lg
       )
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        v_ok <- validate_scrub_interpolate(
-          pre_file = pre_scrub_interpolate_file,
-          post_file = cur_file,
-          censor_file = censor_file
-        )
-        postproc_validate_or_stop("scrub_interpolate", v_ok)
-      }
     } else if (step == "temporal_filter") {
-      pre_temporal_filter_file <- cur_file
       cur_file <- temporal_filter(cur_file,
         out_file = out_file,
         tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz,
@@ -580,58 +947,20 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img,
         method = cfg$temporal_filter$method
       )
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        hp <- cfg$temporal_filter$high_pass_hz
-        lp <- cfg$temporal_filter$low_pass_hz
-        v_ok <- validate_temporal_filter(
-          pre_file = pre_temporal_filter_file,
-          post_file = cur_file,
-          tr = cfg$tr,
-          band_low_hz = hp,
-          band_high_hz = lp,
-          mask_file = brain_mask
-        )
-        postproc_validate_or_stop("temporal_filter", v_ok)
-      }
     } else if (step == "confound_regression") {
       to_log(lg, "info", "Removing confound regressors from fMRI data using file: {to_regress}")
-      pre_confound_regression_file <- cur_file
       cur_file <- confound_regression(cur_file,
         out_file = out_file,
         to_regress = to_regress, censor_file = censor_file,
         overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        v_ok <- validate_confound_regression(
-          pre_file = pre_confound_regression_file,
-          post_file = cur_file,
-          to_regress = to_regress,
-          censor_file = censor_file
-        )
-        postproc_validate_or_stop("confound_regression", v_ok)
-      }
     } else if (step == "scrub_timepoints") {
-      censor_vec_before_scrub_tp <- if (checkmate::test_file_exists(censor_file)) {
-        as.integer(readLines(censor_file))
-      } else {
-        integer()
-      }
-      pre_scrub_timepoints_file <- cur_file
       cur_file <- scrub_timepoints(cur_file,
         out_file = out_file,
         censor_file = censor_file,
         overwrite = cfg$overwrite, lg = lg
       )
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        v_ok <- validate_scrub_timepoints(
-          pre_file = pre_scrub_timepoints_file,
-          post_file = cur_file,
-          censor_vec = censor_vec_before_scrub_tp
-        )
-        postproc_validate_or_stop("scrub_timepoints", v_ok)
-      }
     } else if (step == "intensity_normalize") {
-      pre_intensity_normalize_file <- cur_file
       cur_file <- intensity_normalize(cur_file,
         out_file = out_file,
         mode = normalization_mode,
@@ -639,23 +968,20 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         scale_file = normalization_reference$scale_file,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
       )
-      if (isTRUE(cfg$validate_postproc_steps)) {
-        v_ok <- validate_intensity_normalize(
-          pre_file = pre_intensity_normalize_file,
-          post_file = cur_file,
-          mode = normalization_mode,
-          reference_location = normalization_reference$reference_location,
-          target = normalization_reference$target,
-          scale_factor = normalization_reference$scale_factor,
-          scale_file = normalization_reference$scale_file,
-          core_file = normalization_reference$core_file,
-          include_frames = normalization_reference$include_frames,
-          tolerance = 1e-5
-        )
-        postproc_validate_or_stop("intensity_normalize", v_ok)
-      }
     } else {
       stop("Unknown step: ", step)
+    }
+
+    if (isTRUE(cfg$validate_postproc_steps)) {
+      postproc_validate_or_stop(
+        step_name = step,
+        validator = make_postproc_validator(
+          step, pre_step_file, cur_file, ii, validation_context
+        ),
+        input_file = pre_step_file,
+        output_file = cur_file,
+        output_source = "computed"
+      )
     }
 
     if (!is_last_step) intermediate_outputs[[out_file]] <- dest_out_file
@@ -691,10 +1017,17 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   }
 
   # move the final file into a BIDS-friendly file name with a desc field
-  if (!identical(cur_file, final_filename)) {
-    move_staged_file(cur_file, final_filename, overwrite = isTRUE(cfg$overwrite), label = "final postprocessed file")
+  final_ready <- if (!identical(cur_file, final_filename)) {
+    move_staged_file(
+      cur_file, final_filename, overwrite = isTRUE(cfg$overwrite),
+      label = "final postprocessed file"
+    )
   } else {
     to_log(lg, "debug", "Final postprocessed file already written to destination: {final_filename}")
+    file.exists(final_filename)
+  }
+  if (!isTRUE(final_ready) || !file.exists(final_filename)) {
+    stop("Unable to publish validated final postprocessed file: ", final_filename)
   }
 
   ancillary_candidates <- list(
@@ -720,7 +1053,37 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       move_staged_file(src, dest, overwrite = isTRUE(cfg$overwrite), label = "intermediate file")
     }
   }
-  
+
+  validation_pipeline_completed <- TRUE
+  if (validation_orchestration_started) {
+    write_validation_summary()
+    validation_statuses <- vapply(
+      validation_records, function(record) record$status, character(1)
+    )
+    validation_counts <- table(factor(
+      validation_statuses,
+      levels = c("passed", "skipped", "failed", "error")
+    ))
+    validation_summary_level <- if (
+      validation_counts[["failed"]] > 0L ||
+        validation_counts[["error"]] > 0L
+    ) "warn" else "info"
+    to_log(
+      lg, validation_summary_level,
+      paste0(
+        "Postprocessing validation summary: ",
+        "passed={validation_counts[['passed']]}, ",
+        "skipped={validation_counts[['skipped']]}, ",
+        "failed={validation_counts[['failed']]}, ",
+        "errors={validation_counts[['error']]}"
+      )
+    )
+    to_log(
+      lg, "info",
+      "Postprocessing validation audit saved to {validation_summary_file}."
+    )
+  }
+
   end_time <- Sys.time()
   to_log(lg, "info", "Final postprocessed is: {final_filename}")
   to_log(lg, "info", "End postprocessing: {as.character(end_time)}")

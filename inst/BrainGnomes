@@ -1,182 +1,486 @@
 #!/usr/bin/env Rscript
 
 help_tokens <- c("-h", "--help")
-public_commands <- c("setup_project", "edit_project", "run_project", "status")
+command_aliases <- c(
+  setup_project = "init",
+  edit_project = "config-edit",
+  run_project = "run"
+)
 
-is_help_token <- function(x) {
-  is.character(x) && length(x) > 0L && all(x %in% help_tokens)
+usage_error <- function(message) {
+  condition <- simpleError(message)
+  class(condition) <- c("bg_cli_usage_error", class(condition))
+  stop(condition)
+}
+
+or_else <- function(x, y) {
+  if (is.null(x) || length(x) == 0L) y else x
+}
+
+is_flag <- function(x) {
+  !is.null(x) && (isTRUE(x) || (length(x) == 1L && is.na(x)))
+}
+
+normalize_options <- function(args, allowed = character()) {
+  if (length(args) == 0L) return(list())
+  parsed <- BrainGnomes::parse_cli_args(args)
+  names(parsed) <- gsub("-", "_", names(parsed), fixed = TRUE)
+  unknown <- setdiff(names(parsed), allowed)
+  if (length(unknown) > 0L) {
+    usage_error(paste0("Unknown option(s): --", paste(gsub("_", "-", unknown), collapse = ", --")))
+  }
+  parsed
+}
+
+format_output <- function(x, format = "table") {
+  format <- match.arg(tolower(format), c("table", "json", "csv"))
+  payload <- switch(class(x)[1L],
+    bg_project_validation = list(valid = x$valid, issues = x$issues, messages = x$messages),
+    bg_project_doctor = list(ok = x$ok, checks = x$checks, checked_steps = x$checked_steps),
+    bg_project_plan = list(
+      schema_version = x$schema_version, plan_id = x$plan_id,
+      created_at = x$created_at, config_file = x$config_file,
+      request = x$request, subjects = x$subjects,
+      scope_deferred = x$scope_deferred, jobs = x$jobs
+    ),
+    bg_project_run = unclass(x),
+    bg_run_provenance = unclass(x),
+    bg_project_diagnosis = list(
+      run_id = x$run_id, jobs = x$jobs, failures = x$failures, logs = x$logs
+    ),
+    x
+  )
+
+  if (format == "json") {
+    cat(jsonlite::toJSON(payload, pretty = TRUE, auto_unbox = TRUE, na = "null"), "\n")
+  } else if (format == "csv") {
+    if (!is.data.frame(payload)) usage_error("CSV output is available only for tabular command results.")
+    utils::write.table(payload, stdout(), sep = ",", row.names = FALSE, col.names = TRUE, quote = TRUE, na = "")
+  } else {
+    if (inherits(x, c("bg_project_validation", "bg_project_doctor", "bg_project_plan", "bg_project_run", "bg_run_provenance", "bg_project_diagnosis"))) {
+      print(x)
+    } else {
+      print(payload, row.names = FALSE)
+    }
+  }
+  invisible(x)
 }
 
 print_global_help <- function(status = 0L) {
   cat(
     "Usage: BrainGnomes <command> [options]\n\n",
-    "Commands:\n",
-    "  setup_project [project_name] [project_directory]\n",
-    "  edit_project <project_directory|config.yaml>\n",
-    "  run_project <project_directory|config.yaml> [--steps=<steps>] [--subject_filter=<ids>] [--extract_streams=<streams>] [--dry-run]\n",
-    "  status <project_directory|config.yaml> [--sub_id=<id>] [--ses_id=<id>] [--summary]\n",
+    "Typical workflow:\n",
+    "  setup_project <project_name> <project_directory> [--non-interactive]\n",
+    "  run_project <project_directory|config.yaml> [run options]\n",
+    "  diagnose <project_directory|config.yaml> [--interactive]\n\n",
+    "Optional inspection and automation:\n",
+    "  config validate <project_directory|config.yaml> [--format=table|json]\n",
+    "  config edit <project_directory|config.yaml>\n",
+    "  config show <project_directory|config.yaml> [--format=table|json]\n",
+    "  doctor <project_directory|config.yaml> [--steps=<steps>] [--deep]\n",
+    "  plan <project_directory|config.yaml> [run options] [--output=<plan.yaml>]\n\n",
+    "Run operations:\n",
+    "  status <project_directory|config.yaml> [--run=<id|latest>|--runs] [--watch]\n",
+    "  provenance <project_directory|config.yaml> [--run=<id|latest>] [--format=table|json]\n",
+    "  logs <project_directory|config.yaml> [--run=<id|latest>] [--failed-only]\n",
+    "  retry <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes\n",
+    "  cancel <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes\n",
+    "  validate-bids <project_directory|config.yaml> [--outfile=<report.html>]\n",
     "  help [command]\n\n",
-    "Examples:\n",
-    "  BrainGnomes setup_project demo_project /proj/my_study\n",
-    "  BrainGnomes edit_project /proj/my_study/project_config.yaml\n",
-    "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess' --subject_filter='001 002' --force\n",
-    "  BrainGnomes status /proj/my_study/project_config.yaml --summary\n\n",
-    "Use 'BrainGnomes <command> --help' for command-specific help.\n",
+    "Also accepted: init, edit_project, and run.\n",
+    "Config, doctor, and plan are optional; run_project resolves and submits directly.\n",
+    "Use 'BrainGnomes help <command>' or 'BrainGnomes <command> --help' for details.\n",
     sep = ""
   )
   quit(save = "no", status = status)
 }
 
 print_command_help <- function(command, status = 0L) {
-  switch(
-    command,
-    "setup_project" = cat(
-      "Usage: BrainGnomes setup_project [project_name] [project_directory]\n\n",
-      "Create or update a project config interactively.\n\n",
-      "Examples:\n",
-      "  BrainGnomes setup_project\n",
-      "  BrainGnomes setup_project demo_project\n",
-      "  BrainGnomes setup_project demo_project /proj/my_study\n",
-      sep = ""
-    ),
-    "edit_project" = cat(
-      "Usage: BrainGnomes edit_project <project_directory|config.yaml>\n\n",
-      "Edit an existing project configuration interactively.\n\n",
-      "Examples:\n",
-      "  BrainGnomes edit_project /proj/my_study\n",
-      "  BrainGnomes edit_project /proj/my_study/project_config.yaml\n",
-      sep = ""
-    ),
-    "run_project" = cat(
-      "Usage: BrainGnomes run_project <project_directory|config.yaml> [options]\n\n",
+  command <- switch(command,
+    setup_project = "init", edit_project = "config", run_project = "run",
+    command
+  )
+  text <- switch(command,
+    init = paste0(
+      "Usage: BrainGnomes setup_project <project_name> <project_directory> [options]\n",
+      "Alias: BrainGnomes init <project_name> <project_directory> [options]\n\n",
       "Options:\n",
-      "  --steps=<steps>                    Pipeline steps to run (space-separated).\n",
-      "  --subject_filter=<ids>             Subject IDs to include (space-separated).\n",
-      "  --postprocess_streams=<streams>    Postprocess streams to include (space-separated).\n",
-      "  --extract_streams=<streams>        ROI-extraction streams to include (space-separated).\n",
-      "  --debug                            Run in debug mode.\n",
-      "  --force                            Force rerun of previously completed jobs.\n\n",
-      "  --dry-run                          Validate and show planned work without submitting jobs.\n\n",
-      "Examples:\n",
-      "  BrainGnomes run_project /proj/my_study\n",
-      "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='fmriprep postprocess'\n",
-      "  BrainGnomes run_project /proj/my_study --subject_filter='001 002' --postprocess_streams='rest task' --debug --force\n",
-      "  BrainGnomes run_project /proj/my_study --steps='extract_rois' --extract_streams='rest task'\n",
-      "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='bids_conversion fmriprep' --dry-run\n",
-      "\nBIDS validation is configured with the project but submitted separately through run_bids_validation(); it is not a run_project step:\n",
-      "  BrainGnomes::run_bids_validation(BrainGnomes::load_project('/proj/my_study'))\n",
-      sep = ""
+      "  --template=<config.yaml>       Start from an existing configuration.\n",
+      "  --non-interactive              Create portable disabled-stage defaults without prompting.\n",
+      "  --overwrite                    Replace an existing project_config.yaml.\n"
     ),
-    "status" = cat(
+    config = paste0(
+      "Usage: BrainGnomes config <validate|edit|show> <project_directory|config.yaml> [options]\n\n",
+      "Optional inspection tooling for scripts, CI, and YAML review. It is not required before run_project.\n\n",
+      "Options:\n",
+      "  --format=table|json            Output format for validate/show.\n"
+    ),
+    doctor = paste0(
+      "Usage: BrainGnomes doctor <project_directory|config.yaml> [options]\n\n",
+      "Optional comprehensive preflight for a new or changed submission environment, or before an expensive run.\n",
+      "It does not change the project and is not required before run_project.\n\n",
+      "Options:\n",
+      "  --steps=<steps>                Space-separated enabled stages to check.\n",
+      "  --deep                         Also initialize Python and check optional modules.\n",
+      "  --strict                       Treat warnings as a non-zero result.\n",
+      "  --format=table|json            Output format.\n"
+    ),
+    plan = paste0(
+      "Usage: BrainGnomes plan <project_directory|config.yaml> [options]\n\n",
+      "Optional inspection/persistence view of the execution model that run_project resolves internally.\n",
+      "Create a plan for review or automation; it is not required before a direct run.\n\n",
+      "Options:\n",
+      "  --steps=<steps>                Space-separated stages or all.\n",
+      "  --subject-filter=<ids>         Space-separated subject IDs.\n",
+      "  --postprocess-streams=<names>  Space-separated postprocessing streams.\n",
+      "  --extract-streams=<names>      Space-separated ROI-extraction streams.\n",
+      "  --force                        Include completed work in the request.\n",
+      "  --allow-invalid                Build an exploratory plan from an invalid config.\n",
+      "  --output=<plan.yaml>           Save the reusable plan.\n",
+      "  --overwrite                    Replace an existing plan file.\n",
+      "  --format=table|json            Output format.\n"
+    ),
+    run = paste0(
+      "Usage: BrainGnomes run_project <project_directory|config.yaml|plan.yaml> [options]\n",
+      "Alias: BrainGnomes run <project_directory|config.yaml|plan.yaml> [options]\n\n",
+      "Direct project/config submission is the standard path; config, doctor, and plan are optional.\n",
+      "run_project resolves the same stages, streams, scope, and force setting exposed by plan.\n\n",
+      "Options:\n",
+      "  --steps=<steps>                    Pipeline stages to run (space-separated).\n",
+      "  --subject-filter=<ids>             Subject IDs to include (space-separated).\n",
+      "  --postprocess-streams=<streams>    Postprocess streams to include.\n",
+      "  --extract-streams=<streams>        ROI-extraction streams to include.\n",
+      "  --debug                            Echo commands without true processing.\n",
+      "  --force                            Rerun completed work.\n",
+      "  --dry-run                          Validate and show planned work without submission.\n",
+      "  --log-level=<level>                TRACE, DEBUG, INFO, WARN, ERROR, or FATAL.\n",
+      "  --format=table|json                Output format for the returned run handle.\n\n",
+      "A YAML file with schema_version brain-gnomes-plan-v1 is submitted as a saved plan.\n"
+    ),
+    `validate-bids` = paste0(
+      "Usage: BrainGnomes validate-bids <project_directory|config.yaml> [options]\n\n",
+      "Options:\n",
+      "  --outfile=<report.html>        Validation report path.\n",
+      "  --wait-jobs=<ids>              Space-separated scheduler job IDs.\n",
+      "  --run=<id>                     Associate validation with an existing run ID.\n"
+    ),
+    status = paste0(
       "Usage: BrainGnomes status <project_directory|config.yaml> [options]\n\n",
       "Options:\n",
-      "  --sub_id=<id>                     Limit status output to one subject.\n",
-      "  --ses_id=<id>                     Optional session id (requires --sub_id).\n",
-      "  --summary                         Print completion summary table.\n\n",
-      "Examples:\n",
-      "  BrainGnomes status /proj/my_study\n",
-      "  BrainGnomes status /proj/my_study/project_config.yaml --summary\n",
-      "  BrainGnomes status /proj/my_study --sub_id='001' --ses_id='01'\n",
-      sep = ""
+      "  --sub-id=<id>                  Limit completion status to one subject.\n",
+      "  --ses-id=<id>                  Optional session ID; requires --sub-id.\n",
+      "  --summary                      Summarize completion counts.\n",
+      "  --runs                         List tracked runs.\n",
+      "  --run=<id|latest>              Show jobs for one tracked run.\n",
+      "  --watch                        Refresh run jobs until none are queued/running.\n",
+      "  --interval=<seconds>           Watch refresh interval (default 30).\n",
+      "  --format=table|json|csv        Output format.\n"
     ),
+    provenance = paste0(
+      "Usage: BrainGnomes provenance <project_directory|config.yaml> [options]\n\n",
+      "Show what BrainGnomes submitted for one run: settings, subjects, software, host, scheduler, identifying file checksums, and current jobs.\n\n",
+      "Options:\n",
+      "  --run=<id|latest>              Select a submitted run (default latest).\n",
+      "  --format=table|json            Summary or complete machine-readable record.\n"
+    ),
+    logs = paste0(
+      "Usage: BrainGnomes logs <project_directory|config.yaml> [options]\n\n",
+      "Options:\n",
+      "  --run=<id|latest>              Select a tracked run.\n",
+      "  --failed-only                  Include only failed/cancelled jobs.\n",
+      "  --tail=<lines>                 Print the last lines of each matching log.\n",
+      "  --format=table|json|csv        Output format.\n"
+    ),
+    diagnose = paste0(
+      "Usage: BrainGnomes diagnose <project_directory|config.yaml> [options]\n\n",
+      "Summarize failed, blocked, or cancelled jobs and locate their logs.\n\n",
+      "Options:\n",
+      "  --run=<id|latest>              Select a run for the prompt-free summary.\n",
+      "  --interactive                  Open the guided browser, which asks what to inspect.\n",
+      "  --format=table|json            Output format.\n"
+    ),
+    retry = paste0(
+      "Usage: BrainGnomes retry <project_directory|config.yaml> [options]\n\n",
+      "Create a separate new run for failed or cancelled work; the original run is unchanged.\n",
+      "Preview and correct the underlying problem before submitting the retry.\n\n",
+      "Options:\n",
+      "  --run=<id|latest>              Source run.\n",
+      "  --include-blocked              Also include downstream jobs blocked by an earlier failure.\n",
+      "  --dry-run                      Show the retry plan without submission.\n",
+      "  --yes                          Confirm scheduler submission.\n"
+    ),
+    cancel = paste0(
+      "Usage: BrainGnomes cancel <project_directory|config.yaml> [options]\n\n",
+      "Cancel tracked jobs that are still queued or running; project data and outputs are not deleted.\n\n",
+      "Options:\n",
+      "  --run=<id|latest>              Run whose queued/running jobs should be cancelled.\n",
+      "  --dry-run                      Print scheduler cancellation commands only.\n",
+      "  --yes                          Confirm cancellation.\n"
+    ),
+    NULL
+  )
+  if (is.null(text)) {
+    message("Unknown command: ", command)
+    print_global_help(status = 2L)
+  }
+  cat(text)
+  quit(save = "no", status = status)
+}
+
+require_input <- function(values, command) {
+  if (length(values) < 1L || startsWith(values[[1L]], "-")) {
+    usage_error(paste(command, "requires a project directory, configuration, or plan file."))
+  }
+  values[[1L]]
+}
+
+command_init <- function(values) {
+  positional <- values[!startsWith(values, "-")]
+  option_values <- values[startsWith(values, "-")]
+  if (length(positional) < 2L) usage_error("init requires <project_name> and <project_directory>.")
+  opts <- normalize_options(option_values, c("template", "non_interactive", "overwrite"))
+  cfg <- BrainGnomes::initialize_project(
+    positional[[1L]], positional[[2L]], template = opts$template,
+    interactive = !is_flag(opts$non_interactive), overwrite = is_flag(opts$overwrite)
+  )
+  cat("Saved project configuration to:", or_else(attr(cfg, "yaml_file"), file.path(cfg$metadata$project_directory, "project_config.yaml")), "\n")
+  0L
+}
+
+command_config <- function(values) {
+  if (length(values) < 1L) usage_error("config requires validate, edit, or show.")
+  action <- values[[1L]]
+  input <- require_input(values[-1L], paste("config", action))
+  opts <- normalize_options(values[-c(1L, 2L)], c("format"))
+  format <- or_else(opts$format, "table")
+  if (action == "validate") {
+    result <- BrainGnomes::validate_project_config(input, quiet = TRUE)
+    format_output(result, format)
+    return(if (result$valid) 0L else 1L)
+  }
+  if (action == "edit") {
+    if (format != "table") usage_error("config edit does not accept --format.")
+    BrainGnomes::edit_project(input)
+    return(0L)
+  }
+  if (action == "show") {
+    cfg <- BrainGnomes::load_project(input, validate = FALSE)
+    if (format == "json") cat(jsonlite::toJSON(as.list(cfg), pretty = TRUE, auto_unbox = TRUE, na = "null"), "\n")
+    else if (format == "table") summary(cfg)
+    else usage_error("config show supports table or json output.")
+    return(0L)
+  }
+  usage_error(paste0("Unknown config action: ", action))
+}
+
+command_doctor <- function(values) {
+  input <- require_input(values, "doctor")
+  opts <- normalize_options(values[-1L], c("steps", "deep", "strict", "format"))
+  result <- BrainGnomes::doctor_project(
+    input, steps = opts$steps, deep = is_flag(opts$deep), quiet = TRUE
+  )
+  format_output(result, or_else(opts$format, "table"))
+  has_warning <- any(result$checks$status == "warn")
+  if (!result$ok || (is_flag(opts$strict) && has_warning)) 1L else 0L
+}
+
+plan_options <- c(
+  "steps", "subject_filter", "postprocess_streams", "extract_streams",
+  "force", "allow_invalid", "output", "overwrite", "format"
+)
+
+command_plan <- function(values) {
+  input <- require_input(values, "plan")
+  opts <- normalize_options(values[-1L], plan_options)
+  result <- BrainGnomes::plan_project(
+    input, steps = or_else(opts$steps, "all"), subject_filter = opts$subject_filter,
+    postprocess_streams = opts$postprocess_streams, extract_streams = opts$extract_streams,
+    force = is_flag(opts$force), allow_invalid = is_flag(opts$allow_invalid), quiet = TRUE
+  )
+  if (!is.null(opts$output)) {
+    path <- BrainGnomes::write_project_plan(result, opts$output, overwrite = is_flag(opts$overwrite))
+    message("Saved plan to ", path)
+  }
+  format_output(result, or_else(opts$format, "table"))
+  0L
+}
+
+command_run <- function(values) {
+  input <- require_input(values, "run")
+  opts <- normalize_options(values[-1L], c(
+    "steps", "subject_filter", "postprocess_streams", "extract_streams",
+    "debug", "force", "dry_run", "log_level", "format"
+  ))
+  plan <- tryCatch(BrainGnomes::read_project_plan(input), error = function(e) NULL)
+  if (!is.null(plan)) {
+    disallowed <- intersect(names(opts), c("steps", "subject_filter", "postprocess_streams", "extract_streams", "force", "dry_run"))
+    if (length(disallowed) > 0L) usage_error("Saved plans cannot be combined with run-selection options.")
+    result <- BrainGnomes::submit_project_plan(plan, debug = is_flag(opts$debug), log_level = or_else(opts$log_level, "INFO"))
+  } else {
+    cli_args <- opts
+    result <- BrainGnomes:::run_project_cli(input, cli_args)
+  }
+  format_output(result, or_else(opts$format, "table"))
+  0L
+}
+
+command_validate_bids <- function(values) {
+  input <- require_input(values, "validate-bids")
+  opts <- normalize_options(values[-1L], c("outfile", "wait_jobs", "run"))
+  cfg <- BrainGnomes::load_project(input)
+  job_id <- BrainGnomes::run_bids_validation(
+    cfg, outfile = opts$outfile, wait_jobs = opts$wait_jobs,
+    sequence_id = opts$run
+  )
+  cat("Submitted BIDS validation job:", job_id, "\n")
+  0L
+}
+
+command_status <- function(values) {
+  input <- require_input(values, "status")
+  opts <- normalize_options(values[-1L], c(
+    "sub_id", "ses_id", "summary", "runs", "run", "watch", "interval", "format"
+  ))
+  format <- or_else(opts$format, "table")
+  if (!is.null(opts$ses_id) && is.null(opts$sub_id)) usage_error("--ses-id requires --sub-id.")
+  if (is_flag(opts$runs) && !is.null(opts$run)) usage_error("Use either --runs or --run, not both.")
+  if (is_flag(opts$watch) && is.null(opts$run)) usage_error("--watch requires --run=<id|latest>.")
+  if (is_flag(opts$runs)) {
+    format_output(BrainGnomes::get_project_runs(input), format)
+    return(0L)
+  }
+  if (!is.null(opts$run)) {
+    interval <- as.numeric(or_else(opts$interval, 30))
+    repeat {
+      jobs <- BrainGnomes::get_run_jobs(input, opts$run)
+      format_output(jobs, format)
+      if (!is_flag(opts$watch) || !any(jobs$status %in% c("QUEUED", "STARTED"))) break
+      Sys.sleep(interval)
+    }
+    return(0L)
+  }
+  cfg <- BrainGnomes::load_project(input)
+  status <- if (is.null(opts$sub_id)) BrainGnomes::get_project_status(cfg) else {
+    BrainGnomes::get_subject_status(cfg, as.character(opts$sub_id), if (is.null(opts$ses_id)) NULL else as.character(opts$ses_id))
+  }
+  if (is_flag(opts$summary)) status <- summary(status)
+  format_output(status, format)
+  0L
+}
+
+command_logs <- function(values) {
+  input <- require_input(values, "logs")
+  opts <- normalize_options(values[-1L], c("run", "failed_only", "tail", "format"))
+  logs <- BrainGnomes::find_run_logs(
+    input, run_id = or_else(opts$run, "latest"), failed_only = is_flag(opts$failed_only)
+  )
+  format_output(logs, or_else(opts$format, "table"))
+  if (!is.null(opts$tail)) {
+    n <- as.integer(opts$tail)
+    for (path in logs$path) {
+      cat("\n==> ", path, " <==\n", sep = "")
+      lines <- readLines(path, warn = FALSE)
+      cat(utils::tail(lines, n), sep = "\n")
+      cat("\n")
+    }
+  }
+  0L
+}
+
+command_provenance <- function(values) {
+  input <- require_input(values, "provenance")
+  opts <- normalize_options(values[-1L], c("run", "format"))
+  result <- BrainGnomes::get_run_provenance(
+    input, run_id = or_else(opts$run, "latest")
+  )
+  format_output(result, or_else(opts$format, "table"))
+  0L
+}
+
+command_diagnose <- function(values) {
+  input <- require_input(values, "diagnose")
+  opts <- normalize_options(values[-1L], c("run", "interactive", "format"))
+  if (is_flag(opts$interactive)) {
+    BrainGnomes::diagnose_pipeline(input)
+  } else {
+    result <- BrainGnomes::diagnose_project(input, or_else(opts$run, "latest"))
+    format_output(result, or_else(opts$format, "table"))
+  }
+  0L
+}
+
+command_retry <- function(values) {
+  input <- require_input(values, "retry")
+  opts <- normalize_options(values[-1L], c("run", "include_blocked", "dry_run", "yes", "format"))
+  dry_run <- is_flag(opts$dry_run)
+  if (!dry_run && !is_flag(opts$yes)) usage_error("retry requires --dry-run or --yes.")
+  result <- BrainGnomes::retry_project_run(
+    input, or_else(opts$run, "latest"), include_blocked = is_flag(opts$include_blocked),
+    dry_run = dry_run
+  )
+  format_output(result, or_else(opts$format, "table"))
+  0L
+}
+
+command_cancel <- function(values) {
+  input <- require_input(values, "cancel")
+  opts <- normalize_options(values[-1L], c("run", "dry_run", "yes", "format"))
+  dry_run <- is_flag(opts$dry_run)
+  if (!dry_run && !is_flag(opts$yes)) usage_error("cancel requires --dry-run or --yes.")
+  result <- BrainGnomes::cancel_project_run(input, or_else(opts$run, "latest"), dry_run = dry_run)
+  format_output(result, or_else(opts$format, "table"))
+  0L
+}
+
+main <- function() {
+  args <- commandArgs(trailingOnly = TRUE)
+  if (length(args) == 0L) print_global_help(status = 1L)
+  if (args[[1L]] %in% help_tokens) print_global_help(status = 0L)
+  if (identical(args[[1L]], "help")) {
+    if (length(args) == 1L) print_global_help(status = 0L)
+    print_command_help(args[[2L]], status = 0L)
+  }
+
+  command <- args[[1L]]
+  values <- args[-1L]
+  if (any(values %in% help_tokens)) print_command_help(command, status = 0L)
+  if (!requireNamespace("BrainGnomes", quietly = TRUE)) stop("BrainGnomes package is required to run this command.")
+  if (!requireNamespace("jsonlite", quietly = TRUE)) stop("The jsonlite package is required to run this command.")
+
+  if (command %in% names(command_aliases)) command <- unname(command_aliases[[command]])
+  if (command == "config-edit") {
+    command <- "config"
+    values <- c("edit", values)
+  }
+  switch(command,
+    init = command_init(values),
+    config = command_config(values),
+    doctor = command_doctor(values),
+    plan = command_plan(values),
+    run = command_run(values),
+    `validate-bids` = command_validate_bids(values),
+    status = command_status(values),
+    provenance = command_provenance(values),
+    logs = command_logs(values),
+    diagnose = command_diagnose(values),
+    retry = command_retry(values),
+    cancel = command_cancel(values),
     {
       message("Unknown command: ", command)
       print_global_help(status = 2L)
     }
   )
-
-  quit(save = "no", status = status)
 }
 
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 1L) {
-  print_global_help(status = 1L)
-}
-
-cmd <- args[1]
-opts <- if (length(args) > 1) args[-1] else character()
-
-if (is_help_token(cmd)) {
-  print_global_help(status = 0L)
-}
-
-if (identical(cmd, "help")) {
-  if (length(opts) > 0L) {
-    print_command_help(opts[1], status = 0L)
-  } else {
-    print_global_help(status = 0L)
+status <- tryCatch(
+  main(),
+  bg_cli_usage_error = function(e) {
+    message("Usage error: ", conditionMessage(e))
+    2L
+  },
+  error = function(e) {
+    message("Error: ", conditionMessage(e))
+    1L
   }
-}
-
-if (length(opts) > 0L && any(opts %in% help_tokens)) {
-  print_command_help(cmd, status = 0L)
-}
-
-if (!(cmd %in% public_commands)) {
-  message("Unknown command: ", cmd)
-  print_global_help(status = 2L)
-}
-
-if (!requireNamespace("BrainGnomes", quietly = TRUE)) {
-  stop("BrainGnomes package is required to run this script.")
-}
-
-cli_setup <- function(opts) {
-  project_name <- if (length(opts) >= 1) opts[1] else NULL
-  project_dir  <- if (length(opts) >= 2) opts[2] else NULL
-  scfg <- list(metadata = list())
-  if (!is.null(project_name)) scfg$metadata$project_name <- project_name
-  if (!is.null(project_dir)) scfg$metadata$project_directory <- project_dir
-  class(scfg) <- "bg_project_cfg"
-  scfg <- BrainGnomes::setup_project(scfg)
-  cat(
-    "Saved project configuration to:",
-    file.path(scfg$metadata$project_directory, "project_config.yaml"), "\n"
-  )
-}
-
-cli_edit <- function(opts) {
-  if (length(opts) < 1) stop("edit_project requires a project directory or YAML file")
-  scfg <- BrainGnomes::edit_project(opts[1])
-}
-
-cli_run <- function(opts) {
-  if (length(opts) < 1) stop("run_project requires a project directory or YAML file")
-  input <- opts[1]
-  cli_args <- if (length(opts) > 1) BrainGnomes::parse_cli_args(opts[-1]) else list()
-  ret <- BrainGnomes:::.run_project_cli(input, cli_args)
-}
-
-cli_status <- function(opts) {
-  if (length(opts) < 1) stop("status requires a project directory or YAML file")
-  input <- opts[1]
-  cli_args <- if (length(opts) > 1) BrainGnomes::parse_cli_args(opts[-1]) else list()
-  sub_id <- cli_args$sub_id
-  ses_id <- cli_args$ses_id
-  do_summary <- !is.null(cli_args$summary) && (isTRUE(cli_args$summary) || is.na(cli_args$summary))
-
-  if (!is.null(ses_id) && is.null(sub_id)) {
-    stop("--ses_id can only be used when --sub_id is provided")
-  }
-
-  scfg <- BrainGnomes::load_project(input)
-  status_df <- if (is.null(sub_id)) {
-    BrainGnomes::get_project_status(scfg)
-  } else {
-    BrainGnomes::get_subject_status(scfg, sub_id = as.character(sub_id), ses_id = if (is.null(ses_id)) NULL else as.character(ses_id))
-  }
-
-  if (isTRUE(do_summary)) {
-    print(summary(status_df))
-  } else {
-    print(status_df)
-  }
-}
-
-switch(cmd,
-  setup_project = cli_setup(opts),
-  edit_project = cli_edit(opts),
-  run_project = cli_run(opts),
-  status = cli_status(opts),
-  stop(paste("Unknown command:", cmd))
 )
+quit(save = "no", status = as.integer(status))

@@ -71,7 +71,13 @@ test_that("postprocess_subject stages outputs in scratch workspace", {
   expected_final <- norm_path(file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"), mustWork = TRUE)
   expect_true(file.exists(expected_final))
   expect_identical(final_file, expected_final)
-  expect_identical(norm_path(recorded_paths$apply_mask, mustWork = TRUE), expected_final)
+  expected_staged_final <- file.path(
+    workspace_dir,
+    "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"
+  )
+  expect_identical(
+    norm_path(recorded_paths$apply_mask), norm_path(expected_staged_final)
+  )
   intermediate_file <- file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz")
   expect_false(file.exists(intermediate_file))
   staged_exists <- dir.exists(workspace_dir)
@@ -169,7 +175,14 @@ test_that("postprocess_subject moves intermediates when requested", {
   expected_final <- norm_path(file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"), mustWork = TRUE)
   expect_true(file.exists(expected_final))
   expect_identical(final_file, expected_final)
-  expect_identical(norm_path(recorded_paths$intensity_normalize, mustWork = TRUE), expected_final)
+  expected_staged_final <- file.path(
+    workspace_dir,
+    "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"
+  )
+  expect_identical(
+    norm_path(recorded_paths$intensity_normalize),
+    norm_path(expected_staged_final)
+  )
   expect_equal(recorded_paths$scale_factor, 2)
   expect_identical(recorded_paths$normalization_mode, "run_scalar")
   expect_identical(recorded_paths$applied_mode, "run_scalar")

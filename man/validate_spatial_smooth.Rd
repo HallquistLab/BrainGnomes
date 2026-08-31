@@ -11,12 +11,13 @@ validate_spatial_smooth(
   fwhm_mm = NA_real_,
   smoother = "susan",
   used_mask = TRUE,
+  input_mask = "none",
   tolerance_mm = NULL,
-  preprocess = TRUE,
-  polydeg = 3L,
-  demean = TRUE,
-  unif = TRUE,
-  max_volumes = 300L
+  preprocess = NULL,
+  polydeg = NULL,
+  demean = NULL,
+  unif = NULL,
+  max_volumes = 96L
 )
 }
 \arguments{
@@ -35,20 +36,30 @@ brightness threshold (default \code{TRUE}). SUSAN itself is not spatially
 restricted to this mask. For Gaussian calibration modes this instead
 distinguishes masked \verb{3dBlurInMask} from unmasked \verb{3dmerge}.}
 
+\item{input_mask}{Character input-mask condition: \code{"none"}, \code{"fmriprep"},
+\code{"template"}, or \code{"custom"}. This describes masking already applied to
+the BOLD before smoothing, independently of \code{used_mask}. A model from a
+different input-mask condition is reported as an extrapolation but cannot
+pass validation, because masking materially changes the calibrated gain.}
+
 \item{tolerance_mm}{Tolerance in mm for \verb{|observed_post - expected_post|}.
 \code{NULL} (the default) uses the program/mask-specific cross-validation
 tolerance stored with the calibration model.}
 
-\item{preprocess}{Logical; if \code{TRUE}, apply calibration-matched preprocessing.}
+\item{preprocess}{Logical or \code{NULL}. \code{NULL} (the default) uses the preprocessing
+mode recorded by the selected calibration model. An explicit value must
+match that model; without \code{fwhm_mm}, \code{TRUE} applies diagnostic detrending.}
 
-\item{polydeg}{Polynomial detrending degree used when \code{preprocess = TRUE}.}
+\item{polydeg}{Optional polynomial detrending degree. \code{NULL} uses the model.}
 
-\item{demean}{Logical; include mean removal in preprocessing.}
+\item{demean}{Optional logical mean-removal setting. \code{NULL} uses the model.}
 
-\item{unif}{Logical; normalize each voxel by temporal MAD in preprocessing.}
+\item{unif}{Optional logical temporal-MAD scaling setting. \code{NULL} uses the model.}
 
-\item{max_volumes}{Maximum number of timepoints used for validation. The
-first \code{max_volumes} are used; \code{Inf} uses all volumes.}
+\item{max_volumes}{Maximum number of timepoints used for validation.
+Timepoints are deterministically distributed over the complete run;
+shorter runs use every timepoint, and \code{Inf} uses all volumes. A calibrated
+model may require its stored cap and reject a different override.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
@@ -59,9 +70,10 @@ Measures the observed FWHM change using \code{estimate_classic_fwhm()} and compa
 it to the calibration-predicted delta for the requested kernel size. The
 calibration accounts for the fact that fMRI data are non-Gaussian and the
 naive first-differences FWHM estimate has a systematic bias that depends on
-smoother type and whether masking was used. Before estimating FWHM, voxel time
-series are polynomial-detrended and MAD-normalized to match the preprocessing
-used by the calibration script.
+smoother type and whether masking was used. The calibrated preprocessing mode
+is selected together with the calibration model. The production masked-SUSAN
+calibration stores and enforces the estimator preparation selected by
+cross-dataset validation; the estimator is not chosen at validation time.
 }
 \details{
 Classic first-difference FWHM is used intentionally as a local
@@ -71,17 +83,11 @@ obey Gaussian quadrature when a Gaussian kernel is added: the fitted core and
 tail change differently. The real-BOLD calibration therefore absorbs the
 non-Gaussian core behavior without treating the full ACF as Gaussian.
 
-The preprocessing is important because the classic first-difference FWHM
-estimator is sensitive to non-smooth sources of spatial variance that are not
-the target of the smoothing check. Slow voxelwise drifts, mean offsets, and
-large between-voxel variance differences can inflate or deflate the ratio of
-spatial-difference variance to total variance, making the measured FWHM change
-disagree with the calibration even when smoothing was applied correctly. The
-validation therefore mirrors \verb{local/smoothness_checks/3dSmoothnessChange.R}:
-it removes a low-order polynomial trend from each in-mask voxel time series,
-removes the
-mean when \code{demean = TRUE}, and scales each voxel by its temporal MAD when
-\code{unif = TRUE}. This puts pre/post data on the same residualized, variance-
-normalized scale used to derive the empirical calibration coefficients.
+Optional preprocessing can remove a low-order polynomial trend, the temporal
+mean, and voxelwise temporal scale before the classic estimate. It is retained
+for diagnostic and legacy calibration use, but it must match the selected
+calibration. \code{preprocess = NULL} enforces that model-specific choice.
+Requests outside the model's stored kernel or voxel-size range are reported
+as extrapolations and cannot pass validation.
 }
 \keyword{internal}

@@ -492,7 +492,11 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
   if ("postprocess/validate_postproc_steps" %in% fields) {
     ppcfg$validate_postproc_steps <- prompt_input(
       instruct = glue("\n
-        Validation steps allow you to verify that the postprocessing steps were applied correctly.
+        Validation steps verify that postprocessing operations were applied correctly.
+        Each check is reported in the subject postprocessing log and in a
+        machine-readable JSON audit beside that log. Existing intermediate
+        outputs are validated when reused; an existing final output is not
+        replayed unless the required intermediates are available.
         \n
       "),
       prompt = "Enable validation checks for postprocessing steps?",
@@ -504,13 +508,14 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
   if ("postprocess/stop_on_failed_validation" %in% fields) {
     ppcfg$stop_on_failed_validation <- prompt_input(
       instruct = glue("\n\n
-        When a validation check fails (for example, if masking appears incorrect),
+        When a validation check fails or raises an error (for example, if masking appears incorrect),
         you can either stop postprocessing immediately for that dataset or continue
         running later steps while recording the validation failure in the logs.\n
 
         If you set this to TRUE, postprocessing for a given dataset will halt as soon
-        a validation step fails. If FALSE, validation failures will be logged but the
-        remaining steps will still run.\n
+        a validation step fails or errors, and an invalid final image will not be
+        published. If FALSE, validation failures will be logged and retained in the
+        JSON audit, but the remaining steps will still run.\n
       "),
       prompt = "Stop postprocessing when a validation check fails?",
       type = "flag",

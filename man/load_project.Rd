@@ -9,11 +9,13 @@ load_project(input = NULL, validate = TRUE)
 \arguments{
 \item{input}{A path to a YAML file, or a project directory containing \code{project_config.yaml}.}
 
-\item{validate}{Logical indicating whether to validate the configuration after loading. Default: TRUE}
+\item{validate}{Logical indicating whether to validate the configuration after loading. Validation is
+non-interactive and never changes or saves the configuration. The structured validation result is
+attached as the \code{validation} attribute. Default: TRUE.}
 }
 \value{
 A list representing the project configuration (class \code{"bg_project_cfg"}). If \code{validate} is TRUE,
-the returned object is validated (missing fields may be set to NULL and noted).
+the returned object has a \code{validation} attribute produced by \code{\link[=validate_project_config]{validate_project_config()}}.
 }
 \description{
 Load a project configuration from a file

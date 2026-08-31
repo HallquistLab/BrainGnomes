@@ -202,7 +202,7 @@ parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
 # Translate the public command-line options into run_project() arguments.
 # Keeping this adapter in the package makes the installed CLI behavior directly
 # testable without submitting scheduler jobs from a subprocess.
-.run_project_cli <- function(input, cli_args = list()) {
+run_project_cli <- function(input, cli_args = list()) {
   checkmate::assert_string(input)
   checkmate::assert_list(cli_args)
 
@@ -214,6 +214,10 @@ parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
   if (is.null(dry_run_opt)) dry_run_opt <- cli_args$dry_run
 
   scfg <- load_project(input)
+  attr(scfg, "provenance_context") <- list(
+    interface = "cli",
+    input = normalizePath(input, winslash = "/", mustWork = FALSE)
+  )
   run_project(
     scfg,
     steps = cli_args$steps,
@@ -222,7 +226,8 @@ parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
     extract_streams = cli_args$extract_streams,
     debug = cli_flag(cli_args$debug),
     force = cli_flag(cli_args$force),
-    dry_run = cli_flag(dry_run_opt)
+    dry_run = cli_flag(dry_run_opt),
+    log_level = if (is.null(cli_args$log_level)) "INFO" else cli_args$log_level
   )
 }
 

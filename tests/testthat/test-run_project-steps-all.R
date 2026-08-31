@@ -62,10 +62,13 @@ test_that("run_project expands steps = 'all' to enabled step flags", {
     .package = "BrainGnomes"
   )
 
-  run_project(scfg, steps = "all", debug = TRUE)
+  run <- run_project(scfg, steps = "all", debug = TRUE)
 
   expect_true(submitted)
-  snapshot_file <- file.path(log_dir, "run_project_snapshot.rds")
+  expect_s3_class(run, "bg_project_run")
+  expect_match(run$run_id, "^[0-9a-f-]+$")
+  expect_true(file.exists(run$provenance_file))
+  snapshot_file <- file.path(log_dir, "runs", run$run_id, "run_project_snapshot.rds")
   expect_true(file.exists(snapshot_file))
 
   snapshot <- readRDS(snapshot_file)
@@ -76,4 +79,13 @@ test_that("run_project expands steps = 'all' to enabled step flags", {
   expect_true(all(snapshot$steps[expected_enabled]))
   expect_true(all(!snapshot$steps[expected_disabled]))
   expect_false("all" %in% names(snapshot$steps))
+
+  provenance <- get_run_provenance(scfg, run$run_id)
+  expect_s3_class(provenance, "bg_run_provenance")
+  expect_identical(provenance$request$steps, expected_enabled)
+  expect_true(provenance$execution$scope_deferred)
+  expect_identical(provenance$state, "submitted")
+  expect_true(all(c(
+    "configuration", "software", "host", "scheduler", "artifacts"
+  ) %in% names(provenance)))
 })

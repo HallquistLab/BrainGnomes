@@ -47,9 +47,26 @@ log_message INFO Starting fsaverage_setup with mem: $mem and cpus: $ncores
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
 
-# to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
+# To trap SIGTERM, background the main compute and wait. Newer fMRIPrep images
+# (including 25.2.5) do not ship rsync, so retain rsync when available and use
+# GNU cp's archive mode without metadata preservation as a compatible fallback.
+fsaverage_dest="${loc_mrproc_root}/sourcedata/freesurfer/fsaverage"
+rel $rel_flag mkdir -p "$fsaverage_dest"
 rel $rel_flag singularity exec --cleanenv --containall -B "$loc_mrproc_root" "$fmriprep_container" \
-    rsync --mkpath -a --no-owner --no-group --no-times --no-perms /opt/freesurfer/subjects/fsaverage "${loc_mrproc_root}/sourcedata/freesurfer" &
+    sh -c '
+      set -eu
+      source_dir="$1"
+      destination_dir="$2"
+      if command -v rsync >/dev/null 2>&1; then
+        echo "Copying fsaverage with rsync"
+        rsync -a --no-owner --no-group --no-times --no-perms \
+          "${source_dir}/" "${destination_dir}/"
+      else
+        echo "rsync is unavailable; copying fsaverage with cp"
+        cp -a --no-preserve=ownership,timestamps,mode \
+          "${source_dir}/." "${destination_dir}/"
+      fi
+    ' sh /opt/freesurfer/subjects/fsaverage "$fsaverage_dest" &
 cmd_pid=$!
 run_bg_and_wait "$cmd_pid" cmd_status
 
