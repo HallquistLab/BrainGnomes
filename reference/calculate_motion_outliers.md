@@ -111,6 +111,12 @@ max FD, mean FD, and outlier percentages for each threshold (filtered
 columns are included when requested). Filtered summary values are `NA`
 when motion filtering was requested but could not be applied.
 
+## See also
+
+[`vignette("motion_qc", package = "BrainGnomes")`](https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.md)
+for a complete run-level QC workflow and its relationship to
+postprocessing scrubbing.
+
 ## Examples
 
 ``` r

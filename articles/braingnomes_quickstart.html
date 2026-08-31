@@ -39,6 +39,7 @@
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
+    <li><a class="dropdown-item" href="../articles/motion_qc.html">Motion Quality Control and Framewise Displacement Summaries</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul>
 </li>
@@ -66,7 +67,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">31 Aug 2025</h4>
+            <h4 data-toc-skip class="date">31 Aug 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/braingnomes_quickstart.Rmd" class="external-link"><code>vignettes/braingnomes_quickstart.Rmd</code></a></small>
       <div class="d-none name"><code>braingnomes_quickstart.Rmd</code></div>
@@ -432,7 +433,7 @@ flywheel_sync_directory (in the example,
 <code>/proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync</code>).
 Thus, you typically want a trailing slash after your project name in the
 <code>fw://</code> string so that the top-level folder itself isn’t
-copied to the synch folder.</p>
+copied to the sync folder.</p>
 </div>
 <div class="section level4">
 <h4 id="deferred-queueing-of-subject-processing-when-flywheel-comes-first">Deferred queueing of subject processing when flywheel comes
@@ -595,14 +596,14 @@ Postprocessing includes several optional steps, including</p>
 <li>Intensity normalization</li>
 <li>Confound calculation and regression</li>
 </ul>
-<p>If you say ‘yes’ to postprocessing, you will be asked to setup one or
-more postprocessing streams for your data. BrainGnomes supports multiple
-postprocessing streams, such that the same data can be postprocessed in
-multiple ways. For example, you might wish to compare results with
-different levels of smoothing or with different temporal filtering
-settings.</p>
-<p>To specify streams, you will be dropped into a menu system that
-lookes like this:</p>
+<p>If you say ‘yes’ to postprocessing, you will be asked to set up one
+or more postprocessing streams for your data. BrainGnomes supports
+multiple postprocessing streams, such that the same data can be
+postprocessed in multiple ways. For example, you might wish to compare
+results with different levels of smoothing or with different temporal
+filtering settings.</p>
+<p>To specify streams, you will be dropped into a menu system that looks
+like this:</p>
 <pre><code>Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
 Each stream also asks about which files should be postprocessed using the stream. For example,
 files with 'rest' in their name could be postprocessed in one way and files with 'nback' could
@@ -617,7 +618,7 @@ Modify postprocessing streams:
 3: Delete a stream
 4: Show stream settings
 5: Finish</code></pre>
-<p>For additional details about postprocessing, see (in progress) <a href="postprocessing.html">Postprocessing vignette</a>.</p>
+<p>For additional details about postprocessing, see the <a href="postprocessing.html">Postprocessing vignette</a>.</p>
 </div>
 <div class="section level3">
 <h3 id="roi-time-series-extraction-and-functional-connectivity-calculation">ROI time series extraction and functional connectivity
@@ -625,8 +626,8 @@ calculation<a class="anchor" aria-label="anchor" href="#roi-time-series-extracti
 </h3>
 <p>Finally, you will be asked whether to include ROI extraction and
 functional connectivity calculation in the pipeline. This step allows
-you extract average time series from regions of interest (ROIs) in one
-or more atlases/ROI masks. You can also ask BrainGnomes to compute
+you to extract average time series from regions of interest (ROIs) in
+one or more atlases/ROI masks. You can also ask BrainGnomes to compute
 correlations among the ROI timeseries for functional connectivity
 analyses.</p>
 <p>The <code><a href="../reference/extract_rois.html">extract_rois()</a></code> function – called using

@@ -39,6 +39,7 @@
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
+    <li><a class="dropdown-item" href="../articles/motion_qc.html">Motion Quality Control and Framewise Displacement Summaries</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul>
 </li>
@@ -66,6 +67,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
+            <h4 data-toc-skip class="date">31 Aug 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/postprocessing.Rmd" class="external-link"><code>vignettes/postprocessing.Rmd</code></a></small>
       <div class="d-none name"><code>postprocessing.Rmd</code></div>
@@ -188,7 +190,7 @@ mask produced by your preprocessing pipeline.
 Do you want to apply a brain mask to your fMRI data?</code></pre>
 <p>Options include a path to the mask file (<code>mask_file</code>) and
 a prefix for the masked output (<code>prefix</code>, default
-<code>"m"</code>).【F:R/setup_postprocess.R†L496-L544】</p>
+<code>"m"</code>).</p>
 </div>
 <div class="section level3">
 <h3 id="spatial-smoothing">Spatial Smoothing<a class="anchor" aria-label="anchor" href="#spatial-smoothing"></a>
@@ -355,6 +357,11 @@ fmriprep. For example, if you wish to scrub any volume with more than
 <code>framewise_displacement &gt; 0.5</code>. You can have logical
 operators in the expression, too, allowing something like
 <code>framewise_displacement &gt; 0.5 | dvars &gt; 5</code>.</p>
+<p>Before choosing a study-level threshold, the <a href="motion_qc.html">Motion Quality Control and Framewise Displacement
+Summaries</a> guide shows how to compare raw and motion-filtered FD
+across runs, inspect several thresholds, and export a QC or exclusion
+table. The run-level helper described there does not itself scrub or
+alter BOLD data.</p>
 <p><code>Scrubbing expression(s) &gt; framewise_displacement &gt; 0.9</code></p>
 <p>In addition, your scrubbing expression can specify a range of volumes
 to scrub using a format like: ‘-1:1; dvars &gt; 1.5’. The part before
@@ -570,7 +577,7 @@ example <code>a_comp_cor_&lt;1-6&gt;</code> expands to
 <code>a_comp_cor_1</code> through <code>a_comp_cor_6</code> and a
 pattern like <code>^trans_</code> will match all six motion parameters.
 This expansion is implemented in
-<code>expand_confound_columns()</code>.【F:R/postprocess_functions.R†L996-L1036】</p>
+<code>expand_confound_columns()</code>.</p>
 <p>Standard motion-confound bundles can also be selected using shortcuts
 such as <code>"6p"</code>, <code>"12p"</code>, <code>"24p"</code>, or
 <code>"36p"</code> to request common sets of motion parameters and their
@@ -638,11 +645,11 @@ patterns, giving fine-grained control over nuisance regressors.</p>
 voxelwise regression of these confounds. If scrubbing is enabled, the
 censor file written during <code><a href="../reference/setup_scrubbing.html">setup_scrubbing()</a></code> is passed to
 the regression step so that model fits are computed using only volumes
-marked as “good.”【F:R/postprocess_functions.R†L748-L764】 The residuals
-are written to new NIfTI files with a chosen prefix. Because filtered
-confounds match the exact temporal treatment of the BOLD data, this
-regression step is safe from mismatch artifacts, similar to the strategy
-described in the xcp-d documentation.</p>
+marked as “good.” The residuals are written to new NIfTI files with a
+chosen prefix. Because filtered confounds match the exact temporal
+treatment of the BOLD data, this regression step is safe from mismatch
+artifacts, similar to the strategy described in the xcp-d
+documentation.</p>
 </div>
 <div class="section level3">
 <h3 id="ordering-steps">Ordering Steps<a class="anchor" aria-label="anchor" href="#ordering-steps"></a>
@@ -652,7 +659,7 @@ which enabled steps run. By default intensity normalisation follows
 masking and smoothing and precedes AROMA, optional
 scrubbing/interpolation, temporal filtering, and confound regression.
 You may override this order by answering “yes” to the prompt shown in
-the code below.【F:R/setup_postprocess.R†L321-L358】</p>
+the code below.</p>
 </div>
 </div>
 <div class="section level2">

@@ -133,8 +133,7 @@ output prefix.
     Do you want to apply a brain mask to your fMRI data?
 
 Options include a path to the mask file (`mask_file`) and a prefix for
-the masked output (`prefix`, default
-`"m"`).【F:R/setup_postprocess.R†L496-L544】
+the masked output (`prefix`, default `"m"`).
 
 ### Spatial Smoothing
 
@@ -311,6 +310,14 @@ fmriprep. For example, if you wish to scrub any volume with more than
 `framewise_displacement > 0.5`. You can have logical operators in the
 expression, too, allowing something like
 `framewise_displacement > 0.5 | dvars > 5`.
+
+Before choosing a study-level threshold, the [Motion Quality Control and
+Framewise Displacement
+Summaries](https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.md)
+guide shows how to compare raw and motion-filtered FD across runs,
+inspect several thresholds, and export a QC or exclusion table. The
+run-level helper described there does not itself scrub or alter BOLD
+data.
 
 `Scrubbing expression(s) > framewise_displacement > 0.9`
 
@@ -531,7 +538,7 @@ contain regular expressions or numeric ranges inside angle brackets. For
 example `a_comp_cor_<1-6>` expands to `a_comp_cor_1` through
 `a_comp_cor_6` and a pattern like `^trans_` will match all six motion
 parameters. This expansion is implemented in
-`expand_confound_columns()`.【F:R/postprocess_functions.R†L996-L1036】
+`expand_confound_columns()`.
 
 Standard motion-confound bundles can also be selected using shortcuts
 such as `"6p"`, `"12p"`, `"24p"`, or `"36p"` to request common sets of
@@ -602,11 +609,11 @@ optionally performs voxelwise regression of these confounds. If
 scrubbing is enabled, the censor file written during
 [`setup_scrubbing()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_scrubbing.md)
 is passed to the regression step so that model fits are computed using
-only volumes marked as “good.”【F:R/postprocess_functions.R†L748-L764】
-The residuals are written to new NIfTI files with a chosen prefix.
-Because filtered confounds match the exact temporal treatment of the
-BOLD data, this regression step is safe from mismatch artifacts, similar
-to the strategy described in the xcp-d documentation.
+only volumes marked as “good.” The residuals are written to new NIfTI
+files with a chosen prefix. Because filtered confounds match the exact
+temporal treatment of the BOLD data, this regression step is safe from
+mismatch artifacts, similar to the strategy described in the xcp-d
+documentation.
 
 ### Ordering Steps
 
@@ -614,8 +621,7 @@ Finally, `setup_postproc_steps()` determines the order in which enabled
 steps run. By default intensity normalisation follows masking and
 smoothing and precedes AROMA, optional scrubbing/interpolation, temporal
 filtering, and confound regression. You may override this order by
-answering “yes” to the prompt shown in the code
-below.【F:R/setup_postprocess.R†L321-L358】
+answering “yes” to the prompt shown in the code below.
 
 ## Running Postprocessing
 

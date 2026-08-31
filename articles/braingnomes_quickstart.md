@@ -326,7 +326,7 @@ the flywheel_sync_directory (in the example,
 `/proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync`).
 Thus, you typically want a trailing slash after your project name in the
 `fw://` string so that the top-level folder itself isn’t copied to the
-synch folder.
+sync folder.
 
 #### Deferred queueing of subject processing when flywheel comes first
 
@@ -487,14 +487,14 @@ includes several optional steps, including
 - Intensity normalization
 - Confound calculation and regression
 
-If you say ‘yes’ to postprocessing, you will be asked to setup one or
+If you say ‘yes’ to postprocessing, you will be asked to set up one or
 more postprocessing streams for your data. BrainGnomes supports multiple
 postprocessing streams, such that the same data can be postprocessed in
 multiple ways. For example, you might wish to compare results with
 different levels of smoothing or with different temporal filtering
 settings.
 
-To specify streams, you will be dropped into a menu system that lookes
+To specify streams, you will be dropped into a menu system that looks
 like this:
 
     Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
@@ -512,16 +512,15 @@ like this:
     4: Show stream settings
     5: Finish
 
-For additional details about postprocessing, see (in progress)
-[Postprocessing
+For additional details about postprocessing, see the [Postprocessing
 vignette](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.md).
 
 ### ROI time series extraction and functional connectivity calculation
 
 Finally, you will be asked whether to include ROI extraction and
 functional connectivity calculation in the pipeline. This step allows
-you extract average time series from regions of interest (ROIs) in one
-or more atlases/ROI masks. You can also ask BrainGnomes to compute
+you to extract average time series from regions of interest (ROIs) in
+one or more atlases/ROI masks. You can also ask BrainGnomes to compute
 correlations among the ROI timeseries for functional connectivity
 analyses.
 

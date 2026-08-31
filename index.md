@@ -217,6 +217,10 @@ guides:
   Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.html)
   — configure masking, smoothing, AROMA, filtering, scrubbing, intensity
   normalization, and confound regression.
+- [Motion Quality Control and Framewise Displacement
+  Summaries](https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.html)
+  — compare raw and filtered FD, summarize thresholds, export run-level
+  QC decisions, and connect those decisions to scrubbing.
 - [Extracting ROI Timeseries and
   Connectivity](https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.html)
   — configure atlas/mask ROI extraction and connectivity outputs.

@@ -33,6 +33,12 @@ Released 2026-08-30
   retry, submit it as a separate new run, decide whether to include
   downstream blocked work, and safely preview cancellation. Function and
   CLI help use the same plain-language behavior and safety guidance.
+- Add an executable motion-QC vignette for
+  [`calculate_motion_outliers()`](https://hallquistlab.github.io/BrainGnomes/reference/calculate_motion_outliers.md).
+  It demonstrates raw and filtered FD summaries, strict threshold
+  interpretation, unavailable-filter handling, run-level QC/exclusion
+  exports, and the boundary between interactive QC summaries and
+  postprocessing scrubbing.
 - Make guided
   [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
   and

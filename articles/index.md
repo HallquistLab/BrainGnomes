@@ -14,5 +14,7 @@
   BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.md):
 - [Local onboarding and
   prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.md):
+- [Motion Quality Control and Framewise Displacement
+  Summaries](https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.md):
 - [Postprocessing
   Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.md):

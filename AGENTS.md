@@ -33,6 +33,26 @@
   examples where practical.
 - File names: group by feature (e.g., `utils_misc.R`, `extract_rois.R`).
 
+## Vignette Date Metadata
+
+- Every `vignettes/*.Rmd` file must have a literal YAML date immediately
+  after the author, formatted as `date: "DD Mon YYYY"` (for example,
+  `date: "31 Aug 2026"`).
+- When creating or editing a vignette, update its date in the same
+  change to the current local date. Treat documentation, code-chunk, and
+  metadata edits alike; do not defer the date update to a later release
+  step.
+- Before handing off vignette changes, inspect every changed vignette
+  and confirm its literal date is current. During release or pkgdown
+  preparation, also compare each clean vignette with
+  `git log -1 --date=format:'%d %b %Y' --format='%cd' -- vignettes/<file>.Rmd`
+  and correct missing or stale dates.
+- Keep CRAN builds self-contained: do not put inline R, `git` commands,
+  GitHub API calls, or other network lookups in vignette date fields or
+  in code evaluated while building/checking vignettes. Git may be used
+  only as a maintainer-side check before packaging; the committed `.Rmd`
+  must contain the resolved literal date.
+
 ## Testing Guidelines
 
 - Framework: `testthat` (edition 3). Place tests in `tests/testthat/` as

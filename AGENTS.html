@@ -24,6 +24,7 @@
     <li><a class="dropdown-item" href="articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
     <li><a class="dropdown-item" href="articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
+    <li><a class="dropdown-item" href="articles/motion_qc.html">Motion Quality Control and Framewise Displacement Summaries</a></li>
     <li><a class="dropdown-item" href="articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -73,6 +74,13 @@
 <li>C++ (<code>src/</code>): follow tidy, minimal-include style; expose via Rcpp attributes; keep headers local.</li>
 <li>Roxygen2 for docs; include <code>@export</code>, <code>@param</code>, <code>@return</code>, and examples where practical.</li>
 <li>File names: group by feature (e.g., <code>utils_misc.R</code>, <code>extract_rois.R</code>).</li>
+</ul></div>
+<div class="section level2">
+<h2 id="vignette-date-metadata">Vignette Date Metadata<a class="anchor" aria-label="anchor" href="#vignette-date-metadata"></a></h2>
+<ul><li>Every <code>vignettes/*.Rmd</code> file must have a literal YAML date immediately after the author, formatted as <code>date: "DD Mon YYYY"</code> (for example, <code>date: "31 Aug 2026"</code>).</li>
+<li>When creating or editing a vignette, update its date in the same change to the current local date. Treat documentation, code-chunk, and metadata edits alike; do not defer the date update to a later release step.</li>
+<li>Before handing off vignette changes, inspect every changed vignette and confirm its literal date is current. During release or pkgdown preparation, also compare each clean vignette with <code>git log -1 --date=format:'%d %b %Y' --format='%cd' -- vignettes/&lt;file&gt;.Rmd</code> and correct missing or stale dates.</li>
+<li>Keep CRAN builds self-contained: do not put inline R, <code>git</code> commands, GitHub API calls, or other network lookups in vignette date fields or in code evaluated while building/checking vignettes. Git may be used only as a maintainer-side check before packaging; the committed <code>.Rmd</code> must contain the resolved literal date.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="testing-guidelines">Testing Guidelines<a class="anchor" aria-label="anchor" href="#testing-guidelines"></a></h2>
