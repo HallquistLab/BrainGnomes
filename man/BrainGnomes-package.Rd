@@ -11,8 +11,8 @@ Configures, submits, and monitors reproducible functional magnetic resonance ima
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://uncdependlab.github.io/BrainGnomes/}
-  \item Report bugs at \url{https://github.com/UNCDEPENdLab/BrainGnomes/issues}
+  \item \url{https://hallquistlab.github.io/BrainGnomes/}
+  \item Report bugs at \url{https://github.com/HallquistLab/BrainGnomes/issues}
 }
 
 }

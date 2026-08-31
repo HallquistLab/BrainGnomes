@@ -790,8 +790,11 @@ spatial_smooth <- function(in_file, out_file, fwhm_mm = 6, brain_mask = NULL, ov
   fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
   sigma <- fwhm_mm / fwhm_to_sigma
 
-  p2_intensity <- image_quantile(in_file, brain_mask, .02)
-  median_intensity <- image_quantile(in_file, brain_mask, .5)
+  intensity_quantiles <- image_quantile(
+    in_file, brain_mask, quantiles = c(0.02, 0.5)
+  )
+  p2_intensity <- intensity_quantiles[[1L]]
+  median_intensity <- intensity_quantiles[[2L]]
   susan_thresh <- (median_intensity - p2_intensity) * .75 # also see featlib.tcl
 
   # always compute extents mask that is reapplied to data post-smoothing to avoid any "new" voxels
@@ -1800,7 +1803,32 @@ resample_template_to_img <- function(
   }
 
   if (file.exists(output) && !overwrite) {
-    return(invisible(output)) # don't recreate existing image
+    cached_grid <- tryCatch(
+      pp_compare_nifti_grid(
+        in_file,
+        output,
+        reference_label = "BOLD image",
+        candidate_label = "cached template mask"
+      ),
+      error = function(e) NULL
+    )
+    if (!is.null(cached_grid) && isTRUE(cached_grid$passed)) {
+      return(invisible(output)) # don't recreate a valid existing image
+    }
+
+    # Masks written by older nilearn/nibabel combinations can have the right
+    # voxel grid but normalized qform/sform codes. Recreate such cached masks
+    # so strict postprocessing validation does not inherit stale metadata.
+    mismatch <- if (is.null(cached_grid)) {
+      "its NIfTI grid could not be verified"
+    } else {
+      cached_grid$message
+    }
+    to_log(
+      lg, "warn",
+      "Recreating cached template mask '{output}' because {mismatch}"
+    )
+    overwrite <- TRUE
   }
 
   # based on postprocess log, determine log root for parking lock file

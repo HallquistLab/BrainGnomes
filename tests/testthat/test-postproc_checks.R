@@ -79,6 +79,20 @@ test_that("postprocessing validators reject correct values on a shifted grid", {
 
 # --- validate_apply_mask ------------------------------------------------------
 
+test_that("distributed volume selection is deterministic and includes endpoints", {
+  expected <- as.integer(round(seq.int(1, 1000, length.out = 32)))
+  selected <- pp_distributed_volume_indices(1000L, 32L)
+
+  expect_identical(selected, expected)
+  expect_length(selected, 32L)
+  expect_identical(selected[1], 1L)
+  expect_identical(selected[32], 1000L)
+  expect_identical(anyDuplicated(selected), 0L)
+  expect_true(all(diff(selected) > 0L))
+  expect_identical(pp_distributed_volume_indices(20L, 32L), 1:20)
+  expect_identical(pp_distributed_volume_indices(20L, Inf), 1:20)
+})
+
 test_that("validate_apply_mask passes when masking is correct", {
   skip_if_not_installed("RNifti")
 
@@ -108,6 +122,60 @@ test_that("validate_apply_mask passes when masking is correct", {
   expect_true(result)
   expect_equal(attr(result, "external_violations"), 0L)
   expect_equal(attr(result, "details")$n_mismatched, 0L)
+  expect_identical(attr(result, "details")$volumes_compared, 20L)
+  expect_identical(attr(result, "details")$total_volumes, 20L)
+  expect_identical(attr(result, "details")$volume_indices, 1:20)
+  expect_identical(attr(result, "details")$volume_sampling, "all")
+  expect_match(attr(result, "message"), "Exact mask replay \\(20/20 volumes")
+})
+
+test_that("validate_apply_mask samples 32 distributed volumes by default", {
+  expect_identical(formals(validate_apply_mask)$max_volumes, 32L)
+
+  nx <- 4; ny <- 4; nz <- 3; nt <- 41
+  mask <- array(0L, dim = c(nx, ny, nz))
+  mask[2:3, 2:3, 2] <- 1L
+  pre <- array(seq_len(nx * ny * nz * nt), dim = c(nx, ny, nz, nt))
+  correct <- pre * array(rep(mask, nt), dim = dim(pre))
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  mask_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, mask_file)), add = TRUE)
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(correct, post_file)
+  write_synth_mask(mask, mask_file)
+
+  result <- validate_apply_mask(pre_file, post_file, mask_file)
+  details <- attr(result, "details")
+  expect_true(result)
+  expect_identical(details$volumes_compared, 32L)
+  expect_identical(details$total_volumes, 41L)
+  expect_identical(details$volume_sampling, "distributed")
+  expect_length(details$volume_indices, 32L)
+  expect_identical(details$volume_indices[1], 1L)
+  expect_identical(details$volume_indices[32], 41L)
+  expect_true(details$includes_first_volume)
+  expect_true(details$includes_last_volume)
+  expect_match(attr(result, "message"), "Distributed mask replay \\(32/41 volumes")
+
+  unsampled <- setdiff(seq_len(nt), details$volume_indices)[1]
+  altered <- correct
+  altered[1, 1, 1, unsampled] <- 999
+  write_synth_4d(altered, post_file)
+  expect_true(validate_apply_mask(pre_file, post_file, mask_file))
+  exhaustive <- validate_apply_mask(
+    pre_file, post_file, mask_file, max_volumes = Inf
+  )
+  expect_false(exhaustive)
+  expect_identical(attr(exhaustive, "details")$volumes_compared, 41L)
+  expect_identical(attr(exhaustive, "details")$volume_sampling, "all")
+
+  altered <- correct
+  altered[1, 1, 1, nt] <- 999
+  write_synth_4d(altered, post_file)
+  endpoint_result <- validate_apply_mask(pre_file, post_file, mask_file)
+  expect_false(endpoint_result)
+  expect_gt(attr(endpoint_result, "external_violations"), 0L)
 })
 
 test_that("validate_apply_mask fails when outside-mask voxels have signal", {

@@ -100,7 +100,7 @@ The corresponding setup checklist is:
 1. Installation: Install the BrainGnomes R package. The package is not on CRAN (yet), so for now, you must install from GitHub. Then load it in your R session:
 ```{r, eval=FALSE}
 # Install (if needed) and load BrainGnomes
-# devtools::install_github("UNCDEPENdLab/BrainGnomes")
+# devtools::install_github("HallquistLab/BrainGnomes")
 library(BrainGnomes)
 ```
 

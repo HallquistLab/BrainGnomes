@@ -139,6 +139,33 @@ pp_read_volume_matrix <- function(path, volumes, spatial_dims) {
   matrix(as.numeric(image), nrow = prod(spatial_dims), ncol = length(volumes))
 }
 
+#' Select deterministic timepoints distributed over a complete run
+#'
+#' Finite caps retain regularly spaced, ordered timepoints and include the
+#' first and last volume whenever at least two volumes are selected. Runs no
+#' longer than the cap retain every volume. `NULL`, `NA`, and `Inf` request all
+#' volumes.
+#'
+#' @keywords internal
+#' @noRd
+pp_distributed_volume_indices <- function(nt, max_volumes) {
+  if (!checkmate::test_count(nt, positive = TRUE)) {
+    stop("nt must be a positive integer.", call. = FALSE)
+  }
+  if (is.null(max_volumes) ||
+      (length(max_volumes) == 1L &&
+       (is.na(max_volumes) || is.infinite(max_volumes)))) {
+    return(seq_len(nt))
+  }
+  checkmate::assert_count(max_volumes, positive = TRUE)
+  n_use <- min(nt, as.integer(max_volumes))
+  if (n_use == nt) return(seq_len(nt))
+
+  indices <- as.integer(round(seq.int(1, nt, length.out = n_use)))
+  stopifnot(length(indices) == n_use, !anyDuplicated(indices))
+  indices
+}
+
 #' Compare an observed numeric transform with its expected values
 #' @keywords internal
 #' @noRd
@@ -289,30 +316,38 @@ pp_validate_censor <- function(censor, n_timepoints) {
 #'
 #' Replays the masking operation in volume chunks and checks that the post-mask
 #' image equals the pre-mask image inside the mask and is exactly zero outside
-#' it. Voxels inside the mask that remain zero for the full run are reported.
+#' it. Voxels inside the mask that remain zero across the compared volumes are
+#' reported.
 #'
 #' @param pre_file Path to the 4D fMRI data before masking.
 #' @param post_file Path to the 4D fMRI data after masking.
 #' @param mask_file Path to the binary mask NIfTI file (1s = brain, 0s = non-brain).
 #' @param tolerance Maximum relative numerical error allowed inside the mask.
+#' @param max_volumes Maximum number of timepoints compared. The default uses
+#'   32 timepoints deterministically distributed over the complete run,
+#'   including the first and last. Runs with 32 or fewer timepoints use every
+#'   volume. Use `Inf` for exhaustive replay.
 #' @param chunk_size Number of volumes compared at a time.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes:
 #'   - `message`: Character string describing the validation result.
 #'   - `external_violations`: Integer count of voxels outside mask with non-zero signal.
-#'   - `internal_zeros`: Integer count of voxels inside mask that are all zero.
+#'   - `internal_zeros`: Integer count of voxels inside mask that are zero in all
+#'     compared volumes.
 #'
 #' @details
-#' Validation requires the complete post-mask image to equal the exact expected
+#' Validation requires the sampled post-mask volumes to equal the exact expected
 #' transform within `tolerance`. This prevents an all-zero or otherwise altered
 #' in-mask output from passing merely because nothing leaked outside the mask.
+#' Spatial-grid and mask-validity checks remain exhaustive.
 #'
 #' @keywords internal
 #' @importFrom RNifti readNifti
 #' @importFrom matrixStats rowAnys
 validate_apply_mask <- function(pre_file, post_file, mask_file,
-                                tolerance = 1e-5, chunk_size = 100L) {
+                                tolerance = 1e-5, max_volumes = 32L,
+                                chunk_size = 100L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
@@ -359,9 +394,17 @@ validate_apply_mask <- function(pre_file, post_file, mask_file,
     n_mismatched = 0L, n_nonfinite_observed = 0L,
     finite_pattern_mismatches = 0L
   )
+  volume_indices <- pp_distributed_volume_indices(
+    pre_dims[4], max_volumes = max_volumes
+  )
+  volume_sampling <- if (length(volume_indices) == pre_dims[4]) {
+    "all"
+  } else {
+    "distributed"
+  }
   volume_groups <- split(
-    seq_len(pre_dims[4]),
-    ceiling(seq_len(pre_dims[4]) / as.integer(chunk_size))
+    volume_indices,
+    ceiling(seq_along(volume_indices) / as.integer(chunk_size))
   )
   for (volumes in volume_groups) {
     pre_matrix <- pp_read_volume_matrix(pre_file, volumes, pre_dims[1:3])
@@ -392,12 +435,32 @@ validate_apply_mask <- function(pre_file, post_file, mask_file,
   internal_zeros <- sum(mask_vec & !inside_any_nonzero)
   passed <- aggregate$n_mismatched == 0L &&
     aggregate$n_nonfinite_observed == 0L && external_violations == 0L
+  replay_label <- if (identical(volume_sampling, "all")) {
+    "Exact mask replay"
+  } else {
+    "Distributed mask replay"
+  }
+  includes_first_volume <- identical(volume_indices[1], 1L)
+  includes_last_volume <- identical(
+    volume_indices[length(volume_indices)], pre_dims[4]
+  )
+  endpoint_note <- if (includes_first_volume && includes_last_volume) {
+    ", including first and last"
+  } else if (includes_first_volume) {
+    ", including first"
+  } else if (includes_last_volume) {
+    ", including last"
+  } else {
+    ""
+  }
   msg <- sprintf(
     paste0(
-      "Exact mask replay: %d mismatched values, max relative error %.6g ",
+      "%s (%d/%d volumes%s): ",
+      "%d mismatched values, max relative error %.6g ",
       "(tol %.6g); %d outside-mask voxels nonzero/nonfinite; ",
-      "%d in-mask voxels zero for all volumes."
+      "%d in-mask voxels zero for all compared volumes."
     ),
+    replay_label, length(volume_indices), pre_dims[4], endpoint_note,
     aggregate$n_mismatched, aggregate$max_relative_error, tolerance,
     external_violations, internal_zeros
   )
@@ -409,7 +472,14 @@ validate_apply_mask <- function(pre_file, post_file, mask_file,
   attr(result, "details") <- c(
     aggregate,
     list(
-      tolerance = tolerance, volumes_compared = pre_dims[4],
+      tolerance = tolerance,
+      volumes_compared = length(volume_indices),
+      total_volumes = pre_dims[4],
+      max_volumes = max_volumes,
+      volume_indices = volume_indices,
+      volume_sampling = volume_sampling,
+      includes_first_volume = includes_first_volume,
+      includes_last_volume = includes_last_volume,
       chunk_size = as.integer(chunk_size)
     )
   )
@@ -1422,24 +1492,10 @@ pp_mad_scale_matrix <- function(mat) {
 #' @keywords internal
 #' @noRd
 pp_smoothness_volume_indices <- function(nt, max_volumes = 96L) {
-  if (!checkmate::test_count(nt, positive = TRUE)) {
-    stop("nt must be a positive integer.", call. = FALSE)
-  }
-  if (is.null(max_volumes) ||
-      (length(max_volumes) == 1L && (is.na(max_volumes) || is.infinite(max_volumes)))) {
-    return(seq_len(nt))
-  }
-  checkmate::assert_count(max_volumes, positive = TRUE)
-  n_use <- min(nt, as.integer(max_volumes))
-  if (n_use == nt) return(seq_len(nt))
-
   # Smoothness is a spatial property. Spread the retained timepoints over the
   # complete run so a short validation sample is not determined by one
-  # contiguous acquisition segment. Since n_use <= nt, rounding this regular
-  # grid yields exactly n_use unique, ordered, one-based indices.
-  indices <- as.integer(round(seq.int(1, nt, length.out = n_use)))
-  stopifnot(length(indices) == n_use, !anyDuplicated(indices))
-  indices
+  # contiguous acquisition segment.
+  pp_distributed_volume_indices(nt, max_volumes = max_volumes)
 }
 
 #' Match the classic smoothness preprocessing used by 3dSmoothnessChange.R

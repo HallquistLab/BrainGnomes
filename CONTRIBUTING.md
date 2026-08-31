@@ -33,4 +33,4 @@ Thanks for your interest in improving BrainGnomes! This guide summarizes how to 
 ## Reference
 - Repo guidelines: `AGENTS.md`
 - README and examples: `README.md`
-- Package site: https://uncdependlab.github.io/BrainGnomes/
+- Package site: https://hallquistlab.github.io/BrainGnomes/

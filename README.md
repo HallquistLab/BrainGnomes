@@ -1,8 +1,8 @@
 # BrainGnomes
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/R-CMD-check.yaml)
-[![pkgdown](https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/pkgdown.yaml)
+[![R-CMD-check](https://github.com/HallquistLab/BrainGnomes/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/HallquistLab/BrainGnomes/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/HallquistLab/BrainGnomes/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/HallquistLab/BrainGnomes/actions/workflows/pkgdown.yaml)
 <!-- badges: end -->
 
 BrainGnomes is an R package for configuring, submitting, and monitoring reproducible fMRI workflows on high-performance computing (HPC) systems. It coordinates containerized neuroimaging tools and scheduler jobs from one project configuration, while retaining logs and job-tracking information for each run.
@@ -33,7 +33,7 @@ stage-specific:
 BrainGnomes scripts invoke `singularity`; an Apptainer installation is suitable
 when it provides that compatibility command.
 
-See the [Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) for the full configuration workflow, or start with [Local onboarding and prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html) to inspect a miniature configuration and run examples without a cluster.
+See the [Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) for the full configuration workflow, or start with [Local onboarding and prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html) to inspect a miniature configuration and run examples without a cluster.
 
 ## Installation
 
@@ -41,7 +41,7 @@ BrainGnomes is installed from GitHub. In R:
 
 ```r
 install.packages("remotes")  # once, if needed
-remotes::install_github("UNCDEPENdLab/BrainGnomes")
+remotes::install_github("HallquistLab/BrainGnomes")
 
 library(BrainGnomes)
 ```
@@ -52,10 +52,10 @@ To install a particular tagged release rather than the latest development
 version, supply its tag with `ref`. For example:
 
 ```r
-remotes::install_github("UNCDEPENdLab/BrainGnomes", ref = "0.9")
+remotes::install_github("HallquistLab/BrainGnomes", ref = "0.9")
 ```
 
-See the [available tags](https://github.com/UNCDEPENdLab/BrainGnomes/tags)
+See the [available tags](https://github.com/HallquistLab/BrainGnomes/tags)
 to choose an available tag.
 
 ## Typical workflow
@@ -158,21 +158,21 @@ Cancellation follows the same preview-first pattern and affects only queued or
 running scheduler jobs; it does not delete project data or outputs. BIDS
 validation remains independently schedulable with
 `run_bids_validation()` or `BrainGnomes validate-bids`. The
-[Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
+[Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
 shows the primary workflow and these optional tools.
 
 ## Documentation
 
-The [package website](https://uncdependlab.github.io/BrainGnomes/) includes function reference pages, release notes, and the following guides:
+The [package website](https://hallquistlab.github.io/BrainGnomes/) includes function reference pages, release notes, and the following guides:
 
-- [BrainGnomes Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) — set up a project and run an end-to-end workflow.
-- [Local onboarding and prerequisites](https://uncdependlab.github.io/BrainGnomes/articles/local_onboarding.html) — inspect an installed example configuration and run a first task without scheduler or container access.
-- [Building Singularity containers for BrainGnomes](https://uncdependlab.github.io/BrainGnomes/articles/building_containers.html) — create the container images used by pipeline stages.
-- [Postprocessing Walkthrough](https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.html) — configure masking, smoothing, AROMA, filtering, scrubbing, intensity normalization, and confound regression.
-- [Extracting ROI Timeseries and Connectivity](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.html) — configure atlas/mask ROI extraction and connectivity outputs.
-- [Diagnosing Pipeline Runs](https://uncdependlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html) — triage project or subject status and investigate failures from job-tracking records and logs.
-- [Run-wise Intensity Normalization](https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.html) — understand the robust reference-core approach, targets, provenance, quality checks, and troubleshooting.
+- [BrainGnomes Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) — set up a project and run an end-to-end workflow.
+- [Local onboarding and prerequisites](https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html) — inspect an installed example configuration and run a first task without scheduler or container access.
+- [Building Singularity containers for BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/building_containers.html) — create the container images used by pipeline stages.
+- [Postprocessing Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.html) — configure masking, smoothing, AROMA, filtering, scrubbing, intensity normalization, and confound regression.
+- [Extracting ROI Timeseries and Connectivity](https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.html) — configure atlas/mask ROI extraction and connectivity outputs.
+- [Diagnosing Pipeline Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html) — triage project or subject status and investigate failures from job-tracking records and logs.
+- [Run-wise Intensity Normalization](https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.html) — understand the robust reference-core approach, targets, provenance, quality checks, and troubleshooting.
 
 ## Getting help and contributing
 
-Please [open an issue](https://github.com/UNCDEPENdLab/BrainGnomes/issues) for bugs, questions, or feature requests. Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
+Please [open an issue](https://github.com/HallquistLab/BrainGnomes/issues) for bugs, questions, or feature requests. Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.

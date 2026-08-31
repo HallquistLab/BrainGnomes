@@ -17,7 +17,7 @@ SystemRequirements: Full scheduled workflows: SLURM or TORQUE/PBS, Bash,
     the Flywheel CLI, a BIDS validator, a HeuDiConv heuristic, a FreeSurfer
     license, and Python 3 with nibabel, nilearn, and templateflow.
 License: GPL-3
-BugReports: https://github.com/UNCDEPENdLab/BrainGnomes/issues
+BugReports: https://github.com/HallquistLab/BrainGnomes/issues
 Depends:
     R (>= 4.1.0)
 LazyData: yes
@@ -53,5 +53,5 @@ Suggests:
     MASS
 Config/testthat/edition: 3
 LinkingTo: Rcpp, RNifti, RcppArmadillo
-URL: https://uncdependlab.github.io/BrainGnomes/
+URL: https://hallquistlab.github.io/BrainGnomes/
 VignetteBuilder: knitr

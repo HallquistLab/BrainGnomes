@@ -70,10 +70,7 @@ NumericVector image_quantile(std::string in_file,
   
   // read image
   RNifti::NiftiImage image(in_file);
-  
-  // grab voxel data into a float vector
-  std::vector<float> img_data(image.data().begin(), image.data().end());
-  
+
   // Get image dimensions
   std::vector<dim_t> dims = image.dim();
   size_t ndim = dims.size();
@@ -82,9 +79,7 @@ NumericVector image_quantile(std::string in_file,
   size_t nx = dims[0], ny = dims[1], nz = dims[2];
   size_t nt = (ndim == 4) ? dims[3] : 1;
   size_t vol_size = nx * ny * nz; // spatial dimensions
-  
-  // vector of whether to include voxel in calculation
-  std::vector<bool> include(img_data.size(), true);
+  size_t n_image_values = image.nVoxels();
   
   bool use_mask = brain_mask.isNotNull();
   std::vector<float> mask_data; // empty mask_data definition
@@ -108,28 +103,48 @@ NumericVector image_quantile(std::string in_file,
     mask_img.dropData(); // drop mask data from memory (no longer needed)
   }
   
-  // repeatedly re-use 3D mask, if relevant
-  for (size_t t = 0; t < nt; ++t) {
-    for (size_t i = 0; i < vol_size; ++i) {
-      size_t idx = t * vol_size + i;
-      bool include_voxel = true;
-      if (use_mask) include_voxel = include_voxel && (mask_data[i] > 0.001);
-      if (exclude_zero && include_voxel) include_voxel = include_voxel && (img_data[idx] != 0.0f);
-      include[idx] = include_voxel;
+  if (n_image_values != vol_size * nt) {
+    stop("Image dimensions do not match the number of stored voxel values.");
+  }
+
+  // Count retained values first so the quantile vector can be allocated once,
+  // without materialising either a complete float copy of the image or a
+  // whole-image inclusion bitmap. Keep the conversion to float so numerical
+  // behaviour matches the historical implementation exactly.
+  size_t nvals = 0;
+  std::vector<float> values;
+  {
+    const RNifti::NiftiImageData &image_data = image.data();
+    for (size_t t = 0; t < nt; ++t) {
+      for (size_t i = 0; i < vol_size; ++i) {
+        const size_t idx = t * vol_size + i;
+        const float value = static_cast<float>(image_data[idx]);
+        bool include_voxel = !use_mask || (mask_data[i] > 0.001f);
+        if (exclude_zero && include_voxel) {
+          include_voxel = (value != 0.0f);
+        }
+        if (include_voxel) ++nvals;
       }
+    }
+
+    values.reserve(nvals);
+    for (size_t t = 0; t < nt; ++t) {
+      for (size_t i = 0; i < vol_size; ++i) {
+        const size_t idx = t * vol_size + i;
+        const float value = static_cast<float>(image_data[idx]);
+        bool include_voxel = !use_mask || (mask_data[i] > 0.001f);
+        if (exclude_zero && include_voxel) {
+          include_voxel = (value != 0.0f);
+        }
+        if (include_voxel) values.push_back(value);
+      }
+    }
   }
-  
-  int nvals = std::count(include.begin(), include.end(), true);
-  std::vector<float> values; // vector of values for quantile calculation
-  values.reserve(nvals);
-  
-  // Rcout << "Voxels included is: " << nvals << std::endl;
-  
-  // populate values vector
-  for (size_t i = 0; i < img_data.size(); ++i) {
-    if (include[i]) values.push_back(img_data[i]);
-  }
-  
+
+  // nth_element only needs the retained float values. Release RNifti's native
+  // full-image buffer before beginning quantile selection.
+  image.dropData();
+
   if (values.empty()) stop("No valid voxels found for quantile calculation.");
   
   // this uses std::nth_element to only reorder values up to the point of interest (e.g., the 10th percentile), whereas sort reorders the full array (slower)

@@ -99,3 +99,89 @@ test_that("resample_template_to_img forwards cohort-qualified template queries",
   expect_identical(captured$template_cohort, 2L)
   expect_true(grepl("cohort-2", basename(out), fixed = TRUE))
 })
+
+test_that("Python template resampling preserves target xforms and codes", {
+  skip_if_not_installed("reticulate")
+  required_modules <- c("nibabel", "nilearn", "numpy", "templateflow")
+  available <- vapply(
+    required_modules, reticulate::py_module_available, logical(1)
+  )
+  skip_if_not(
+    all(available),
+    paste("Python modules unavailable:", paste(required_modules[!available], collapse = ", "))
+  )
+
+  script <- system.file(
+    "fetch_matched_template_image.py", package = "BrainGnomes"
+  )
+  expect_true(file.exists(script))
+
+  tmp_dir <- tempfile("resample_xforms_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  reference_file <- file.path(
+    tmp_dir,
+    "sub-01_task-test_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz"
+  )
+  template_file <- file.path(tmp_dir, "template_mask.nii.gz")
+  output_file <- file.path(tmp_dir, "resampled_mask.nii.gz")
+
+  np <- reticulate::import("numpy", convert = FALSE)
+  nib <- reticulate::import("nibabel", convert = FALSE)
+  reference_affine <- diag(4)
+  reference_affine[1:3, 1:3] <- diag(c(2.4, 2.5, 2.6))
+  reference_affine[1:3, 4] <- c(-70, -90, -60)
+  reference_affine_py <- np$array(reference_affine)
+  reference <- nib$Nifti1Image(
+    np$zeros(reticulate::tuple(8L, 9L, 7L, 3L), dtype = "float32"),
+    reference_affine_py
+  )
+  reference$set_qform(reference_affine_py, code = 4L)
+  reference$set_sform(reference_affine_py, code = 4L)
+  nib$save(reference, reference_file)
+
+  template_affine_py <- np$array(diag(c(1, 1, 1, 1)))
+  template <- nib$Nifti1Image(
+    np$ones(reticulate::tuple(5L, 6L, 4L), dtype = "uint8"),
+    template_affine_py
+  )
+  nib$save(template, template_file)
+
+  module <- reticulate::import_from_path(
+    "fetch_matched_template_image", path = dirname(script), convert = FALSE
+  )
+  reticulate::py_set_attr(
+    module,
+    "fetch_template_image",
+    reticulate::r_to_py(
+      function(template, resolution, suffix, desc = NULL,
+               extension = ".nii.gz", cohort = NULL) template_file
+    )
+  )
+  module$resample_template_to_bold(
+    in_file = reference_file,
+    output = output_file,
+    template_space = "MNI152NLin2009cAsym",
+    interpolation = "nearest"
+  )
+
+  observed <- nib$load(output_file)
+  observed_qform <- observed$get_qform(coded = TRUE)
+  observed_sform <- observed$get_sform(coded = TRUE)
+  reference_qform <- reference$get_qform(coded = TRUE)
+  reference_sform <- reference$get_sform(coded = TRUE)
+
+  observed_qform <- reticulate::py_to_r(observed_qform)
+  observed_sform <- reticulate::py_to_r(observed_sform)
+  reference_qform <- reticulate::py_to_r(reference_qform)
+  reference_sform <- reticulate::py_to_r(reference_sform)
+
+  expect_identical(as.integer(observed_qform[[2L]]), 4L)
+  expect_identical(as.integer(observed_sform[[2L]]), 4L)
+  expect_equal(
+    observed_qform[[1L]], reference_qform[[1L]], tolerance = 1e-7
+  )
+  expect_equal(
+    observed_sform[[1L]], reference_sform[[1L]], tolerance = 1e-7
+  )
+})

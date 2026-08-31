@@ -67,6 +67,46 @@ test_that("image_quantile computes correct quantiles in 3D and 4D with masking a
   }
 })
 
+test_that("image_quantile returns combined quantiles identically to separate calls", {
+  skip_if_not_installed("RNifti")
+
+  dims <- c(7L, 6L, 5L, 9L)
+  values <- ((seq_len(prod(dims)) * 37L) %% 997L) - 400L
+  values[seq.int(3L, length(values), by = 19L)] <- 0L
+  image <- array(values, dim = dims)
+  mask <- array((seq_len(prod(dims[1:3])) %% 4L) != 0L, dim = dims[1:3])
+  image_file <- tempfile(fileext = ".nii.gz")
+  mask_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(image_file, mask_file)), add = TRUE)
+  RNifti::writeNifti(RNifti::asNifti(image), image_file)
+  RNifti::writeNifti(RNifti::asNifti(mask), mask_file)
+
+  probabilities <- c(0.5, 0.02, 0.98, 0.25, 0.5)
+  combined <- image_quantile(
+    image_file, mask_file, probabilities, exclude_zero = TRUE
+  )
+  separate <- vapply(
+    probabilities,
+    function(probability) {
+      unname(image_quantile(
+        image_file, mask_file, probability, exclude_zero = TRUE
+      ))
+    },
+    numeric(1L)
+  )
+  retained <- as.vector(image)[rep(as.vector(mask), dims[4])]
+  retained <- retained[retained != 0]
+  expected <- unname(stats::quantile(
+    retained, probabilities, names = FALSE, type = 7
+  ))
+
+  expect_equal(unname(combined), separate, tolerance = 0)
+  expect_equal(unname(combined), expected, tolerance = 1e-6)
+  expect_identical(
+    names(combined), sprintf("%.2f%%", probabilities * 100)
+  )
+})
+
 test_that("image_quantile rejects empty, missing, and non-finite probabilities", {
   skip_if_not_installed("RNifti")
   image_file <- tempfile(fileext = ".nii.gz")
