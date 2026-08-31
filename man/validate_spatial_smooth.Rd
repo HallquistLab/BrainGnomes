@@ -17,7 +17,7 @@ validate_spatial_smooth(
   polydeg = NULL,
   demean = NULL,
   unif = NULL,
-  max_volumes = 600L
+  max_volumes = 96L
 )
 }
 \arguments{
@@ -56,8 +56,10 @@ match that model; without \code{fwhm_mm}, \code{TRUE} applies diagnostic detrend
 
 \item{unif}{Optional logical temporal-MAD scaling setting. \code{NULL} uses the model.}
 
-\item{max_volumes}{Maximum number of timepoints used for validation. The
-first \code{max_volumes} are used; \code{Inf} uses all volumes.}
+\item{max_volumes}{Maximum number of timepoints used for validation.
+Timepoints are deterministically distributed over the complete run;
+shorter runs use every timepoint, and \code{Inf} uses all volumes. A calibrated
+model may require its stored cap and reject a different override.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).

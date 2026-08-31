@@ -1,13 +1,301 @@
 ### Postprocessing validation functions
 
+#' Read NIfTI dimensions without loading image data
+#' @keywords internal
+#' @noRd
+pp_nifti_dims4 <- function(path) {
+  checkmate::assert_file_exists(path)
+  header <- RNifti::niftiHeader(path)
+  dims <- as.integer(header$dim[2:5])
+  dims[!is.finite(dims) | dims < 1L] <- 1L
+  dims
+}
+
+#' Compare the spatial grids encoded by two NIfTI headers
+#'
+#' Postprocessing operations in this file are not resampling operations. They
+#' must therefore preserve the spatial matrix, voxel sizes, spatial units, and
+#' both qform- and sform-preferred transforms. Comparing only array dimensions
+#' can miss an output whose voxel values are correct but whose world-space
+#' mapping has been damaged.
+#'
+#' @keywords internal
+#' @noRd
+pp_compare_nifti_grid <- function(reference_path, candidate_path,
+                                   reference_label = "reference",
+                                   candidate_label = "candidate",
+                                   tolerance = 1e-5) {
+  checkmate::assert_file_exists(reference_path)
+  checkmate::assert_file_exists(candidate_path)
+  checkmate::assert_string(reference_label, min.chars = 1L)
+  checkmate::assert_string(candidate_label, min.chars = 1L)
+  checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+
+  reference_header <- RNifti::niftiHeader(reference_path)
+  candidate_header <- RNifti::niftiHeader(candidate_path)
+  reference_dims <- as.integer(reference_header$dim[2:4])
+  candidate_dims <- as.integer(candidate_header$dim[2:4])
+  reference_pixdim <- as.numeric(reference_header$pixdim[2:4])
+  candidate_pixdim <- as.numeric(candidate_header$pixdim[2:4])
+  reference_codes <- c(
+    qform = as.integer(reference_header$qform_code),
+    sform = as.integer(reference_header$sform_code)
+  )
+  candidate_codes <- c(
+    qform = as.integer(candidate_header$qform_code),
+    sform = as.integer(candidate_header$sform_code)
+  )
+  # The low three bits encode spatial units; temporal units are deliberately
+  # excluded because this helper's contract is spatial-grid invariance.
+  reference_units <- bitwAnd(as.integer(reference_header$xyzt_units), 7L)
+  candidate_units <- bitwAnd(as.integer(candidate_header$xyzt_units), 7L)
+  reference_qform <- unclass(RNifti::xform(reference_header, TRUE))
+  candidate_qform <- unclass(RNifti::xform(candidate_header, TRUE))
+  reference_sform <- unclass(RNifti::xform(reference_header, FALSE))
+  candidate_sform <- unclass(RNifti::xform(candidate_header, FALSE))
+
+  max_difference <- function(x, y) {
+    if (!identical(dim(x), dim(y)) || any(!is.finite(x)) || any(!is.finite(y))) {
+      return(Inf)
+    }
+    max(abs(as.numeric(x) - as.numeric(y)))
+  }
+  pixdim_difference <- max_difference(
+    matrix(reference_pixdim, nrow = 1L),
+    matrix(candidate_pixdim, nrow = 1L)
+  )
+  qform_difference <- max_difference(reference_qform, candidate_qform)
+  sform_difference <- max_difference(reference_sform, candidate_sform)
+  dimensions_match <- identical(reference_dims, candidate_dims)
+  codes_match <- identical(reference_codes, candidate_codes)
+  units_match <- identical(reference_units, candidate_units)
+  passed <- dimensions_match && codes_match && units_match &&
+    pixdim_difference <= tolerance && qform_difference <= tolerance &&
+    sform_difference <= tolerance
+
+  reasons <- character()
+  if (!dimensions_match) reasons <- c(reasons, "spatial dimensions")
+  if (pixdim_difference > tolerance) reasons <- c(reasons, "voxel sizes")
+  if (!units_match) reasons <- c(reasons, "spatial units")
+  if (!codes_match) reasons <- c(reasons, "qform/sform codes")
+  if (qform_difference > tolerance) reasons <- c(reasons, "qform transform")
+  if (sform_difference > tolerance) reasons <- c(reasons, "sform transform")
+  message <- if (passed) {
+    sprintf(
+      "%s and %s have the same spatial NIfTI grid.",
+      reference_label, candidate_label
+    )
+  } else {
+    sprintf(
+      paste0(
+        "%s/%s spatial NIfTI grid mismatch (%s): dims [%s] vs [%s], ",
+        "pixdim [%s] vs [%s], qform/sform codes [%s] vs [%s], ",
+        "maximum qform/sform differences %.6g/%.6g (tol %.6g)."
+      ),
+      reference_label, candidate_label, paste(reasons, collapse = ", "),
+      paste(reference_dims, collapse = "x"),
+      paste(candidate_dims, collapse = "x"),
+      paste(signif(reference_pixdim, 7L), collapse = "x"),
+      paste(signif(candidate_pixdim, 7L), collapse = "x"),
+      paste(reference_codes, collapse = "/"),
+      paste(candidate_codes, collapse = "/"),
+      qform_difference, sform_difference, tolerance
+    )
+  }
+
+  list(
+    passed = passed, message = message,
+    reference_path = reference_path, candidate_path = candidate_path,
+    reference_dims = reference_dims, candidate_dims = candidate_dims,
+    reference_pixdim = reference_pixdim,
+    candidate_pixdim = candidate_pixdim,
+    reference_codes = reference_codes, candidate_codes = candidate_codes,
+    reference_spatial_units = reference_units,
+    candidate_spatial_units = candidate_units,
+    max_pixdim_difference = pixdim_difference,
+    max_qform_difference = qform_difference,
+    max_sform_difference = sform_difference,
+    tolerance = tolerance, mismatch_reasons = reasons
+  )
+}
+
+#' Return a standard failed validation result for a spatial-grid mismatch
+#' @keywords internal
+#' @noRd
+pp_grid_failure <- function(grid_check) {
+  stopifnot(is.list(grid_check), identical(grid_check$passed, FALSE))
+  out <- FALSE
+  attr(out, "message") <- grid_check$message
+  attr(out, "details") <- list(spatial_grid = grid_check)
+  out
+}
+
+#' Read selected NIfTI volumes as a voxels-by-time matrix
+#' @keywords internal
+#' @noRd
+pp_read_volume_matrix <- function(path, volumes, spatial_dims) {
+  checkmate::assert_integerish(volumes, lower = 1L, any.missing = FALSE)
+  image <- RNifti::readNifti(path, volumes = as.integer(volumes))
+  matrix(as.numeric(image), nrow = prod(spatial_dims), ncol = length(volumes))
+}
+
+#' Compare an observed numeric transform with its expected values
+#' @keywords internal
+#' @noRd
+pp_compare_numeric <- function(observed, expected, tolerance = 1e-5,
+                                require_finite = TRUE) {
+  checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+  if (length(observed) != length(expected)) {
+    stop("Observed and expected values have different lengths.", call. = FALSE)
+  }
+  observed <- as.numeric(observed)
+  expected <- as.numeric(expected)
+  observed_finite <- is.finite(observed)
+  expected_finite <- is.finite(expected)
+  finite_pattern_mismatches <- sum(observed_finite != expected_finite)
+  nonfinite_observed <- sum(!observed_finite)
+  jointly_finite <- observed_finite & expected_finite
+  if (any(jointly_finite)) {
+    absolute_error <- abs(observed[jointly_finite] - expected[jointly_finite])
+    relative_error <- absolute_error / pmax(1, abs(expected[jointly_finite]))
+    max_absolute_error <- max(absolute_error)
+    max_relative_error <- max(relative_error)
+    numeric_mismatches <- sum(relative_error > tolerance)
+  } else {
+    max_absolute_error <- if (length(observed)) Inf else 0
+    max_relative_error <- if (length(observed)) Inf else 0
+    numeric_mismatches <- 0L
+  }
+  n_mismatched <- finite_pattern_mismatches + numeric_mismatches
+  passed <- n_mismatched == 0L &&
+    (!isTRUE(require_finite) || nonfinite_observed == 0L)
+  list(
+    passed = passed,
+    max_absolute_error = max_absolute_error,
+    max_relative_error = max_relative_error,
+    n_mismatched = n_mismatched,
+    n_nonfinite_observed = nonfinite_observed,
+    finite_pattern_mismatches = finite_pattern_mismatches
+  )
+}
+
+#' Compare two complete NIfTI images without loading every volume at once
+#' @keywords internal
+#' @noRd
+pp_compare_nifti_identity <- function(reference_path, candidate_path,
+                                       tolerance = 1e-5,
+                                       chunk_size = 100L) {
+  checkmate::assert_file_exists(reference_path)
+  checkmate::assert_file_exists(candidate_path)
+  checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+  checkmate::assert_count(chunk_size, positive = TRUE)
+
+  grid <- pp_compare_nifti_grid(
+    reference_path, candidate_path,
+    reference_label = "pre", candidate_label = "post",
+    tolerance = tolerance
+  )
+  reference_dims <- pp_nifti_dims4(reference_path)
+  candidate_dims <- pp_nifti_dims4(candidate_path)
+  if (!isTRUE(grid$passed) || !identical(reference_dims, candidate_dims)) {
+    return(list(
+      passed = FALSE,
+      message = if (!isTRUE(grid$passed)) grid$message else sprintf(
+        "Pre/post dimensions differ: [%s] vs [%s].",
+        paste(reference_dims, collapse = "x"),
+        paste(candidate_dims, collapse = "x")
+      ),
+      spatial_grid = grid,
+      reference_dims = reference_dims, candidate_dims = candidate_dims,
+      max_absolute_error = Inf, max_relative_error = Inf,
+      n_mismatched = Inf, n_nonfinite_observed = Inf,
+      finite_pattern_mismatches = Inf, tolerance = tolerance
+    ))
+  }
+
+  aggregate <- list(
+    max_absolute_error = 0, max_relative_error = 0,
+    n_mismatched = 0L, n_nonfinite_observed = 0L,
+    finite_pattern_mismatches = 0L
+  )
+  volume_groups <- split(
+    seq_len(reference_dims[4]),
+    ceiling(seq_len(reference_dims[4]) / as.integer(chunk_size))
+  )
+  for (volumes in volume_groups) {
+    comparison <- pp_compare_numeric(
+      pp_read_volume_matrix(candidate_path, volumes, reference_dims[1:3]),
+      pp_read_volume_matrix(reference_path, volumes, reference_dims[1:3]),
+      tolerance = tolerance, require_finite = TRUE
+    )
+    aggregate$max_absolute_error <- max(
+      aggregate$max_absolute_error, comparison$max_absolute_error
+    )
+    aggregate$max_relative_error <- max(
+      aggregate$max_relative_error, comparison$max_relative_error
+    )
+    for (name in c(
+      "n_mismatched", "n_nonfinite_observed", "finite_pattern_mismatches"
+    )) {
+      aggregate[[name]] <- aggregate[[name]] + comparison[[name]]
+    }
+  }
+  passed <- aggregate$n_mismatched == 0L &&
+    aggregate$n_nonfinite_observed == 0L
+  c(
+    list(
+      passed = passed,
+      message = sprintf(
+        paste0(
+          "Unchanged-image replay: %d mismatched values, maximum relative ",
+          "error %.6g (tol %.6g) across %d volumes."
+        ),
+        aggregate$n_mismatched, aggregate$max_relative_error, tolerance,
+        reference_dims[4]
+      ),
+      spatial_grid = grid,
+      reference_dims = reference_dims, candidate_dims = candidate_dims
+    ),
+    aggregate,
+    list(tolerance = tolerance, volumes_compared = reference_dims[4])
+  )
+}
+
+#' Validate a binary censor vector against a BOLD time dimension
+#' @keywords internal
+#' @noRd
+pp_validate_censor <- function(censor, n_timepoints) {
+  numeric_censor <- suppressWarnings(as.numeric(censor))
+  if (length(numeric_censor) != n_timepoints) {
+    return(list(
+      valid = FALSE, censor = numeric_censor,
+      message = sprintf(
+        "Censor length (%d) does not match pre image T (%d).",
+        length(numeric_censor), n_timepoints
+      )
+    ))
+  }
+  if (any(!is.finite(numeric_censor)) ||
+      any(!numeric_censor %in% c(0, 1))) {
+    return(list(
+      valid = FALSE, censor = numeric_censor,
+      message = "Censor vector must contain only binary 0/1 values."
+    ))
+  }
+  list(valid = TRUE, censor = as.integer(numeric_censor), message = NULL)
+}
+
 #' Validate that a brain mask was correctly applied to 4D fMRI data
 #'
-#' Checks that voxels outside the mask are zero (no signal leakage) and
-#' optionally reports voxels inside the mask that are all zero (potentially
-#' problematic).
+#' Replays the masking operation in volume chunks and checks that the post-mask
+#' image equals the pre-mask image inside the mask and is exactly zero outside
+#' it. Voxels inside the mask that remain zero for the full run are reported.
 #'
+#' @param pre_file Path to the 4D fMRI data before masking.
+#' @param post_file Path to the 4D fMRI data after masking.
 #' @param mask_file Path to the binary mask NIfTI file (1s = brain, 0s = non-brain).
-#' @param data_file Path to the masked 4D fMRI data file (after `apply_mask` was run).
+#' @param tolerance Maximum relative numerical error allowed inside the mask.
+#' @param chunk_size Number of volumes compared at a time.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes:
@@ -16,56 +304,115 @@
 #'   - `internal_zeros`: Integer count of voxels inside mask that are all zero.
 #'
 #' @details
-#' This function verifies that the masking step was applied correctly by checking:
-#' - External violations: voxels where mask == 0 (outside brain) but data has non-zero signal.
-#' - Internal zeros: voxels where mask > 0 (inside brain) but all timepoints are zero.
-#'
-#' Validation passes if `external_violations == 0`. Internal zeros are reported
-#' but do not cause validation to fail.
+#' Validation requires the complete post-mask image to equal the exact expected
+#' transform within `tolerance`. This prevents an all-zero or otherwise altered
+#' in-mask output from passing merely because nothing leaked outside the mask.
 #'
 #' @keywords internal
 #' @importFrom RNifti readNifti
 #' @importFrom matrixStats rowAnys
-validate_apply_mask <- function(mask_file, data_file) {
+validate_apply_mask <- function(pre_file, post_file, mask_file,
+                                tolerance = 1e-5, chunk_size = 100L) {
+  checkmate::assert_file_exists(pre_file)
+  checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
-  checkmate::assert_file_exists(data_file)
+  checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+  checkmate::assert_count(chunk_size, positive = TRUE)
 
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post", tolerance = tolerance
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
+  pre_mask_grid <- pp_compare_nifti_grid(
+    pre_file, mask_file, "pre", "mask", tolerance = tolerance
+  )
+  if (!isTRUE(pre_mask_grid$passed)) return(pp_grid_failure(pre_mask_grid))
+
+  pre_dims <- pp_nifti_dims4(pre_file)
+  post_dims <- pp_nifti_dims4(post_file)
   mask <- RNifti::readNifti(mask_file)
-  data4d <- RNifti::readNifti(data_file)
-
-  img_dims <- dim(data4d)
-  if (length(img_dims) == 3L) {
-    img_dims <- c(img_dims, 1L)
-    dim(data4d) <- img_dims
+  if (!identical(pre_dims, post_dims) ||
+      !identical(pre_dims[1:3], as.integer(dim(mask)))) {
+    out <- FALSE
+    attr(out, "message") <- sprintf(
+      "Pre/post/mask dimensions mismatch: pre=[%s], post=[%s], mask=[%s].",
+      paste(pre_dims, collapse = "x"), paste(post_dims, collapse = "x"),
+      paste(dim(mask), collapse = "x")
+    )
+    attr(out, "details") <- list(
+      pre_dim = pre_dims, post_dim = post_dims, mask_dim = dim(mask)
+    )
+    return(out)
   }
-  n_vox <- prod(img_dims[1:3])
-  n_t <- img_dims[4]
+  if (any(!is.finite(mask)) || any(mask < 0)) {
+    out <- FALSE
+    attr(out, "message") <- "Mask contains nonfinite or negative values."
+    attr(out, "details") <- list()
+    return(out)
+  }
 
-  # reshape 4D time series into voxels x time matrix
-  img_matrix <- array(data4d, dim = c(n_vox, n_t))
-  mask_vec <- as.vector(mask)
-  outside <- mask_vec == 0
-  inside <- mask_vec > 0
+  mask_vec <- as.vector(mask) > 0
+  inside_any_nonzero <- rep(FALSE, length(mask_vec))
+  outside_any_invalid <- rep(FALSE, length(mask_vec))
+  aggregate <- list(
+    max_absolute_error = 0, max_relative_error = 0,
+    n_mismatched = 0L, n_nonfinite_observed = 0L,
+    finite_pattern_mismatches = 0L
+  )
+  volume_groups <- split(
+    seq_len(pre_dims[4]),
+    ceiling(seq_len(pre_dims[4]) / as.integer(chunk_size))
+  )
+  for (volumes in volume_groups) {
+    pre_matrix <- pp_read_volume_matrix(pre_file, volumes, pre_dims[1:3])
+    post_matrix <- pp_read_volume_matrix(post_file, volumes, pre_dims[1:3])
+    expected <- pre_matrix
+    expected[!mask_vec, ] <- 0
+    comparison <- pp_compare_numeric(
+      post_matrix, expected, tolerance = tolerance, require_finite = TRUE
+    )
+    aggregate$max_absolute_error <- max(
+      aggregate$max_absolute_error, comparison$max_absolute_error
+    )
+    aggregate$max_relative_error <- max(
+      aggregate$max_relative_error, comparison$max_relative_error
+    )
+    aggregate$n_mismatched <- aggregate$n_mismatched + comparison$n_mismatched
+    aggregate$n_nonfinite_observed <- aggregate$n_nonfinite_observed +
+      comparison$n_nonfinite_observed
+    aggregate$finite_pattern_mismatches <-
+      aggregate$finite_pattern_mismatches + comparison$finite_pattern_mismatches
+    inside_any_nonzero <- inside_any_nonzero |
+      matrixStats::rowAnys(is.finite(post_matrix) & post_matrix != 0)
+    outside_any_invalid <- outside_any_invalid |
+      matrixStats::rowAnys(!is.finite(post_matrix) | post_matrix != 0)
+  }
 
-  # External violation: mask == 0 but ANY timepoint is nonzero
-  any_nonzero <- matrixStats::rowAnys(img_matrix != 0)
-  external_violations <- sum(outside & any_nonzero)
-
-  # Internal zeros: mask > 0 but ALL timepoints are zero
-  all_zero <- !any_nonzero
-  internal_zeros <- sum(inside & all_zero)
-
-  passed <- external_violations == 0L
-
-  msg <- paste0(
-    internal_zeros, " voxels = 0 inside the mask. ",
-    external_violations, " voxels > 0 outside the mask."
+  external_violations <- sum(!mask_vec & outside_any_invalid)
+  internal_zeros <- sum(mask_vec & !inside_any_nonzero)
+  passed <- aggregate$n_mismatched == 0L &&
+    aggregate$n_nonfinite_observed == 0L && external_violations == 0L
+  msg <- sprintf(
+    paste0(
+      "Exact mask replay: %d mismatched values, max relative error %.6g ",
+      "(tol %.6g); %d outside-mask voxels nonzero/nonfinite; ",
+      "%d in-mask voxels zero for all volumes."
+    ),
+    aggregate$n_mismatched, aggregate$max_relative_error, tolerance,
+    external_violations, internal_zeros
   )
 
   result <- passed
   attr(result, "message") <- msg
   attr(result, "external_violations") <- external_violations
   attr(result, "internal_zeros") <- internal_zeros
+  attr(result, "details") <- c(
+    aggregate,
+    list(
+      tolerance = tolerance, volumes_compared = pre_dims[4],
+      chunk_size = as.integer(chunk_size)
+    )
+  )
 
   return(result)
 }
@@ -76,7 +423,7 @@ validate_apply_mask <- function(mask_file, data_file) {
 #' @importFrom signal sgolayfilt
 #' @keywords internal
 #' @noRd
-.pp_power_multitaper <- function(
+pp_power_multitaper <- function(
     y, dt,
     nw = 3, k = NULL,
     pad_factor = 0.5, detrend = TRUE,
@@ -137,7 +484,7 @@ validate_apply_mask <- function(mask_file, data_file) {
 }
 
 
-.pp_mtm_bandpower <- function(
+pp_mtm_bandpower <- function(
     y, dt,
     bands,                       # data.frame with low/high[/label], or named list of length-2 numerics
     nw = 4, k = NULL,
@@ -287,60 +634,156 @@ validate_apply_mask <- function(mask_file, data_file) {
 
 #' @keywords internal
 #' @noRd
-.pp_is_valid_series <- function(x, tol = 2 * .Machine$double.eps) {
+pp_is_valid_series <- function(x, tol = 2 * .Machine$double.eps) {
   return(all(is.finite(x)) && stats::var(x) > tol)
 }
 
 #' @keywords internal
 #' @noRd
-.pp_select_nonconstant_voxels <- function(
+pp_select_nonconstant_voxels <- function(
     mask_idx,
     get_pre_ts,
-    get_post_ts,
     n_voxels,
+    spatial_dims,
     var_tol = 2 * .Machine$double.eps) {
 
+  checkmate::assert_integerish(mask_idx, lower = 1L, any.missing = FALSE)
+  checkmate::assert_integerish(
+    spatial_dims, len = 3L, lower = 1L, any.missing = FALSE
+  )
   candidate_positions <- seq_along(mask_idx)
 
   if (is.null(n_voxels) || is.na(n_voxels)) {
     valid_mask <- vapply(
       candidate_positions,
-      function(pos) {
-        .pp_is_valid_series(get_pre_ts(pos), tol = var_tol) &&
-          .pp_is_valid_series(get_post_ts(pos), tol = var_tol)
-      },
+      function(pos) pp_is_valid_series(get_pre_ts(pos), tol = var_tol),
       logical(1)
     )
     valid_positions <- candidate_positions[valid_mask]
     if (!length(valid_positions)) {
-      stop("No non-constant voxels available in both pre and post series.", call. = FALSE)
+      stop("No finite, non-constant pre-step voxels are available.", call. = FALSE)
     }
     return(list(indices = mask_idx[valid_positions], positions = valid_positions))
   }
 
-  candidate_order <- sample(candidate_positions, length(candidate_positions))
-  valid_positions <- integer(n_voxels)
-  found <- 0L
-  for (pos in candidate_order) {
-    if (.pp_is_valid_series(get_pre_ts(pos), tol = var_tol) &&
-        .pp_is_valid_series(get_post_ts(pos), tol = var_tol)) {
-      found <- found + 1L
-      valid_positions[found] <- pos
-      if (found == n_voxels) break
-    }
-  }
-  if (found < n_voxels) {
-    stop(
-      "Fewer than ", n_voxels, " non-constant voxels available in both pre and post series.",
-      call. = FALSE
+  checkmate::assert_count(n_voxels, positive = TRUE)
+  n_want <- min(as.integer(n_voxels), length(mask_idx))
+  # Most supplied masks are brain masks, so a five-fold deterministic spatial
+  # pool normally finds enough eligible series in one pass. If it does not,
+  # expand the same low-discrepancy ordering rather than drawing random
+  # replacements. Post-step values never affect selection.
+  pool_size <- min(length(mask_idx), max(n_want, 5L * n_want))
+  repeat {
+    pool <- pp_select_spatial_replay_voxels(
+      mask_idx, spatial_dims = spatial_dims, n_voxels = pool_size
     )
+    pool_positions <- match(pool$indices, mask_idx)
+    valid <- vapply(
+      pool_positions,
+      function(pos) pp_is_valid_series(get_pre_ts(pos), tol = var_tol),
+      logical(1)
+    )
+    valid_positions <- pool_positions[valid]
+    if (length(valid_positions) >= n_want) {
+      valid_positions <- valid_positions[seq_len(n_want)]
+      selected_indices <- mask_idx[valid_positions]
+      selected_normalized <- pool$normalized_coords[
+        match(selected_indices, pool$indices), , drop = FALSE
+      ]
+      return(list(
+        indices = selected_indices, positions = valid_positions,
+        normalized_coords = selected_normalized
+      ))
+    }
+    if (pool_size == length(mask_idx)) break
+    pool_size <- min(length(mask_idx), 2L * pool_size)
   }
-  return(list(indices = mask_idx[valid_positions], positions = valid_positions))
+  stop(
+    "Fewer than ", n_want,
+    " finite, non-constant pre-step voxels are available.", call. = FALSE
+  )
+}
+
+#' Select deterministic, resolution-independent spatial replay voxels
+#'
+#' Eligible coordinates are stratified in normalized 3D image space so that
+#' matrices with different spatial dimensions and voxel resolutions are sampled
+#' across comparable relative locations. Eligibility must be determined solely
+#' from pre-step data before calling this helper.
+#'
+#' @keywords internal
+#' @noRd
+pp_select_spatial_replay_voxels <- function(candidate_idx, spatial_dims,
+                                             n_voxels) {
+  checkmate::assert_integerish(candidate_idx, lower = 1L, any.missing = FALSE)
+  checkmate::assert_integerish(spatial_dims, len = 3L, lower = 1L,
+                               any.missing = FALSE)
+  checkmate::assert_count(n_voxels, positive = TRUE)
+  if (!length(candidate_idx)) {
+    return(list(indices = integer(),
+                normalized_coords = matrix(numeric(), ncol = 3L)))
+  }
+  if (any(candidate_idx > prod(spatial_dims))) {
+    stop("Replay candidate index exceeds the spatial matrix size.", call. = FALSE)
+  }
+
+  candidate_idx <- sort(unique(as.integer(candidate_idx)))
+  coords_matrix <- arrayInd(candidate_idx, .dim = spatial_dims)
+  n_want <- min(as.integer(n_voxels), length(candidate_idx))
+  normalized <- sweep(
+    coords_matrix - 0.5, 2L, as.numeric(spatial_dims), FUN = "/"
+  )
+  # A fixed low-discrepancy sequence supplies targets in relative image space.
+  # Nearest eligible voxels therefore occupy comparable anatomical fractions
+  # even when studies use different matrix dimensions or voxel resolutions.
+  radical_inverse <- function(index, base) {
+    value <- 0
+    fraction <- 1 / base
+    while (index > 0L) {
+      value <- value + fraction * (index %% base)
+      index <- index %/% base
+      fraction <- fraction / base
+    }
+    value
+  }
+  halton <- cbind(
+    vapply(seq_len(n_want), radical_inverse, numeric(1), base = 2L),
+    vapply(seq_len(n_want), radical_inverse, numeric(1), base = 3L),
+    vapply(seq_len(n_want), radical_inverse, numeric(1), base = 5L)
+  )
+  lower <- apply(normalized, 2L, min)
+  upper <- apply(normalized, 2L, max)
+  targets <- sweep(halton, 2L, upper - lower, FUN = "*")
+  targets <- sweep(targets, 2L, lower, FUN = "+")
+
+  selected <- integer(n_want)
+  used <- rep(FALSE, length(candidate_idx))
+  for (target_i in seq_len(n_want)) {
+    distance <- rowSums(
+      (normalized - matrix(
+        targets[target_i, ], nrow = nrow(normalized), ncol = 3L,
+        byrow = TRUE
+      ))^2
+    )
+    distance[used] <- Inf
+    chosen <- which.min(distance)
+    selected[[target_i]] <- chosen
+    used[[chosen]] <- TRUE
+  }
+
+  if (!length(selected)) {
+    return(list(indices = integer(),
+                normalized_coords = matrix(numeric(), ncol = 3L)))
+  }
+  list(
+    indices = candidate_idx[selected],
+    normalized_coords = normalized[selected, , drop = FALSE]
+  )
 }
 
 #' @keywords internal
 #' @noRd
-.pp_make_ts_extractor <- function(img, coords_matrix) {
+pp_make_ts_extractor <- function(img, coords_matrix) {
   function(position) {
     coord <- coords_matrix[position, ]
     return(img[coord[1], coord[2], coord[3], , drop = TRUE])
@@ -349,7 +792,7 @@ validate_apply_mask <- function(mask_file, data_file) {
 
 #' @keywords internal
 #' @noRd
-.pp_average_multitaper_spectra <- function(spec_list) {
+pp_average_multitaper_spectra <- function(spec_list) {
   if (!length(spec_list)) stop("No spectra supplied for averaging.", call. = FALSE)
   dt <- data.table::rbindlist(spec_list, idcol = "voxel")
   data.table::setnames(dt, c("f", "power"), c("freq", "power_db"))
@@ -358,7 +801,7 @@ validate_apply_mask <- function(mask_file, data_file) {
 
 #' @keywords internal
 #' @noRd
-.pp_average_bandpower <- function(bp_list) {
+pp_average_bandpower <- function(bp_list) {
   if (!length(bp_list)) stop("No bandpower estimates supplied for averaging.", call. = FALSE)
   dt <- data.table::rbindlist(bp_list, idcol = "voxel")
   out <- dt[, .(power_linear = mean(power_linear, na.rm = TRUE),
@@ -381,6 +824,8 @@ validate_apply_mask <- function(mask_file, data_file) {
 #' @param mask_file Optional 3D mask; if unset, sample the whole volume.
 #' @param n_voxels How many voxels to use.
 #' @param passband_loss_fail_db Max allowed passband loss (dB) before fail (default 3).
+#' @param minimum_voxel_fraction Minimum fraction of sampled voxels that must
+#'   show stopband power reduction and remain within the passband-loss limit.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details` (numeric summaries and flags).
@@ -395,12 +840,36 @@ validate_temporal_filter <- function(
     band_high_hz = NA_real_,
     mask_file = NULL,
     n_voxels = 30L,
-    passband_loss_fail_db = 3
+    passband_loss_fail_db = 3,
+    minimum_voxel_fraction = 0.8
 ) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_number(tr, lower = 1e-4, upper = 100)
   checkmate::assert_int(n_voxels, lower = 1L)
+  checkmate::assert_number(passband_loss_fail_db, lower = 0, finite = TRUE)
+  checkmate::assert_number(
+    minimum_voxel_fraction, lower = 0.5, upper = 1, finite = TRUE
+  )
+
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post"
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
+  has_mask <- checkmate::test_string(mask_file, min.chars = 1L)
+  if (!is.null(mask_file) && !has_mask) {
+    out <- FALSE
+    attr(out, "message") <- "mask_file must be NULL or a nonempty path."
+    attr(out, "details") <- list(mask_file = mask_file)
+    return(out)
+  }
+  if (has_mask) {
+    checkmate::assert_file_exists(mask_file)
+    pre_mask_grid <- pp_compare_nifti_grid(
+      pre_file, mask_file, "pre", "mask"
+    )
+    if (!isTRUE(pre_mask_grid$passed)) return(pp_grid_failure(pre_mask_grid))
+  }
 
   if (!requireNamespace("multitaper", quietly = TRUE) || !requireNamespace("signal", quietly = TRUE)) {
     out <- FALSE
@@ -421,6 +890,27 @@ validate_temporal_filter <- function(
   }
 
   dt <- tr
+  nyquist <- 1 / (2 * dt)
+  invalid_cutoff <-
+    (!is.na(band_low) && band_low >= nyquist) ||
+    (!is.na(band_high) && band_high >= nyquist) ||
+    (!is.na(band_low) && !is.na(band_high) && band_low >= band_high)
+  if (invalid_cutoff || (is.na(band_low) && is.na(band_high))) {
+    out <- FALSE
+    attr(out, "message") <- sprintf(
+      paste0(
+        "Temporal-filter validation requires at least one effective cutoff ",
+        "strictly between 0 and Nyquist (%.6g Hz), with high-pass below ",
+        "low-pass; received high-pass=%s and low-pass=%s."
+      ),
+      nyquist, format(band_low), format(band_high)
+    )
+    attr(out, "details") <- list(
+      nyquist_hz = nyquist, band_low_hz = band_low,
+      band_high_hz = band_high, invalid_band_specification = TRUE
+    )
+    return(out)
+  }
 
   pre_img <- RNifti::readNifti(pre_file)
   pre_img_dims <- dim(pre_img)
@@ -432,8 +922,7 @@ validate_temporal_filter <- function(
   pre_n_vox <- prod(pre_img_dims[1:3])
 
   mask_dims <- NULL
-  if (!is.null(mask_file) && nzchar(mask_file)) {
-    checkmate::assert_file_exists(mask_file)
+  if (has_mask) {
     mask <- RNifti::readNifti(mask_file)
     mask_dims <- dim(mask)
     if (!all(mask_dims == pre_img_dims[1:3])) {
@@ -467,7 +956,7 @@ validate_temporal_filter <- function(
   post_n_t <- post_img_dims[4]
   post_n_vox <- prod(post_img_dims[1:3])
 
-  if (!is.null(mask_file) && nzchar(mask_file) && !all(mask_dims == post_img_dims[1:3])) {
+  if (has_mask && !all(mask_dims == post_img_dims[1:3])) {
     out <- FALSE
     attr(out, "message") <- "Mask dimensions do not match post image."
     attr(out, "details") <- list()
@@ -486,19 +975,19 @@ validate_temporal_filter <- function(
     return(out)
   }
 
-  var_tol <- if (is.null(mask_file) || !nzchar(mask_file)) 1e-3 else 2 * .Machine$double.eps
+  var_tol <- if (!has_mask) 1e-3 else 2 * .Machine$double.eps
   default_sample_size <- min(as.integer(n_voxels), length(mask_idx))
   voxels_to_sample <- if (length(mask_idx) <= default_sample_size) length(mask_idx) else default_sample_size
 
-  get_pre_ts <- .pp_make_ts_extractor(pre_img, mask_coords)
-  get_post_ts <- .pp_make_ts_extractor(post_img, mask_coords)
+  get_pre_ts <- pp_make_ts_extractor(pre_img, mask_coords)
+  get_post_ts <- pp_make_ts_extractor(post_img, mask_coords)
 
   selection <- tryCatch(
-    .pp_select_nonconstant_voxels(
+    pp_select_nonconstant_voxels(
       mask_idx = mask_idx,
       get_pre_ts = get_pre_ts,
-      get_post_ts = get_post_ts,
       n_voxels = voxels_to_sample,
+      spatial_dims = pre_img_dims[1:3],
       var_tol = var_tol
     ),
     error = function(e) e
@@ -511,19 +1000,34 @@ validate_temporal_filter <- function(
   }
 
   selected_positions <- selection$positions
+  post_valid <- vapply(
+    selected_positions,
+    function(pos) pp_is_valid_series(get_post_ts(pos), tol = var_tol),
+    logical(1)
+  )
+  if (!all(post_valid)) {
+    out <- FALSE
+    attr(out, "message") <- sprintf(
+      paste0(
+        "%d of %d deterministic pre-selected voxels became nonfinite or ",
+        "constant after temporal filtering."
+      ),
+      sum(!post_valid), length(post_valid)
+    )
+    attr(out, "details") <- list(
+      n_voxels_used = length(selected_positions),
+      n_invalid_post_series = sum(!post_valid),
+      sampled_indices = selection$indices,
+      normalized_coords = selection$normalized_coords
+    )
+    return(out)
+  }
 
-  pre_spectra <- lapply(selected_positions, function(pos) {
-    .pp_power_multitaper(get_pre_ts(pos), dt = dt)
-  })
-  post_spectra <- lapply(selected_positions, function(pos) {
-    .pp_power_multitaper(get_post_ts(pos), dt = dt)
-  })
-
-  rm(pre_img, post_img)
-
-  nyquist <- 1 / (2 * dt)
   outside_bands <- list()
   avg_reduction <- NA_real_
+  median_reduction <- NA_real_
+  fraction_reduced <- NA_real_
+  outside_summaries_finite <- FALSE
   fail_outside <- FALSE
 
   if (!is.na(band_low) && band_low > 0) {
@@ -533,121 +1037,174 @@ validate_temporal_filter <- function(
     outside_bands$above <- c(min(band_high, nyquist), nyquist)
   }
 
-  if (length(outside_bands) > 0) {
+  bandpower_error <- NULL
+  outside_result <- tryCatch({
     pre_bp_list <- lapply(selected_positions, function(pos) {
-      .pp_mtm_bandpower(
-        get_pre_ts(pos),
-        dt = dt,
-        bands = outside_bands,
-        detrend = "linear",
-        exclude_dc = TRUE,
+      pp_mtm_bandpower(
+        get_pre_ts(pos), dt = dt, bands = outside_bands,
+        detrend = "linear", exclude_dc = TRUE,
         total_band = c(0, nyquist)
       )
     })
     post_bp_list <- lapply(selected_positions, function(pos) {
-      .pp_mtm_bandpower(
-        get_post_ts(pos),
-        dt = dt,
-        bands = outside_bands,
-        detrend = "linear",
-        exclude_dc = TRUE,
+      pp_mtm_bandpower(
+        get_post_ts(pos), dt = dt, bands = outside_bands,
+        detrend = "linear", exclude_dc = TRUE,
         total_band = c(0, nyquist)
       )
     })
-
-    pre_bp_avg <- .pp_average_bandpower(pre_bp_list)
-    post_bp_avg <- .pp_average_bandpower(post_bp_list)
-
-    bandpower_diff <- merge(
-      pre_bp_avg[, c("label", "low", "high", "power_db", "relative_power")],
-      post_bp_avg[, c("label", "low", "high", "power_db", "relative_power")],
-      by = c("label", "low", "high"), suffixes = c("_pre", "_post")
+    reductions <- mapply(
+      function(pre_bp, post_bp) {
+        pre_power <- sum(pre_bp$power_linear)
+        post_power <- sum(post_bp$power_linear)
+        if (!is.finite(pre_power) || !is.finite(post_power) ||
+            pre_power <= 0 || post_power <= 0) return(NA_real_)
+        10 * log10(pre_power / post_power)
+      },
+      pre_bp_list, post_bp_list
     )
-    bandpower_diff$power_db_change <- bandpower_diff$power_db_post - bandpower_diff$power_db_pre
-    bandpower_diff$band_type <- "outside"
-
-    avg_reduction <- mean(bandpower_diff$power_db_pre - bandpower_diff$power_db_post, na.rm = TRUE)
-    fail_outside <- is.finite(avg_reduction) && avg_reduction <= 0
+    list(reductions = reductions)
+  }, error = function(e) {
+    bandpower_error <<- conditionMessage(e)
+    NULL
+  })
+  if (!is.null(outside_result)) {
+    reductions <- outside_result$reductions
+    outside_summaries_finite <- length(reductions) == length(selected_positions) &&
+      all(is.finite(reductions))
+    if (outside_summaries_finite) {
+      avg_reduction <- mean(reductions)
+      median_reduction <- stats::median(reductions)
+      fraction_reduced <- mean(reductions > 0)
+    }
   }
+  fail_outside <- !outside_summaries_finite ||
+    !is.finite(fraction_reduced) ||
+    fraction_reduced < minimum_voxel_fraction
 
   passband_low <- if (!is.na(band_low)) max(0, band_low) else 0
   passband_high <- if (!is.na(band_high)) min(nyquist, band_high) else nyquist
   has_passband_bounds <- (!is.na(band_low) || !is.na(band_high)) && passband_high > passband_low
 
   avg_change_db <- NA_real_
+  median_change_db <- NA_real_
+  fraction_passband_preserved <- NA_real_
+  passband_summaries_finite <- FALSE
   fail_passband <- FALSE
 
   if (has_passband_bounds) {
     passband <- list(passband = c(passband_low, passband_high))
-    pre_pass_list <- lapply(selected_positions, function(pos) {
-      .pp_mtm_bandpower(
-        get_pre_ts(pos),
-        dt = dt,
-        bands = passband,
-        detrend = "linear",
-        exclude_dc = TRUE,
-        total_band = c(0, nyquist)
+    passband_result <- tryCatch({
+      pre_pass_list <- lapply(selected_positions, function(pos) {
+        pp_mtm_bandpower(
+          get_pre_ts(pos), dt = dt, bands = passband,
+          detrend = "linear", exclude_dc = TRUE,
+          total_band = c(0, nyquist)
+        )
+      })
+      post_pass_list <- lapply(selected_positions, function(pos) {
+        pp_mtm_bandpower(
+          get_post_ts(pos), dt = dt, bands = passband,
+          detrend = "linear", exclude_dc = TRUE,
+          total_band = c(0, nyquist)
+        )
+      })
+      changes <- mapply(
+        function(pre_bp, post_bp) {
+          pre_power <- sum(pre_bp$power_linear)
+          post_power <- sum(post_bp$power_linear)
+          if (!is.finite(pre_power) || !is.finite(post_power) ||
+              pre_power <= 0 || post_power <= 0) return(NA_real_)
+          10 * log10(post_power / pre_power)
+        },
+        pre_pass_list, post_pass_list
       )
+      list(changes = changes)
+    }, error = function(e) {
+      bandpower_error <<- conditionMessage(e)
+      NULL
     })
-    post_pass_list <- lapply(selected_positions, function(pos) {
-      .pp_mtm_bandpower(
-        get_post_ts(pos),
-        dt = dt,
-        bands = passband,
-        detrend = "linear",
-        exclude_dc = TRUE,
-        total_band = c(0, nyquist)
-      )
-    })
-
-    pre_pass_avg <- .pp_average_bandpower(pre_pass_list)
-    post_pass_avg <- .pp_average_bandpower(post_pass_list)
-
-    passband_diff <- merge(
-      pre_pass_avg[, c("label", "low", "high", "power_db", "relative_power")],
-      post_pass_avg[, c("label", "low", "high", "power_db", "relative_power")],
-      by = c("label", "low", "high"), suffixes = c("_pre", "_post")
-    )
-    passband_diff$power_db_change <- passband_diff$power_db_post - passband_diff$power_db_pre
-    passband_diff$band_type <- "passband"
-
-    power_changes <- passband_diff$power_db_change
-    avg_change_db <- if (all(is.na(power_changes))) NA_real_ else mean(power_changes, na.rm = TRUE)
-    fail_passband <- !is.na(avg_change_db) && is.finite(avg_change_db) &&
-      avg_change_db < -passband_loss_fail_db
+    if (!is.null(passband_result)) {
+      power_changes <- passband_result$changes
+      passband_summaries_finite <-
+        length(power_changes) == length(selected_positions) &&
+        all(is.finite(power_changes))
+      if (passband_summaries_finite) {
+        avg_change_db <- mean(power_changes)
+        median_change_db <- stats::median(power_changes)
+        fraction_passband_preserved <- mean(
+          power_changes >= -passband_loss_fail_db
+        )
+      }
+    }
+    fail_passband <- !passband_summaries_finite ||
+      !is.finite(fraction_passband_preserved) ||
+      fraction_passband_preserved < minimum_voxel_fraction
+  } else {
+    fail_passband <- TRUE
   }
 
   passed <- !fail_outside && !fail_passband
 
   msg_parts <- character()
   if (is.finite(avg_reduction)) {
-    msg_parts <- c(msg_parts, sprintf("avg outside-band power reduction (dB): %s", signif(avg_reduction, 4)))
+    msg_parts <- c(msg_parts, sprintf(
+      paste0(
+        "outside-band reduction mean/median %.4g/%.4g dB; ",
+        "fraction reduced %.3f"
+      ),
+      avg_reduction, median_reduction, fraction_reduced
+    ))
   }
   if (!is.na(avg_change_db) && is.finite(avg_change_db)) {
-    msg_parts <- c(msg_parts, sprintf("avg passband power change post-pre (dB): %s", signif(avg_change_db, 4)))
+    msg_parts <- c(msg_parts, sprintf(
+      paste0(
+        "passband change mean/median %.4g/%.4g dB; fraction within %.3g dB ",
+        "loss %.3f"
+      ),
+      avg_change_db, median_change_db, passband_loss_fail_db,
+      fraction_passband_preserved
+    ))
   }
   if (!length(msg_parts)) {
-    msg_parts <- "multitaper bandpower summaries (limited band spec)."
+    msg_parts <- "multitaper bandpower summaries were unavailable."
   }
 
   msg <- paste(msg_parts, collapse = "; ")
   if (fail_outside) {
-    msg <- paste0(msg, "; FAIL: no net power reduction outside configured stopbands.")
+    msg <- paste0(
+      msg, "; FAIL: fewer than ", minimum_voxel_fraction * 100,
+      "% of sampled voxels showed finite stopband power reduction."
+    )
   }
   if (fail_passband) {
     msg <- paste0(
       msg,
-      "; FAIL: large power loss in passband (threshold ",
-      passband_loss_fail_db,
-      " dB)."
+      "; FAIL: fewer than ", minimum_voxel_fraction * 100,
+      "% of sampled voxels stayed within the passband-loss threshold of ",
+      passband_loss_fail_db, " dB."
     )
+  }
+  if (!is.null(bandpower_error)) {
+    msg <- paste0(msg, "; spectral estimation error: ", bandpower_error)
   }
 
   details <- list(
     nyquist_hz = nyquist,
     n_voxels_used = length(selected_positions),
+    sampled_indices = selection$indices,
+    normalized_coords = selection$normalized_coords,
     avg_reduction_outside_db = avg_reduction,
+    median_reduction_outside_db = median_reduction,
+    fraction_voxels_outside_reduced = fraction_reduced,
     avg_passband_change_db = avg_change_db,
+    median_passband_change_db = median_change_db,
+    fraction_voxels_passband_preserved = fraction_passband_preserved,
+    minimum_voxel_fraction = minimum_voxel_fraction,
+    passband_loss_fail_db = passband_loss_fail_db,
+    outside_summaries_finite = outside_summaries_finite,
+    passband_summaries_finite = passband_summaries_finite,
+    spectral_error = bandpower_error,
     band_low_hz = band_low,
     band_high_hz = band_high,
     fail_outside = fail_outside,
@@ -744,11 +1301,12 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
 #' This is algebraically identical to reconstructing a full 3D volume and
 #' calling `compute_fwhm_1dif()` at every timepoint. Precomputing the row pairs
 #' that are adjacent along each spatial axis avoids repeatedly allocating three
-#' full-volume difference arrays, which is material for 600-volume validation.
+#' full-volume difference arrays, which is material even for the distributed
+#' 96-volume production validation sample.
 #'
 #' @keywords internal
 #' @noRd
-.pp_estimate_classic_masked_matrix <- function(masked_matrix, mask3d, vox_mm) {
+pp_estimate_classic_masked_matrix <- function(masked_matrix, mask3d, vox_mm) {
   checkmate::assert_matrix(masked_matrix, mode = "numeric")
   checkmate::assert_numeric(vox_mm, len = 3L, lower = 1e-6, finite = TRUE)
   mask3d <- (mask3d != 0) & is.finite(mask3d)
@@ -818,7 +1376,7 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
 #' Build an orthonormal polynomial trend matrix for smoothness validation
 #' @keywords internal
 #' @noRd
-.pp_build_trend_matrix <- function(nt, degree = 3L, demean = TRUE) {
+pp_build_trend_matrix <- function(nt, degree = 3L, demean = TRUE) {
   degree <- max(0L, as.integer(degree))
   cols <- list()
   tvec <- seq_len(nt)
@@ -841,10 +1399,10 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
 #' Apply voxelwise polynomial detrending for smoothness validation
 #' @keywords internal
 #' @noRd
-.pp_detrend_voxels <- function(mat, degree = 3L, demean = TRUE) {
+pp_detrend_voxels <- function(mat, degree = 3L, demean = TRUE) {
   nt <- ncol(mat)
   if (!length(mat) || nt == 0L) return(mat)
-  X <- .pp_build_trend_matrix(nt, degree = degree, demean = demean)
+  X <- pp_build_trend_matrix(nt, degree = degree, demean = demean)
   if (is.null(X)) return(mat)
   coeff <- qr.solve(X, t(mat))
   fitted <- t(X %*% coeff)
@@ -854,16 +1412,16 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
 #' Normalize voxel time series by temporal MAD for smoothness validation
 #' @keywords internal
 #' @noRd
-.pp_mad_scale_matrix <- function(mat) {
+pp_mad_scale_matrix <- function(mat) {
   mad_vals <- matrixStats::rowMads(mat, constant = 1.4826, na.rm = TRUE)
   mad_vals[!is.finite(mad_vals) | mad_vals <= 1e-6] <- 1
   mat / mad_vals
 }
 
-#' Select timepoints for smoothness validation
+#' Select distributed timepoints for smoothness validation
 #' @keywords internal
 #' @noRd
-.pp_smoothness_volume_indices <- function(nt, max_volumes = 600L) {
+pp_smoothness_volume_indices <- function(nt, max_volumes = 96L) {
   if (!checkmate::test_count(nt, positive = TRUE)) {
     stop("nt must be a positive integer.", call. = FALSE)
   }
@@ -872,13 +1430,22 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
     return(seq_len(nt))
   }
   checkmate::assert_count(max_volumes, positive = TRUE)
-  seq_len(min(nt, as.integer(max_volumes)))
+  n_use <- min(nt, as.integer(max_volumes))
+  if (n_use == nt) return(seq_len(nt))
+
+  # Smoothness is a spatial property. Spread the retained timepoints over the
+  # complete run so a short validation sample is not determined by one
+  # contiguous acquisition segment. Since n_use <= nt, rounding this regular
+  # grid yields exactly n_use unique, ordered, one-based indices.
+  indices <- as.integer(round(seq.int(1, nt, length.out = n_use)))
+  stopifnot(length(indices) == n_use, !anyDuplicated(indices))
+  indices
 }
 
 #' Match the classic smoothness preprocessing used by 3dSmoothnessChange.R
 #' @keywords internal
 #' @noRd
-.pp_prepare_classic_smoothness <- function(arr4d, mask3d, polydeg = 3L,
+pp_prepare_classic_smoothness <- function(arr4d, mask3d, polydeg = 3L,
                                            demean = TRUE, unif = TRUE) {
   dims <- dim(arr4d)
   n_vox <- prod(dims[1:3])
@@ -887,8 +1454,8 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
   mat <- array(arr4d, dim = c(n_vox, nt))
   if (any(mask_vec)) {
     mat_mask <- mat[mask_vec, , drop = FALSE]
-    mat_mask <- .pp_detrend_voxels(mat_mask, degree = polydeg, demean = demean)
-    if (isTRUE(unif)) mat_mask <- .pp_mad_scale_matrix(mat_mask)
+    mat_mask <- pp_detrend_voxels(mat_mask, degree = polydeg, demean = demean)
+    if (isTRUE(unif)) mat_mask <- pp_mad_scale_matrix(mat_mask)
     mat[mask_vec, ] <- mat_mask
   }
   array(mat, dim = dims)
@@ -897,8 +1464,8 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
 #' Estimate classic FWHM from one file without retaining a full prepared 4D copy
 #' @keywords internal
 #' @noRd
-.pp_estimate_classic_smoothness_file <- function(path, mask3d,
-                                                 max_volumes = 600L,
+pp_estimate_classic_smoothness_file <- function(path, mask3d,
+                                                 max_volumes = 96L,
                                                  preprocess = TRUE,
                                                  polydeg = 3L,
                                                  demean = TRUE,
@@ -911,29 +1478,28 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
   invisible(gc(FALSE))
   on.exit(invisible(gc(FALSE)), add = TRUE)
 
-  image <- .pp_read_4d(path)
-  spatial_dims <- dim(image)[1:3]
+  image_dims <- pp_nifti_dims4(path)
+  spatial_dims <- image_dims[1:3]
   if (!identical(as.integer(spatial_dims), as.integer(dim(mask3d)))) {
     stop("Image and smoothness mask dimensions do not match.", call. = FALSE)
   }
-  total_volumes <- dim(image)[4]
-  volume_idx <- .pp_smoothness_volume_indices(total_volumes, max_volumes)
-  image <- image[, , , volume_idx, drop = FALSE]
+  total_volumes <- image_dims[4]
+  volume_idx <- pp_smoothness_volume_indices(total_volumes, max_volumes)
   mask_vec <- as.vector(mask3d)
-  prepared <- array(image, dim = c(prod(spatial_dims), length(volume_idx)))[
+  # RNifti performs the temporal subsetting while reading. This avoids
+  # materializing a complete long 4D run merely to retain a small sample.
+  prepared <- pp_read_volume_matrix(path, volume_idx, spatial_dims)[
     mask_vec, , drop = FALSE
   ]
-  rm(image)
-  invisible(gc(FALSE))
 
   if (isTRUE(preprocess)) {
-    detrended <- .pp_detrend_voxels(prepared, degree = polydeg, demean = demean)
+    detrended <- pp_detrend_voxels(prepared, degree = polydeg, demean = demean)
     rm(prepared)
     invisible(gc(FALSE))
     prepared <- detrended
     rm(detrended)
     if (isTRUE(unif)) {
-      scaled <- .pp_mad_scale_matrix(prepared)
+      scaled <- pp_mad_scale_matrix(prepared)
       rm(prepared)
       invisible(gc(FALSE))
       prepared <- scaled
@@ -941,15 +1507,17 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
     }
   }
 
-  estimate <- .pp_estimate_classic_masked_matrix(
-    prepared, mask3d, .pp_pixdim_mm(path)
+  estimate <- pp_estimate_classic_masked_matrix(
+    prepared, mask3d, pp_pixdim_mm(path)
   )
   list(
     per_axis = estimate$per_axis,
     geom_axes = estimate$geom_axes,
     geom = estimate$geom,
     volumes_used = length(volume_idx),
-    total_volumes = total_volumes
+    total_volumes = total_volumes,
+    volume_indices = volume_idx,
+    volume_sampling = if (length(volume_idx) == total_volumes) "all" else "distributed"
   )
 }
 
@@ -964,14 +1532,14 @@ mad_over_time <- function(arr4d) {
 
 #' @keywords internal
 #' @noRd
-.pp_pixdim_mm <- function(path) {
+pp_pixdim_mm <- function(path) {
   h <- RNifti::niftiHeader(path)
   return(as.numeric(h$pixdim[2:4]))
 }
 
 #' @keywords internal
 #' @noRd
-.pp_read_4d <- function(path) {
+pp_read_4d <- function(path) {
   img <- RNifti::readNifti(path)
   d <- dim(img)
   if (length(d) == 3L) {
@@ -983,7 +1551,7 @@ mad_over_time <- function(arr4d) {
 
 #' @keywords internal
 #' @noRd
-.pp_max_abs_diff <- function(a, b) {
+pp_max_abs_diff <- function(a, b) {
   return(max(abs(as.numeric(a) - as.numeric(b)), na.rm = TRUE))
 }
 
@@ -1043,6 +1611,11 @@ validate_intensity_normalize <- function(pre_file, post_file,
   checkmate::assert_number(target, finite = TRUE)
   checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
 
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post", tolerance = tolerance
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
+
   if (reference_location <= 0 || target <= 0) {
     out <- FALSE
     attr(out, "message") <- "Run reference intensity and target must be positive."
@@ -1063,12 +1636,32 @@ validate_intensity_normalize <- function(pre_file, post_file,
     }
   } else {
     checkmate::assert_file_exists(scale_file)
+    pre_scale_grid <- pp_compare_nifti_grid(
+      pre_file, scale_file, "pre", "PSC scale map", tolerance = tolerance
+    )
+    if (!isTRUE(pre_scale_grid$passed)) return(pp_grid_failure(pre_scale_grid))
     if (abs(target - 100) > tolerance) {
       out <- FALSE
       attr(out, "message") <- "voxel_psc requires a fixed target of 100."
       attr(out, "details") <- list(target = target)
       return(out)
     }
+  }
+
+  if (identical(mode, "run_scalar") && !is.null(core_file)) {
+    if (!checkmate::test_string(core_file, min.chars = 1L)) {
+      out <- FALSE
+      attr(out, "message") <-
+        "Intensity-reference core must be NULL or a nonempty path."
+      attr(out, "details") <- list(core_file = core_file)
+      return(out)
+    }
+    checkmate::assert_file_exists(core_file)
+    pre_core_grid <- pp_compare_nifti_grid(
+      pre_file, core_file, "pre", "intensity-reference core",
+      tolerance = tolerance
+    )
+    if (!isTRUE(pre_core_grid$passed)) return(pp_grid_failure(pre_core_grid))
   }
 
   pre <- RNifti::readNifti(pre_file)
@@ -1203,8 +1796,11 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' The definitive SUSAN calibration evaluates raw, detrended, and
 #' detrended-plus-MAD estimators instead of assuming one preparation a priori,
 #' and crosses the threshold mask with the mask already applied to the BOLD.
-#' Each promoted model stores its exact estimator and mask condition; those are
-#' part of the model and cannot be changed independently of its coefficients.
+#' The promoted models reproduce the full-run SUSAN threshold, temporal mean,
+#' and extents while estimating smoothness from 96 timepoints distributed over
+#' the complete run. Each model stores its exact estimator, mask condition, and
+#' volume-sampling rule; these cannot be changed independently of its
+#' coefficients.
 #'
 #' The primary model predicts post-smoothing FWHM by Gaussian quadrature while
 #' allowing the program's effective kernel gain to depend on the dimensionless
@@ -1219,7 +1815,7 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #'
 #' @keywords internal
 #' @noRd
-.pp_calibration_coeffs <- list(
+pp_calibration_coeffs <- list(
   gaussian = list(
     classic = list(
       mask = list(
@@ -1244,35 +1840,41 @@ validate_intensity_normalize <- function(pre_file, post_file,
     classic = list(
       mask = list(
         none = list(
-          model_version = "smoothness-calibration-v3-fmriprep-k3-8",
+          model_version = "smoothness-calibration-v4-fullcontext-distributed96-k3-8",
           input_mask = "none",
           type = "quadrature_ratio_linear",
-          coeffs = c(1.3120485766964101, -0.55739645314541497),
-          tolerance_mm = 0.6, mode = "fsl_susan_mask",
+          coeffs = c(1.27820370989578, -0.520302740093367),
+          tolerance_mm = 0.7, mode = "fsl_susan_mask",
           kernel_range_mm = c(3, 8),
           voxel_range_mm = c(2.40865896, 3.11664432),
+          max_volumes = 96L, volume_sampling = "distributed_full_run",
+          smoothing_context = "full_run",
           estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
           demean = TRUE, unif = TRUE
         ),
         fmriprep = list(
-          model_version = "smoothness-calibration-v3-fmriprep-k3-8",
+          model_version = "smoothness-calibration-v4-fullcontext-distributed96-k3-8",
           input_mask = "fmriprep",
           type = "quadrature_ratio_linear",
-          coeffs = c(1.2664743891602199, -0.48666277855524398),
+          coeffs = c(1.23406155442799, -0.451054336264315),
           tolerance_mm = 0.8, mode = "fsl_susan_mask",
           kernel_range_mm = c(3, 8),
           voxel_range_mm = c(2.40865896, 3.11664432),
+          max_volumes = 96L, volume_sampling = "distributed_full_run",
+          smoothing_context = "full_run",
           estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
           demean = TRUE, unif = TRUE
         ),
         template = list(
-          model_version = "smoothness-calibration-v3-fmriprep-k3-8",
+          model_version = "smoothness-calibration-v4-fullcontext-distributed96-k3-8",
           input_mask = "template",
           type = "quadrature_ratio_linear",
-          coeffs = c(1.1941731382927601, -0.41366442683986498),
+          coeffs = c(1.16494890257513, -0.381080413733339),
           tolerance_mm = 0.6, mode = "fsl_susan_mask",
           kernel_range_mm = c(3, 8),
           voxel_range_mm = c(2.40865896, 3.11664432),
+          max_volumes = 96L, volume_sampling = "distributed_full_run",
+          smoothing_context = "full_run",
           estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
           demean = TRUE, unif = TRUE
         )
@@ -1292,7 +1894,7 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' Resolve the exact estimator preparation stored with a calibration model
 #' @keywords internal
 #' @noRd
-.pp_calibration_preparation <- function(model = NULL, preprocess = NULL,
+pp_calibration_preparation <- function(model = NULL, preprocess = NULL,
                                         polydeg = NULL, demean = NULL,
                                         unif = NULL) {
   calibrated <- !is.null(model)
@@ -1350,7 +1952,7 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' Predict the expected FWHM delta from a calibration model
 #' @keywords internal
 #' @noRd
-.pp_calibration_gain <- function(model, kernel_fwhm, voxel_mm) {
+pp_calibration_gain <- function(model, kernel_fwhm, voxel_mm) {
   checkmate::assert_number(kernel_fwhm, lower = 1e-6, finite = TRUE)
   checkmate::assert_numeric(voxel_mm, lower = 1e-6, finite = TRUE, min.len = 1L)
   voxel_geom_mm <- exp(mean(log(voxel_mm)))
@@ -1368,12 +1970,12 @@ validate_intensity_normalize <- function(pre_file, post_file,
 
 #' @keywords internal
 #' @noRd
-.pp_predict_calibration <- function(model, kernel_fwhm, pre_fwhm = NULL,
+pp_predict_calibration <- function(model, kernel_fwhm, pre_fwhm = NULL,
                                     voxel_mm = NULL) {
   coeffs <- model$coeffs
   if (model$type == "quadrature_ratio_linear") {
     checkmate::assert_number(pre_fwhm, lower = 0, finite = TRUE)
-    gain <- .pp_calibration_gain(model, kernel_fwhm, voxel_mm)
+    gain <- pp_calibration_gain(model, kernel_fwhm, voxel_mm)
     expected_post <- sqrt(pre_fwhm^2 + (gain * kernel_fwhm)^2)
     return(expected_post - pre_fwhm)
   } else if (model$type == "linear") {
@@ -1389,13 +1991,13 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' Select the calibration model for a given smoother and mask usage
 #' @keywords internal
 #' @noRd
-.pp_select_calibration <- function(smoother, used_mask, input_mask = "none") {
+pp_select_calibration <- function(smoother, used_mask, input_mask = "none") {
   checkmate::assert_choice(input_mask, c("none", "fmriprep", "template", "custom"))
-  smooth_entry <- .pp_calibration_coeffs[[smoother]]
+  smooth_entry <- pp_calibration_coeffs[[smoother]]
   if (is.null(smooth_entry)) {
     warning("No calibration table for smoother '", smoother,
             "'; falling back to gaussian.", call. = FALSE)
-    smooth_entry <- .pp_calibration_coeffs[["gaussian"]]
+    smooth_entry <- pp_calibration_coeffs[["gaussian"]]
   }
   method_entry <- smooth_entry[["classic"]]
   if (is.null(method_entry)) {
@@ -1502,8 +2104,10 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' @param polydeg Optional polynomial detrending degree. `NULL` uses the model.
 #' @param demean Optional logical mean-removal setting. `NULL` uses the model.
 #' @param unif Optional logical temporal-MAD scaling setting. `NULL` uses the model.
-#' @param max_volumes Maximum number of timepoints used for validation. The
-#'   first `max_volumes` are used; `Inf` uses all volumes.
+#' @param max_volumes Maximum number of timepoints used for validation.
+#'   Timepoints are deterministically distributed over the complete run;
+#'   shorter runs use every timepoint, and `Inf` uses all volumes. A calibrated
+#'   model may require its stored cap and reject a different override.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details` (pre/post/delta/expected_delta/diff FWHM mm).
@@ -1514,10 +2118,19 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
                                     input_mask = "none",
                                     tolerance_mm = NULL, preprocess = NULL,
                                     polydeg = NULL, demean = NULL, unif = NULL,
-                                    max_volumes = 600L) {
+                                    max_volumes = 96L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
+
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post"
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
+  pre_mask_grid <- pp_compare_nifti_grid(
+    pre_file, mask_file, "pre", "smoothness mask"
+  )
+  if (!isTRUE(pre_mask_grid$passed)) return(pp_grid_failure(pre_mask_grid))
 
   msk <- RNifti::readNifti(mask_file)
   mask_logical <- (msk != 0) & is.finite(msk)
@@ -1540,19 +2153,30 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     return(out)
   }
 
-  vox_mm <- .pp_pixdim_mm(pre_file)
+  vox_mm <- pp_pixdim_mm(pre_file)
   has_kernel <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
   cal_model <- if (has_kernel) {
-    .pp_select_calibration(smoother, used_mask, input_mask = input_mask)
+    pp_select_calibration(smoother, used_mask, input_mask = input_mask)
   } else {
     NULL
   }
-  preparation <- .pp_calibration_preparation(
+  if (has_kernel && !is.null(cal_model$max_volumes)) {
+    supplied_cap <- suppressWarnings(as.integer(max_volumes))
+    if (length(supplied_cap) != 1L || is.na(supplied_cap) ||
+        !identical(supplied_cap, as.integer(cal_model$max_volumes))) {
+      stop(
+        "Calibration model '", cal_model$model_version,
+        "' requires max_volumes=", as.integer(cal_model$max_volumes), ".",
+        call. = FALSE
+      )
+    }
+  }
+  preparation <- pp_calibration_preparation(
     cal_model, preprocess = preprocess, polydeg = polydeg,
     demean = demean, unif = unif
   )
   estimate_file <- function(path) {
-    .pp_estimate_classic_smoothness_file(
+    pp_estimate_classic_smoothness_file(
       path, mask_logical, max_volumes = max_volumes,
       preprocess = preparation$preprocess,
       polydeg = preparation$polydeg, demean = preparation$demean,
@@ -1563,6 +2187,8 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   pre_f <- pre_estimate$geom
   volumes_used <- pre_estimate$volumes_used
   total_volumes <- pre_estimate$total_volumes
+  volume_indices <- pre_estimate$volume_indices
+  volume_sampling <- pre_estimate$volume_sampling
   rm(pre_estimate)
   invisible(gc(FALSE))
   post_f <- estimate_file(post_file)$geom
@@ -1581,11 +2207,11 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
 
   # --- calibration-based comparison ---
   if (has_kernel) {
-    delta_expected <- .pp_predict_calibration(
+    delta_expected <- pp_predict_calibration(
       cal_model, fwhm_mm, pre_fwhm = pre_f, voxel_mm = vox_mm
     )
     expected_post <- pre_f + delta_expected
-    calibration_gain <- .pp_calibration_gain(cal_model, fwhm_mm, vox_mm)
+    calibration_gain <- pp_calibration_gain(cal_model, fwhm_mm, vox_mm)
     voxel_geom_mm <- exp(mean(log(vox_mm)))
     calibration_extrapolated <-
       isTRUE(cal_model$input_mask_extrapolated) ||
@@ -1650,10 +2276,15 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       observed_effective_kernel_mm = sqrt(max(0, post_f^2 - pre_f^2)),
       calibration_kernel_range_mm = cal_model$kernel_range_mm,
       calibration_voxel_range_mm = cal_model$voxel_range_mm,
+      calibration_max_volumes = cal_model$max_volumes,
+      calibration_volume_sampling = cal_model$volume_sampling,
+      calibration_smoothing_context = cal_model$smoothing_context,
       calibration_extrapolated = calibration_extrapolated,
       volumes_used = volumes_used,
       total_volumes = total_volumes,
       max_volumes = max_volumes,
+      volume_indices = volume_indices,
+      volume_sampling = volume_sampling,
       preprocessing = list(
         enabled = isTRUE(preparation$preprocess),
         polydeg = preparation$polydeg,
@@ -1678,6 +2309,8 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       volumes_used = volumes_used,
       total_volumes = total_volumes,
       max_volumes = max_volumes,
+      volume_indices = volume_indices,
+      volume_sampling = volume_sampling,
       preprocessing = list(
         enabled = isTRUE(preparation$preprocess),
         polydeg = preparation$polydeg,
@@ -1693,11 +2326,13 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   return(out)
 }
 
-#' Sample voxels and replay regression via `lmfit_residuals_mat`
+#' Deterministically sample voxels and replay regression
 #'
 #' Shared helper for `validate_apply_aroma` and `validate_confound_regression`.
-#' Reads pre/post 4D images, samples up to `n_sample` non-constant voxels,
-#' replays the regression in pure R, and returns the max absolute difference.
+#' Reads pre/post 4D images, selects up to `n_sample` finite, non-constant
+#' pre-step voxels across normalized 3D image space, replays the regression in
+#' pure R, and returns the maximum absolute difference. Post-step values never
+#' influence sample eligibility.
 #'
 #' @param pre_file Path to 4D BOLD before the step.
 #' @param post_file Path to 4D BOLD after the step.
@@ -1709,40 +2344,98 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
 #' @param regress_cols Passed to `lmfit_residuals_mat` (1-based).
 #' @param exclusive Passed to `lmfit_residuals_mat`.
 #' @param n_sample Number of voxels to sample (default 100).
+#' @param mask_file Optional 3D brain mask used to constrain pre-step sampling.
 #'
 #' @return A list with `max_abs_diff` and `n_sampled`.
 #' @keywords internal
 #' @noRd
-.pp_sample_and_replay <- function(pre_file, post_file, X, include_rows,
+pp_sample_and_replay <- function(pre_file, post_file, X, include_rows,
                                   add_intercept = FALSE,
                                   preserve_mean = FALSE, set_mean = 0.0,
                                   regress_cols = NULL, exclusive = FALSE,
-                                  n_sample = 100L) {
-  pre_img <- .pp_read_4d(pre_file)
-  post_img <- .pp_read_4d(post_file)
+                                  n_sample = 100L, mask_file = NULL) {
+  failure <- function(reason, n_sampled = 0L, sampled_indices = integer(),
+                      normalized_coords = matrix(numeric(), ncol = 3L),
+                      n_nonfinite_post = 0L,
+                      n_unexpected_constant_post = 0L) {
+    list(
+      valid = FALSE, max_abs_diff = Inf, n_sampled = as.integer(n_sampled),
+      sampled_indices = sampled_indices,
+      normalized_coords = normalized_coords,
+      n_nonfinite_post = as.integer(n_nonfinite_post),
+      n_unexpected_constant_post = as.integer(n_unexpected_constant_post),
+      failure_reason = reason
+    )
+  }
+  checkmate::assert_count(n_sample, positive = TRUE)
+  pre_img <- pp_read_4d(pre_file)
+  post_img <- pp_read_4d(post_file)
   d <- dim(pre_img)
+  if (!identical(d, dim(post_img))) {
+    return(failure(sprintf(
+      "Pre/post dimensions differ: [%s] vs [%s].",
+      paste(d, collapse = "x"), paste(dim(post_img), collapse = "x")
+    )))
+  }
   nx <- d[1]; ny <- d[2]; nz <- d[3]; nt <- d[4]
-
-  # Build mask: voxels where pre has any nonzero value across time
-  pre_mat_full <- matrix(as.numeric(pre_img), nrow = nx * ny * nz, ncol = nt)
-  mask_idx <- which(matrixStats::rowAnys(pre_mat_full != 0))
-  if (length(mask_idx) == 0L) {
-    return(list(max_abs_diff = 0, n_sampled = 0L))
+  if (!is.matrix(X) || nrow(X) != nt) {
+    return(failure(sprintf(
+      "Regression design has %d rows but BOLD has %d timepoints.",
+      if (is.matrix(X)) nrow(X) else 0L, nt
+    )))
+  }
+  if (length(include_rows) != nt || anyNA(include_rows)) {
+    return(failure("Regression inclusion vector does not match BOLD timepoints."))
   }
 
-  # Convert mask indices to xyz coords for .pp_select_nonconstant_voxels
-  coords <- arrayInd(mask_idx, .dim = c(nx, ny, nz))
+  use_replay_mask <- !is.null(mask_file)
+  if (use_replay_mask &&
+      !checkmate::test_string(mask_file, min.chars = 1L)) {
+    return(failure("Replay mask path must be a single nonempty string."))
+  }
+  replay_mask <- rep(TRUE, nx * ny * nz)
+  if (use_replay_mask) {
+    if (!checkmate::test_file_exists(mask_file)) {
+      return(failure("Replay mask file does not exist."))
+    }
+    replay_mask_image <- RNifti::readNifti(mask_file)
+    if (!identical(as.integer(dim(replay_mask_image)), c(nx, ny, nz))) {
+      return(failure("Replay mask dimensions do not match the BOLD grid."))
+    }
+    replay_mask <- as.vector(
+      is.finite(replay_mask_image) & replay_mask_image > 0
+    )
+    if (!any(replay_mask)) {
+      return(failure("Replay mask contains no voxels."))
+    }
+  }
 
-  get_pre_ts <- .pp_make_ts_extractor(pre_img, coords)
-  get_post_ts <- .pp_make_ts_extractor(post_img, coords)
-
-  n_want <- min(n_sample, length(mask_idx))
-  sel <- .pp_select_nonconstant_voxels(
-    mask_idx = mask_idx,
-    get_pre_ts = get_pre_ts,
-    get_post_ts = get_post_ts,
-    n_voxels = n_want
+  # Determine replay eligibility from the pre-step matrix only. rowVars() also
+  # excludes series containing NA/Inf, while the nonzero requirement avoids
+  # spending the replay sample on empty background.
+  pre_mat_full <- matrix(as.numeric(pre_img), nrow = nx * ny * nz, ncol = nt)
+  pre_variance <- matrixStats::rowVars(pre_mat_full)
+  candidate_idx <- which(
+    replay_mask & is.finite(pre_variance) &
+      pre_variance > 2 * .Machine$double.eps &
+      matrixStats::rowAnys(pre_mat_full != 0, na.rm = TRUE)
   )
+  if (length(candidate_idx) == 0L) {
+    return(failure(
+      "No finite, non-constant pre-step voxels are available for replay."
+    ))
+  }
+
+  sel <- pp_select_spatial_replay_voxels(
+    candidate_idx = candidate_idx,
+    spatial_dims = c(nx, ny, nz),
+    n_voxels = n_sample
+  )
+  if (!length(sel$indices)) {
+    return(failure(
+      "No finite, non-constant pre-step voxels are available for replay."
+    ))
+  }
 
   # Extract pre and post time series for selected voxels (nt x n_voxels)
   Y_pre <- pre_mat_full[sel$indices, , drop = FALSE]  # n_voxels x nt
@@ -1763,14 +2456,65 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     exclusive = exclusive
   )
 
-  mad_val <- max(abs(Y_post - expected), na.rm = TRUE)
-  return(list(max_abs_diff = mad_val, n_sampled = length(sel$indices)))
+  n_nonfinite_post <- sum(!is.finite(Y_post))
+  expected_variable <- vapply(
+    seq_len(ncol(expected)),
+    function(column) pp_is_valid_series(expected[, column]),
+    logical(1)
+  )
+  post_constant <- vapply(
+    seq_len(ncol(Y_post)),
+    function(column) {
+      series <- Y_post[, column]
+      all(is.finite(series)) && !pp_is_valid_series(series)
+    },
+    logical(1)
+  )
+  n_unexpected_constant_post <- sum(expected_variable & post_constant)
+  if (n_nonfinite_post > 0L || n_unexpected_constant_post > 0L) {
+    reason <- paste(
+      c(
+        if (n_nonfinite_post > 0L) {
+          sprintf("%d sampled post-step values are nonfinite", n_nonfinite_post)
+        },
+        if (n_unexpected_constant_post > 0L) {
+          sprintf(
+            "%d sampled post-step series are unexpectedly constant",
+            n_unexpected_constant_post
+          )
+        }
+      ),
+      collapse = "; "
+    )
+    return(failure(
+      reason = reason,
+      n_sampled = length(sel$indices),
+      sampled_indices = sel$indices,
+      normalized_coords = sel$normalized_coords,
+      n_nonfinite_post = n_nonfinite_post,
+      n_unexpected_constant_post = n_unexpected_constant_post
+    ))
+  }
+
+  mad_val <- max(abs(Y_post - expected))
+  return(list(
+    valid = is.finite(mad_val),
+    max_abs_diff = mad_val,
+    n_sampled = length(sel$indices),
+    sampled_indices = sel$indices,
+    normalized_coords = sel$normalized_coords,
+    n_nonfinite_post = n_nonfinite_post,
+    n_unexpected_constant_post = n_unexpected_constant_post,
+    failure_reason = if (is.finite(mad_val)) NULL else "Replay difference is nonfinite."
+  ))
 }
 
-#' Validate AROMA (voxel-sampling replay vs output)
+#' Validate AROMA by deterministic spatial replay
 #'
-#' Samples ~100 voxels and replays the AROMA regression via `lmfit_residuals_mat`;
-#' passes if max abs diff < 0.05 (or skips if no noise ICs).
+#' Selects approximately 100 pre-step voxels across normalized image space and
+#' replays the AROMA regression via `lmfit_residuals_mat`; passes if the maximum
+#' absolute difference is below 0.05. If there are no noise ICs, validation
+#' instead requires the complete post-step image to be unchanged.
 #'
 #' @param pre_file Path to 4D BOLD before `apply_aroma`.
 #' @param post_file Path to 4D BOLD after `apply_aroma`.
@@ -1778,39 +2522,88 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
 #' @param noise_ics Noise IC indices (1-based), same as pipeline.
 #' @param nonaggressive Same as `apply_aroma`.
 #' @param n_sample Number of voxels to sample (default 100).
+#' @param mask_file Optional 3D brain mask used to constrain pre-step sampling.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details`.
 #'
 #' @keywords internal
 validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics,
-                                 nonaggressive = TRUE, n_sample = 100L) {
+                                 nonaggressive = TRUE, n_sample = 100L,
+                                 mask_file = NULL) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mixing_file)
 
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post"
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
+  has_mask <- checkmate::test_string(mask_file, min.chars = 1L)
+  if (!is.null(mask_file) && !has_mask) {
+    out <- FALSE
+    attr(out, "message") <- "AROMA replay mask must be NULL or a nonempty path."
+    attr(out, "details") <- list(failure_reason = "Invalid replay mask path.")
+    return(out)
+  }
+  if (has_mask) {
+    checkmate::assert_file_exists(mask_file)
+    pre_mask_grid <- pp_compare_nifti_grid(
+      pre_file, mask_file, "pre", "AROMA replay mask"
+    )
+    if (!isTRUE(pre_mask_grid$passed)) return(pp_grid_failure(pre_mask_grid))
+  }
+
   if (is.null(noise_ics) || length(noise_ics) == 0L) {
-    out <- TRUE
-    attr(out, "message") <- "No noise ICs; AROMA left data unchanged - validation skipped."
-    attr(out, "details") <- list(skipped = TRUE)
+    unchanged <- pp_compare_nifti_identity(pre_file, post_file)
+    out <- isTRUE(unchanged$passed)
+    attr(out, "message") <- paste0(
+      "No noise ICs; verified that AROMA was a no-op. ", unchanged$message
+    )
+    unchanged$no_op <- TRUE
+    unchanged$skipped <- FALSE
+    attr(out, "details") <- unchanged
+    return(out)
+  }
+
+  if (!checkmate::test_integerish(
+    noise_ics, lower = 1L, any.missing = FALSE
+  )) {
+    out <- FALSE
+    attr(out, "message") <-
+      "AROMA noise IC indices must be finite positive integers."
+    attr(out, "details") <- list(
+      skipped = FALSE, failure_reason = "Invalid noise IC values."
+    )
     return(out)
   }
 
   mixing_mat <- as.matrix(data.table::fread(mixing_file, header = FALSE, data.table = FALSE))
   storage.mode(mixing_mat) <- "double"
-  comp_idx <- sort(unique(as.integer(noise_ics)))
-  comp_idx <- comp_idx[comp_idx >= 1L & comp_idx <= ncol(mixing_mat)]
+  requested_idx <- sort(unique(as.integer(noise_ics)))
+  invalid_idx <- requested_idx[requested_idx > ncol(mixing_mat)]
+  comp_idx <- setdiff(requested_idx, invalid_idx)
   if (length(comp_idx) == 0L) {
-    out <- TRUE
-    attr(out, "message") <- "No valid noise IC indices - validation skipped."
-    attr(out, "details") <- list(skipped = TRUE)
+    out <- FALSE
+    attr(out, "message") <- sprintf(
+      paste0(
+        "No requested AROMA noise IC indices are valid for a %d-column ",
+        "mixing matrix; requested: %s."
+      ),
+      ncol(mixing_mat), paste(requested_idx, collapse = ", ")
+    )
+    attr(out, "details") <- list(
+      skipped = FALSE, requested_noise_ics = requested_idx,
+      invalid_noise_ics = invalid_idx,
+      failure_reason = "No valid noise IC indices."
+    )
     return(out)
   }
 
   exclusive_flag <- !isTRUE(nonaggressive)
   include_rows <- rep(TRUE, nrow(mixing_mat))
 
-  replay <- .pp_sample_and_replay(
+  replay <- pp_sample_and_replay(
     pre_file = pre_file,
     post_file = post_file,
     X = mixing_mat,
@@ -1820,51 +2613,124 @@ validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics,
     set_mean = 0.0,
     regress_cols = comp_idx,
     exclusive = exclusive_flag,
-    n_sample = n_sample
+    n_sample = n_sample,
+    mask_file = mask_file
   )
 
   mad <- replay$max_abs_diff
   tol <- 0.05
-  passed <- is.finite(mad) && mad < tol
+  passed <- isTRUE(replay$valid) && replay$n_sampled > 0L &&
+    is.finite(mad) && mad < tol
   msg <- sprintf(
-    "AROMA voxel-sample replay (%d voxels): max abs diff %.6g (tol %.3g); nonaggressive=%s.",
-    replay$n_sampled, mad, tol, nonaggressive
+    paste0(
+      "AROMA deterministic spatial replay (%d voxels): max abs diff %.6g ",
+      "(tol %.3g); nonaggressive=%s%s."
+    ),
+    replay$n_sampled, mad, tol, nonaggressive,
+    if (is.null(replay$failure_reason)) "" else
+      paste0("; ", replay$failure_reason)
   )
   out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(max_abs_diff = mad, n_noise_ic = length(comp_idx),
-                                n_sampled = replay$n_sampled)
+  attr(out, "details") <- list(
+    max_abs_diff = mad, n_noise_ic = length(comp_idx),
+    requested_noise_ics = requested_idx,
+    invalid_noise_ics = invalid_idx,
+    n_sampled = replay$n_sampled,
+    sampled_indices = replay$sampled_indices,
+    normalized_coords = replay$normalized_coords,
+    n_nonfinite_post = replay$n_nonfinite_post,
+    n_unexpected_constant_post = replay$n_unexpected_constant_post,
+    failure_reason = replay$failure_reason
+  )
   return(out)
 }
 
-#' Validate confound regression (voxel-sampling replay vs output)
+#' Validate confound regression by deterministic spatial replay
 #'
-#' Samples ~100 voxels and replays the regression via `lmfit_residuals_mat`
-#' (`preserve_mean = TRUE`); passes if max abs diff < 0.05.
+#' Selects approximately 100 pre-step voxels across normalized image space and
+#' replays the regression via `lmfit_residuals_mat` (`preserve_mean = TRUE`);
+#' passes if the maximum absolute difference is below 0.05.
 #'
 #' @param pre_file Path to 4D BOLD before `confound_regression`.
 #' @param post_file Path to 4D BOLD after `confound_regression`.
 #' @param to_regress Regressor TSV (no header).
 #' @param censor_file Optional censor file (1 = keep TR).
 #' @param n_sample Number of voxels to sample (default 100).
+#' @param mask_file Optional 3D brain mask used to constrain pre-step sampling.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details` (`max_abs_diff`).
 #'
 #' @keywords internal
 validate_confound_regression <- function(pre_file, post_file, to_regress,
-                                         censor_file = NULL, n_sample = 100L) {
+                                         censor_file = NULL, n_sample = 100L,
+                                         mask_file = NULL) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(to_regress)
 
-  Xmat <- as.matrix(data.table::fread(to_regress, sep = "\t", header = FALSE, data.table = FALSE))
-  good_vols <- rep(TRUE, nrow(Xmat))
-  if (checkmate::test_file_exists(censor_file)) {
-    good_vols <- as.logical(as.integer(readLines(censor_file)))
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post"
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
+  has_mask <- checkmate::test_string(mask_file, min.chars = 1L)
+  if (!is.null(mask_file) && !has_mask) {
+    out <- FALSE
+    attr(out, "message") <-
+      "Confound-regression replay mask must be NULL or a nonempty path."
+    attr(out, "details") <- list(
+      max_abs_diff = Inf, n_sampled = 0L,
+      failure_reason = "Invalid replay mask path."
+    )
+    return(out)
+  }
+  if (has_mask) {
+    checkmate::assert_file_exists(mask_file)
+    pre_mask_grid <- pp_compare_nifti_grid(
+      pre_file, mask_file, "pre", "confound-regression replay mask"
+    )
+    if (!isTRUE(pre_mask_grid$passed)) return(pp_grid_failure(pre_mask_grid))
   }
 
-  replay <- .pp_sample_and_replay(
+  Xmat <- as.matrix(data.table::fread(to_regress, sep = "\t", header = FALSE, data.table = FALSE))
+  good_vols <- rep(TRUE, nrow(Xmat))
+  use_censor <- !is.null(censor_file)
+  if (use_censor &&
+      !checkmate::test_string(censor_file, min.chars = 1L)) {
+    out <- FALSE
+    attr(out, "message") <-
+      "Confound-regression censor path must be a single nonempty string."
+    attr(out, "details") <- list(
+      max_abs_diff = Inf, n_sampled = 0L,
+      failure_reason = "Invalid censor path."
+    )
+    return(out)
+  }
+  if (use_censor) {
+    if (!checkmate::test_file_exists(censor_file)) {
+      out <- FALSE
+      attr(out, "message") <- "Confound-regression censor file does not exist."
+      attr(out, "details") <- list(
+        max_abs_diff = Inf, n_sampled = 0L,
+        failure_reason = "Censor file does not exist."
+      )
+      return(out)
+    }
+    censor_check <- pp_validate_censor(readLines(censor_file), nrow(Xmat))
+    if (!isTRUE(censor_check$valid)) {
+      out <- FALSE
+      attr(out, "message") <- censor_check$message
+      attr(out, "details") <- list(
+        max_abs_diff = Inf, n_sampled = 0L,
+        failure_reason = censor_check$message
+      )
+      return(out)
+    }
+    good_vols <- as.logical(censor_check$censor)
+  }
+
+  replay <- pp_sample_and_replay(
     pre_file = pre_file,
     post_file = post_file,
     X = Xmat,
@@ -1873,109 +2739,365 @@ validate_confound_regression <- function(pre_file, post_file, to_regress,
     set_mean = 0.0,
     regress_cols = NULL,
     exclusive = FALSE,
-    n_sample = n_sample
+    n_sample = n_sample,
+    mask_file = mask_file
   )
 
   mad <- replay$max_abs_diff
   tol <- 0.05
-  passed <- is.finite(mad) && mad < tol
+  passed <- isTRUE(replay$valid) && replay$n_sampled > 0L &&
+    is.finite(mad) && mad < tol
   msg <- sprintf(
-    "Confound regression voxel-sample replay (%d voxels): max abs diff %.6g (tol %.3g).",
-    replay$n_sampled, mad, tol
+    paste0(
+      "Confound regression deterministic spatial replay (%d voxels): ",
+      "max abs diff %.6g (tol %.3g)%s."
+    ),
+    replay$n_sampled, mad, tol,
+    if (is.null(replay$failure_reason)) "" else
+      paste0("; ", replay$failure_reason)
   )
   out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(max_abs_diff = mad, n_sampled = replay$n_sampled)
+  attr(out, "details") <- list(
+    max_abs_diff = mad, n_sampled = replay$n_sampled,
+    sampled_indices = replay$sampled_indices,
+    normalized_coords = replay$normalized_coords,
+    n_nonfinite_post = replay$n_nonfinite_post,
+    n_unexpected_constant_post = replay$n_unexpected_constant_post,
+    failure_reason = replay$failure_reason
+  )
   return(out)
 }
 
-#' Validate scrub interpolate (dims + finite at filled TRs)
+#' Validate scrub interpolation by exact preservation and sampled spline replay
 #'
-#' Same 4D shape as pre; interpolated TRs (censor 0) must be finite in post.
+#' The pre/post images must have the same shape, uncensored volumes must be
+#' unchanged, and interpolated values must match the production natural-spline
+#' implementation at deterministic, spatially distributed voxels.
 #'
 #' @param pre_file Path to 4D BOLD before `scrub_interpolate`.
 #' @param post_file Path to 4D BOLD after `scrub_interpolate`.
 #' @param censor_file Censor file (1 = keep, 0 = interpolate).
+#' @param n_sample Number of pre-step brain/data voxels used for spline replay.
+#' @param tolerance Maximum relative numerical error for exact comparisons.
+#' @param chunk_size Number of volumes compared at a time.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details`.
 #'
 #' @keywords internal
-validate_scrub_interpolate <- function(pre_file, post_file, censor_file) {
+validate_scrub_interpolate <- function(pre_file, post_file, censor_file,
+                                       n_sample = 100L, tolerance = 1e-5,
+                                       chunk_size = 100L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(censor_file)
+  checkmate::assert_count(n_sample, positive = TRUE)
+  checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+  checkmate::assert_count(chunk_size, positive = TRUE)
 
-  pre <- .pp_read_4d(pre_file)
-  post <- .pp_read_4d(post_file)
-  censor <- as.integer(readLines(censor_file))
-  t_interp <- which(1L - censor == 1L)
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post", tolerance = tolerance
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
 
-  if (!all(dim(pre) == dim(post))) {
+  pre_dims <- pp_nifti_dims4(pre_file)
+  post_dims <- pp_nifti_dims4(post_file)
+  if (!identical(pre_dims, post_dims)) {
     out <- FALSE
-    attr(out, "message") <- "Pre/post dimensions differ after scrub_interpolate."
-    attr(out, "details") <- list(pre_dim = dim(pre), post_dim = dim(post))
+    attr(out, "message") <- sprintf(
+      "Pre/post dimensions differ after scrub_interpolate: [%s] vs [%s].",
+      paste(pre_dims, collapse = "x"), paste(post_dims, collapse = "x")
+    )
+    attr(out, "details") <- list(pre_dim = pre_dims, post_dim = post_dims)
     return(out)
   }
 
-  if (length(t_interp) == 0L) {
-    out <- TRUE
-    attr(out, "message") <- "No censored timepoints to interpolate; validation trivially passed."
+  censor_check <- pp_validate_censor(readLines(censor_file), pre_dims[4])
+  if (!isTRUE(censor_check$valid)) {
+    out <- FALSE
+    attr(out, "message") <- censor_check$message
     attr(out, "details") <- list()
     return(out)
   }
+  censor <- censor_check$censor
+  t_interp <- which(censor == 0L)
+  t_keep <- which(censor == 1L)
+  if (length(t_interp) > 0L && length(t_keep) < 3L) {
+    out <- FALSE
+    attr(out, "message") <-
+      "Fewer than three retained timepoints are available for spline replay."
+    attr(out, "details") <- list(
+      n_interpolated = length(t_interp), n_retained = length(t_keep)
+    )
+    return(out)
+  }
 
-  ok <- all(is.finite(post[, , , t_interp]))
-  msg <- sprintf(
-    "Scrub interpolate: %d interpolated timepoints; all finite in post: %s.",
-    length(t_interp), ok
+  summary <- list(
+    max_absolute_error = 0, max_relative_error = 0,
+    n_mismatched = 0L, n_nonfinite_observed = 0L,
+    finite_pattern_mismatches = 0L
   )
-  out <- ok
+  update_summary <- function(current, comparison) {
+    current$max_absolute_error <- max(
+      current$max_absolute_error, comparison$max_absolute_error
+    )
+    current$max_relative_error <- max(
+      current$max_relative_error, comparison$max_relative_error
+    )
+    for (name in c(
+      "n_mismatched", "n_nonfinite_observed", "finite_pattern_mismatches"
+    )) {
+      current[[name]] <- current[[name]] + comparison[[name]]
+    }
+    current
+  }
+
+  n_voxels <- prod(pre_dims[1:3])
+  pre_min <- rep(Inf, n_voxels)
+  pre_max <- rep(-Inf, n_voxels)
+  retained_all_finite <- rep(TRUE, n_voxels)
+  if (length(t_keep)) {
+    keep_groups <- split(
+      t_keep, ceiling(seq_along(t_keep) / as.integer(chunk_size))
+    )
+    for (volumes in keep_groups) {
+      pre_matrix <- pp_read_volume_matrix(pre_file, volumes, pre_dims[1:3])
+      post_matrix <- pp_read_volume_matrix(post_file, volumes, pre_dims[1:3])
+      summary <- update_summary(
+        summary,
+        pp_compare_numeric(
+          post_matrix, pre_matrix, tolerance = tolerance, require_finite = TRUE
+        )
+      )
+      retained_all_finite <- retained_all_finite &
+        matrixStats::rowAlls(is.finite(pre_matrix))
+      pre_min <- pmin(
+        pre_min, matrixStats::rowMins(pre_matrix, na.rm = TRUE)
+      )
+      pre_max <- pmax(
+        pre_max, matrixStats::rowMaxs(pre_matrix, na.rm = TRUE)
+      )
+    }
+  }
+
+  spline_comparison <- list(
+    passed = TRUE, max_absolute_error = 0, max_relative_error = 0,
+    n_mismatched = 0L, n_nonfinite_observed = 0L,
+    finite_pattern_mismatches = 0L
+  )
+  selected <- list(
+    indices = integer(), normalized_coords = matrix(numeric(), ncol = 3L)
+  )
+  if (length(t_interp)) {
+    variable_candidates <- which(
+      retained_all_finite & is.finite(pre_min) & is.finite(pre_max) &
+        (pre_max - pre_min) > 2 * .Machine$double.eps
+    )
+    candidates <- if (length(variable_candidates)) {
+      variable_candidates
+    } else {
+      which(retained_all_finite & is.finite(pre_min) & is.finite(pre_max))
+    }
+    selected <- pp_select_spatial_replay_voxels(
+      candidates, spatial_dims = pre_dims[1:3], n_voxels = n_sample
+    )
+    if (!length(selected$indices)) {
+      out <- FALSE
+      attr(out, "message") <-
+        "No finite pre-step voxels are available for spline replay."
+      attr(out, "details") <- list(
+        n_interpolated = length(t_interp), n_retained = length(t_keep)
+      )
+      return(out)
+    }
+
+    pre_sample <- matrix(
+      NA_real_, nrow = length(selected$indices), ncol = pre_dims[4]
+    )
+    post_sample <- pre_sample
+    all_groups <- split(
+      seq_len(pre_dims[4]),
+      ceiling(seq_len(pre_dims[4]) / as.integer(chunk_size))
+    )
+    for (volumes in all_groups) {
+      pre_matrix <- pp_read_volume_matrix(pre_file, volumes, pre_dims[1:3])
+      post_matrix <- pp_read_volume_matrix(post_file, volumes, pre_dims[1:3])
+      pre_sample[, volumes] <- pre_matrix[selected$indices, , drop = FALSE]
+      post_sample[, volumes] <- post_matrix[selected$indices, , drop = FALSE]
+    }
+
+    expected_interp <- matrix(
+      NA_real_, nrow = length(selected$indices), ncol = length(t_interp)
+    )
+    first_valid <- min(t_keep)
+    last_valid <- max(t_keep)
+    for (voxel in seq_len(nrow(pre_sample))) {
+      retained_values <- pre_sample[voxel, t_keep]
+      if (all(retained_values == retained_values[[1L]])) {
+        # Production skips constant retained series and leaves censored values
+        # exactly as they were in the input image.
+        expected <- pre_sample[voxel, t_interp]
+      } else {
+        expected <- natural_spline_interp(
+          as.numeric(t_keep), retained_values, as.numeric(t_interp)
+        )
+        expected[t_interp < first_valid] <- pre_sample[voxel, first_valid]
+        expected[t_interp > last_valid] <- pre_sample[voxel, last_valid]
+      }
+      expected_interp[voxel, ] <- expected
+    }
+    spline_comparison <- pp_compare_numeric(
+      post_sample[, t_interp, drop = FALSE], expected_interp,
+      tolerance = tolerance, require_finite = TRUE
+    )
+  }
+
+  msg <- sprintf(
+    paste0(
+      "Scrub interpolation replay: %d retained volumes unchanged ",
+      "(max relative error %.6g); %d interpolated volumes replayed at %d ",
+      "spatially stratified voxels (max relative error %.6g; tol %.6g); ",
+      "%d mismatched values."
+    ),
+    length(t_keep), summary$max_relative_error,
+    length(t_interp), length(selected$indices),
+    spline_comparison$max_relative_error, tolerance,
+    summary$n_mismatched + spline_comparison$n_mismatched
+  )
+  passed <- summary$n_mismatched == 0L &&
+    summary$n_nonfinite_observed == 0L && isTRUE(spline_comparison$passed)
+  out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(n_interpolated = length(t_interp))
+  attr(out, "details") <- list(
+    n_interpolated = length(t_interp), n_retained = length(t_keep),
+    n_sampled = length(selected$indices),
+    sampled_indices = selected$indices,
+    normalized_coords = selected$normalized_coords,
+    retained_max_absolute_error = summary$max_absolute_error,
+    retained_max_relative_error = summary$max_relative_error,
+    retained_mismatches = summary$n_mismatched,
+    spline_max_absolute_error = spline_comparison$max_absolute_error,
+    spline_max_relative_error = spline_comparison$max_relative_error,
+    spline_mismatches = spline_comparison$n_mismatched,
+    tolerance = tolerance
+  )
   return(out)
 }
 
-#' Validate scrub timepoints (output TR count vs censor)
+#' Validate scrub timepoints by exact retained-volume replay
 #'
-#' Post TRs should equal pre TRs minus scrubbed count. Pass censor read **before** the step if the file is overwritten.
+#' The post image must contain exactly the pre-image volumes whose censor values
+#' are one, in their original order. Pass the censor vector read **before** the
+#' step if the file is overwritten.
 #'
 #' @param pre_file Path to 4D BOLD before `scrub_timepoints`.
 #' @param post_file Path to 4D BOLD after `scrub_timepoints`.
 #' @param censor_vec Censor vector length = pre TRs (1 = keep, 0 = drop).
+#' @param tolerance Maximum relative numerical error for retained volumes.
+#' @param chunk_size Number of retained volumes compared at a time.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details` (`n_pre_t`, `n_post_t`, `n_removed`).
 #'
 #' @keywords internal
-validate_scrub_timepoints <- function(pre_file, post_file, censor_vec) {
+validate_scrub_timepoints <- function(pre_file, post_file, censor_vec,
+                                      tolerance = 1e-5, chunk_size = 100L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
-  checkmate::assert_integerish(censor_vec, any.missing = FALSE)
+  checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+  checkmate::assert_count(chunk_size, positive = TRUE)
 
-  pre <- .pp_read_4d(pre_file)
-  post <- .pp_read_4d(post_file)
-  censor <- as.integer(censor_vec)
-  n_pre <- dim(pre)[4]
-  if (length(censor) != n_pre) {
+  pre_post_grid <- pp_compare_nifti_grid(
+    pre_file, post_file, "pre", "post", tolerance = tolerance
+  )
+  if (!isTRUE(pre_post_grid$passed)) return(pp_grid_failure(pre_post_grid))
+
+  pre_dims <- pp_nifti_dims4(pre_file)
+  post_dims <- pp_nifti_dims4(post_file)
+  censor_check <- pp_validate_censor(censor_vec, pre_dims[4])
+  if (!isTRUE(censor_check$valid)) {
     out <- FALSE
-    attr(out, "message") <- sprintf(
-      "Censor length (%d) does not match pre image T (%d).",
-      length(censor), n_pre
-    )
+    attr(out, "message") <- censor_check$message
     attr(out, "details") <- list()
     return(out)
   }
-  t_scrub <- which(1L - censor == 1L)
-  n_post <- dim(post)[4]
-  expected <- n_pre - length(t_scrub)
-  passed <- n_post == expected && all(dim(pre)[1:3] == dim(post)[1:3])
+  censor <- censor_check$censor
+  keep <- which(censor == 1L)
+  removed <- which(censor == 0L)
+  expected_t <- length(keep)
+  if (!expected_t) {
+    out <- FALSE
+    attr(out, "message") <- "Censor vector would remove every timepoint."
+    attr(out, "details") <- list(n_pre_t = pre_dims[4], n_removed = length(removed))
+    return(out)
+  }
+  if (!identical(pre_dims[1:3], post_dims[1:3]) || post_dims[4] != expected_t) {
+    out <- FALSE
+    attr(out, "message") <- sprintf(
+      paste0(
+        "Scrub timepoint dimensions mismatch: pre=[%s], post=[%s], ",
+        "expected post T=%d."
+      ),
+      paste(pre_dims, collapse = "x"), paste(post_dims, collapse = "x"),
+      expected_t
+    )
+    attr(out, "details") <- list(
+      pre_dim = pre_dims, post_dim = post_dims, expected_post_t = expected_t
+    )
+    return(out)
+  }
+
+  aggregate <- list(
+    max_absolute_error = 0, max_relative_error = 0,
+    n_mismatched = 0L, n_nonfinite_observed = 0L,
+    finite_pattern_mismatches = 0L
+  )
+  post_positions <- seq_len(expected_t)
+  groups <- split(
+    post_positions, ceiling(post_positions / as.integer(chunk_size))
+  )
+  for (post_volumes in groups) {
+    pre_volumes <- keep[post_volumes]
+    pre_matrix <- pp_read_volume_matrix(pre_file, pre_volumes, pre_dims[1:3])
+    post_matrix <- pp_read_volume_matrix(
+      post_file, post_volumes, post_dims[1:3]
+    )
+    comparison <- pp_compare_numeric(
+      post_matrix, pre_matrix, tolerance = tolerance, require_finite = TRUE
+    )
+    aggregate$max_absolute_error <- max(
+      aggregate$max_absolute_error, comparison$max_absolute_error
+    )
+    aggregate$max_relative_error <- max(
+      aggregate$max_relative_error, comparison$max_relative_error
+    )
+    for (name in c(
+      "n_mismatched", "n_nonfinite_observed", "finite_pattern_mismatches"
+    )) {
+      aggregate[[name]] <- aggregate[[name]] + comparison[[name]]
+    }
+  }
+  passed <- aggregate$n_mismatched == 0L &&
+    aggregate$n_nonfinite_observed == 0L
   msg <- sprintf(
-    "Scrub timepoints: pre T=%d, post T=%d, removed=%d (expected post T=%d). Match: %s.",
-    n_pre, n_post, length(t_scrub), expected, passed
+    paste0(
+      "Scrub timepoint replay: pre T=%d, post T=%d, removed=%d; ",
+      "all %d retained volumes match in order with max relative error %.6g ",
+      "(tol %.6g); %d mismatched values."
+    ),
+    pre_dims[4], post_dims[4], length(removed), expected_t,
+    aggregate$max_relative_error, tolerance, aggregate$n_mismatched
   )
   out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(n_pre_t = n_pre, n_post_t = n_post, n_removed = length(t_scrub))
+  attr(out, "details") <- c(
+    list(
+      n_pre_t = pre_dims[4], n_post_t = post_dims[4],
+      n_removed = length(removed), n_retained = expected_t,
+      tolerance = tolerance
+    ),
+    aggregate
+  )
   return(out)
 }

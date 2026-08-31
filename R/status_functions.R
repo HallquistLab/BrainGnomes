@@ -15,7 +15,7 @@ parse_complete_time <- function(file) {
   as.POSIXct(parsed)
 }
 
-.status_spec <- function(scfg) {
+status_spec <- function(scfg) {
   steps <- character()
   if (isTRUE(scfg$bids_conversion$enable)) steps <- c(steps, "bids_conversion")
   if (isTRUE(scfg$mriqc$enable)) steps <- c(steps, "mriqc")
@@ -31,8 +31,8 @@ parse_complete_time <- function(file) {
   )
 }
 
-.empty_project_status <- function(scfg) {
-  spec <- .status_spec(scfg)
+empty_project_status <- function(scfg) {
+  spec <- status_spec(scfg)
   result <- list(sub_id = character(), ses_id = character())
 
   add_status_columns <- function(prefix) {
@@ -68,7 +68,7 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
   checkmate::assert_string(sub_id)
   checkmate::assert_string(ses_id, null.ok = TRUE)
 
-  status_spec <- .status_spec(scfg)
+  status_spec <- status_spec(scfg)
   steps <- status_spec$steps
   pp_streams <- status_spec$postprocess_streams
   ex_streams <- status_spec$extract_streams
@@ -146,7 +146,7 @@ get_project_status <- function(scfg) {
   log_dir <- scfg$metadata$log_directory
   sub_dirs <- list.dirs(log_dir, recursive = FALSE, full.names = FALSE)
   sub_ids <- sub("^sub-", "", sub_dirs[grepl("^sub-", sub_dirs)])
-  if (length(sub_ids) == 0L) return(.empty_project_status(scfg))
+  if (length(sub_ids) == 0L) return(empty_project_status(scfg))
   res <- lapply(sub_ids, function(id) {
     bids_sub_dir <- file.path(scfg$metadata$bids_directory, paste0("sub-", id))
     ses_dirs <- if (dir.exists(bids_sub_dir)) {

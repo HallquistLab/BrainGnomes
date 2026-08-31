@@ -366,13 +366,13 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
       } else {
         return(FALSE)
       }
-    } else if (all(status %in% c("failed", "complete"))) {
+    } else if (all(status %in% c("failed", "complete", "cancelled"))) {
       job_complete <- TRUE # drop out of this loop
       if (isFALSE(quiet)) {
         cat("All jobs have finished.\n")
       }
-      if (any(status == "failed")) {
-        cat("The following jobs(s) failed:", paste(job_ids[status == "failed"], collapse = ", "), "\n")
+      if (any(status %in% c("failed", "cancelled"))) {
+        cat("The following job(s) failed or were cancelled:", paste(job_ids[status %in% c("failed", "cancelled")], collapse = ", "), "\n")
         ret_code <- FALSE
       } else {
         ret_code <- TRUE

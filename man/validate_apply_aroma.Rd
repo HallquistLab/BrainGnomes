@@ -2,7 +2,7 @@
 % Please edit documentation in R/postproc_checks.R
 \name{validate_apply_aroma}
 \alias{validate_apply_aroma}
-\title{Validate AROMA (voxel-sampling replay vs output)}
+\title{Validate AROMA by deterministic spatial replay}
 \usage{
 validate_apply_aroma(
   pre_file,
@@ -10,7 +10,8 @@ validate_apply_aroma(
   mixing_file,
   noise_ics,
   nonaggressive = TRUE,
-  n_sample = 100L
+  n_sample = 100L,
+  mask_file = NULL
 )
 }
 \arguments{
@@ -25,13 +26,17 @@ validate_apply_aroma(
 \item{nonaggressive}{Same as \code{apply_aroma}.}
 
 \item{n_sample}{Number of voxels to sample (default 100).}
+
+\item{mask_file}{Optional 3D brain mask used to constrain pre-step sampling.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
 Attributes: \code{message}, \code{details}.
 }
 \description{
-Samples ~100 voxels and replays the AROMA regression via \code{lmfit_residuals_mat};
-passes if max abs diff < 0.05 (or skips if no noise ICs).
+Selects approximately 100 pre-step voxels across normalized image space and
+replays the AROMA regression via \code{lmfit_residuals_mat}; passes if the maximum
+absolute difference is below 0.05. If there are no noise ICs, validation
+instead requires the complete post-step image to be unchanged.
 }
 \keyword{internal}

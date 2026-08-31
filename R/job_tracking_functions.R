@@ -339,8 +339,8 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
 
   checkmate::assert_string(status)
   status <- toupper(status)
-  checkmate::assert_subset(status, c("QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT"))
-  if (cascade && status %in% c("QUEUED", "STARTED", "COMPLETED")) {
+  checkmate::assert_subset(status, c("QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT", "CANCELLED"))
+  if (cascade && status %in% c("QUEUED", "STARTED", "COMPLETED", "CANCELLED")) {
     cascade <- FALSE
     warning("Only status FAILED or FAILED_BY_EXT can cascade in `update_tracked_job_status`")
   }
@@ -351,7 +351,8 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
                        STARTED = "time_started",
                        FAILED = "time_ended",
                        COMPLETED = "time_ended",
-                       FAILED_BY_EXT = "time_ended"
+                       FAILED_BY_EXT = "time_ended",
+                       CANCELLED = "time_ended"
   )
 
   rows_updated <- tryCatch({

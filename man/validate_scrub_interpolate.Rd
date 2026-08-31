@@ -2,9 +2,16 @@
 % Please edit documentation in R/postproc_checks.R
 \name{validate_scrub_interpolate}
 \alias{validate_scrub_interpolate}
-\title{Validate scrub interpolate (dims + finite at filled TRs)}
+\title{Validate scrub interpolation by exact preservation and sampled spline replay}
 \usage{
-validate_scrub_interpolate(pre_file, post_file, censor_file)
+validate_scrub_interpolate(
+  pre_file,
+  post_file,
+  censor_file,
+  n_sample = 100L,
+  tolerance = 1e-05,
+  chunk_size = 100L
+)
 }
 \arguments{
 \item{pre_file}{Path to 4D BOLD before \code{scrub_interpolate}.}
@@ -12,12 +19,20 @@ validate_scrub_interpolate(pre_file, post_file, censor_file)
 \item{post_file}{Path to 4D BOLD after \code{scrub_interpolate}.}
 
 \item{censor_file}{Censor file (1 = keep, 0 = interpolate).}
+
+\item{n_sample}{Number of pre-step brain/data voxels used for spline replay.}
+
+\item{tolerance}{Maximum relative numerical error for exact comparisons.}
+
+\item{chunk_size}{Number of volumes compared at a time.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
 Attributes: \code{message}, \code{details}.
 }
 \description{
-Same 4D shape as pre; interpolated TRs (censor 0) must be finite in post.
+The pre/post images must have the same shape, uncensored volumes must be
+unchanged, and interpolated values must match the production natural-spline
+implementation at deterministic, spatially distributed voxels.
 }
 \keyword{internal}

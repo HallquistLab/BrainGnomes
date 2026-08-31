@@ -2,16 +2,41 @@
 
 Released 2026-08-30
 
+* Add a complete project lifecycle to the R and command-line interfaces:
+  non-mutating configuration validation, `doctor()` preflight checks,
+  serializable execution plans, run handles and tracked-run views, log discovery,
+  non-interactive diagnosis, failed-job retry planning, and guarded scheduler
+  cancellation. Flywheel controller snapshots are now run-specific so concurrent
+  submissions cannot overwrite one another.
 * Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
   distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask conditions.
   Validation now enforces the selected detrending-plus-MAD estimator, uses up
-  to 600 volumes with a memory-reduced equivalent estimator, and cannot pass
-  by extrapolating across input-mask, kernel-size, or voxel-size support.
+  to 96 timepoints deterministically distributed over the complete run (or all
+  timepoints in shorter runs), reads only those volumes with RNifti, and cannot
+  pass by extrapolating across input-mask, kernel-size, voxel-size, or sampling
+  support. Calibration retains the full-run SUSAN threshold, temporal mean, and
+  extents while estimating smoothness from the selected timepoints.
 * Validate the promoted 3--8 mm masked-SUSAN models on independent fMRIPrep
-  25.2.5 derivatives and through a 600-volume postprocessing-to-ROI E2E run.
+  25.2.5 derivatives and a 96-volume postprocessing E2E fixture drawn across
+  the complete run.
   The 10 mm stress kernel remains outside the supported calibration range.
-* Allow fsaverage setup to copy with GNU `cp` when newer fMRIPrep containers do
-  not provide `rsync`, while retaining the existing `rsync` path when present.
+* Allow Slurm and PBS fsaverage setup to copy with GNU `cp` when newer fMRIPrep
+  containers do not provide `rsync`, while retaining the existing `rsync` path
+  when present.
+* Strengthen postprocessing validation so masking is replayed exactly,
+  interpolation preserves retained volumes and matches sampled natural-spline
+  values, removed volumes match the censor vector in order, and AROMA/confound
+  regression samples are deterministic, pre-selected, and spatially balanced
+  across image resolutions.
+* Make temporal-filter validation deterministic and pre-selected, require
+  finite per-voxel stopband and passband evidence, verify that no-noise-IC
+  AROMA output is actually unchanged, reject wholly invalid AROMA component
+  requests, and fail every image validator when spatial NIfTI grid metadata
+  change unexpectedly.
+* Route postprocessing checks through a common validation runner: validator
+  errors now obey the configured continue/stop policy, reused intermediates are
+  checked, structured results are retained in a JSON audit beside the subject
+  log, and final images remain staged until last-step validation completes.
 
 # BrainGnomes 0.9-1
 

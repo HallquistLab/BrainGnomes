@@ -589,7 +589,7 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
     return(invisible(NULL))
   }
   
-  status_priority <- c("COMPLETED" = 5, "STARTED" = 4, "QUEUED" = 3, "FAILED_BY_EXT" = 2, "FAILED" = 1)
+  status_priority <- c("COMPLETED" = 6, "STARTED" = 5, "QUEUED" = 4, "CANCELLED" = 3, "FAILED_BY_EXT" = 2, "FAILED" = 1)
   
   # Build trees to get hierarchy structure
   trees <- tracking_df_to_tree(subject_jobs_df)
@@ -891,6 +891,7 @@ get_status_symbol <- Vectorize(
            "STARTED" = cli::col_yellow("\u22ef"), # ellipsis
            "FAILED" = cli::col_red("\u2717"), # X mark
            "FAILED_BY_EXT" = cli::col_red("\u2717"), # X mark
+           "CANCELLED" = cli::col_red("\u25a0"), # stop square
            cli::col_yellow("?")) # unknown/unrecognized status
   },
   USE.NAMES = FALSE
@@ -910,6 +911,7 @@ get_status_color <- Vectorize(
            "STARTED" = cli::col_yellow(status),
            "FAILED" = cli::col_red(status),
            "FAILED_BY_EXT" = cli::col_red(status),
+           "CANCELLED" = cli::col_red(status),
            status)
   },
   USE.NAMES = FALSE

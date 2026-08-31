@@ -53,7 +53,9 @@ postprocessing and extraction stream settings without submitting any jobs.}
 \code{TRACE}, \code{DEBUG}, \code{INFO}, \code{WARN}, \code{ERROR}, or \code{FATAL}.}
 }
 \value{
-A logical value indicating whether the processing pipeline was successfully run.
+For submitted work, an invisible \code{bg_project_run} object containing
+the run UUID and scheduler job IDs known at submission time. Dry runs
+invisibly return \code{TRUE} after printing the resolved plan.
 }
 \description{
 Run the processing pipeline

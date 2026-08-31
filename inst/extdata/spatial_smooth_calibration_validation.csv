@@ -1,7 +1,7 @@
-model_version,mode,input_mask,calibration_rmse_mm,heldout_subject_rmse_mm,kernel_10_stress_rmse_mm,max_lodo_rmse_mm,max_lodo_q95_abs_error_mm,max_loso_rmse_mm,max_loso_q95_abs_error_mm,external_rmse_mm,external_q95_abs_error_mm,tolerance_mm,external_within_tolerance,n_external_subjects,fmriprep_version
-smoothness-calibration-v1,afni_blurinmask,none,0.3062058,0.1232960,1.0867550,0.4002679,0.7232551,,,,,,,0,
-smoothness-calibration-v1,afni_3dmerge,none,0.3927270,0.1570629,1.4358280,0.5353268,0.9495872,,,,,,,0,
-smoothness-calibration-v3-fmriprep-k3-8,fsl_susan_mask,none,0.2108821,0.2819184,0.6605008,0.2579059,0.5240563,0.4021117,0.5924668,0.1705944,0.3134667,0.6,TRUE,10,25.2.5
-smoothness-calibration-v3-fmriprep-k3-8,fsl_susan_mask,fmriprep,0.2133996,0.3125489,0.6965488,0.3131493,0.7559211,0.4315433,0.7046002,0.2075162,0.3983616,0.8,TRUE,10,25.2.5
-smoothness-calibration-v3-fmriprep-k3-8,fsl_susan_mask,template,0.2083504,0.2500960,0.8271381,0.2387722,0.4570124,0.3542908,0.5021433,0.1825685,0.3159956,0.6,TRUE,10,25.2.5
-smoothness-calibration-v1,fsl_susan_nomask,none,0.1108436,0.0721094,0.2222085,0.1485985,0.2680685,,,,,,,0,
+model_version,mode,input_mask,calibration_rmse_mm,heldout_subject_rmse_mm,kernel_10_stress_rmse_mm,max_lodo_rmse_mm,max_lodo_q95_abs_error_mm,max_loso_rmse_mm,max_loso_q95_abs_error_mm,external_rmse_mm,external_q95_abs_error_mm,tolerance_mm,external_within_tolerance,n_external_subjects,fmriprep_version,volumes_per_run,volume_sampling
+smoothness-calibration-v1,afni_blurinmask,none,0.3062058,0.1232960,1.0867550,0.4002679,0.7232551,,,,,,,0,,,
+smoothness-calibration-v1,afni_3dmerge,none,0.3927270,0.1570629,1.4358280,0.5353268,0.9495872,,,,,,,0,,,
+smoothness-calibration-v4-fullcontext-distributed96-k3-8,fsl_susan_mask,none,0.220315274540001,0.302465879476648,0.718881856805896,0.273974616948987,0.568324412111634,0.359822549613713,0.568737067808198,0.162862253189209,0.264804937691776,0.7,TRUE,10,25.2.5,96,distributed_full_run
+smoothness-calibration-v4-fullcontext-distributed96-k3-8,fsl_susan_mask,fmriprep,0.225182160600369,0.338305594380133,0.730895213515259,0.315618611173292,0.787509764582739,0.398475156833889,0.622607306908688,0.172496790023254,0.276177792008002,0.8,TRUE,10,25.2.5,96,distributed_full_run
+smoothness-calibration-v4-fullcontext-distributed96-k3-8,fsl_susan_mask,template,0.216719926746836,0.28577939077647,0.849239215184434,0.262712128076627,0.51081379924794,0.324937136292282,0.524212998151296,0.183403459734461,0.311993327821857,0.6,TRUE,10,25.2.5,96,distributed_full_run
+smoothness-calibration-v1,fsl_susan_nomask,none,0.1108436,0.0721094,0.2222085,0.1485985,0.2680685,,,,,,,0,,,

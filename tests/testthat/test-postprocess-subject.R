@@ -8,7 +8,7 @@ test_that("postprocessing automask helper preserves the production settings", {
     .package = "BrainGnomes"
   )
 
-  expect_equal(.postprocess_automask("input.nii.gz", "mask.nii.gz"), "mask.nii.gz")
+  expect_equal(postprocess_automask("input.nii.gz", "mask.nii.gz"), "mask.nii.gz")
   expect_equal(captured$img, "input.nii.gz")
   expect_equal(captured$outfile, "mask.nii.gz")
   expect_equal(captured$clfrac, 0.5)

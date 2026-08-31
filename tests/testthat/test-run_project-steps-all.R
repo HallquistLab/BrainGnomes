@@ -62,10 +62,12 @@ test_that("run_project expands steps = 'all' to enabled step flags", {
     .package = "BrainGnomes"
   )
 
-  run_project(scfg, steps = "all", debug = TRUE)
+  run <- run_project(scfg, steps = "all", debug = TRUE)
 
   expect_true(submitted)
-  snapshot_file <- file.path(log_dir, "run_project_snapshot.rds")
+  expect_s3_class(run, "bg_project_run")
+  expect_match(run$run_id, "^[0-9a-f-]+$")
+  snapshot_file <- file.path(log_dir, "runs", run$run_id, "run_project_snapshot.rds")
   expect_true(file.exists(snapshot_file))
 
   snapshot <- readRDS(snapshot_file)

@@ -4,12 +4,24 @@
 \alias{validate_apply_mask}
 \title{Validate that a brain mask was correctly applied to 4D fMRI data}
 \usage{
-validate_apply_mask(mask_file, data_file)
+validate_apply_mask(
+  pre_file,
+  post_file,
+  mask_file,
+  tolerance = 1e-05,
+  chunk_size = 100L
+)
 }
 \arguments{
+\item{pre_file}{Path to the 4D fMRI data before masking.}
+
+\item{post_file}{Path to the 4D fMRI data after masking.}
+
 \item{mask_file}{Path to the binary mask NIfTI file (1s = brain, 0s = non-brain).}
 
-\item{data_file}{Path to the masked 4D fMRI data file (after \code{apply_mask} was run).}
+\item{tolerance}{Maximum relative numerical error allowed inside the mask.}
+
+\item{chunk_size}{Number of volumes compared at a time.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
@@ -21,18 +33,13 @@ Attributes:
 }
 }
 \description{
-Checks that voxels outside the mask are zero (no signal leakage) and
-optionally reports voxels inside the mask that are all zero (potentially
-problematic).
+Replays the masking operation in volume chunks and checks that the post-mask
+image equals the pre-mask image inside the mask and is exactly zero outside
+it. Voxels inside the mask that remain zero for the full run are reported.
 }
 \details{
-This function verifies that the masking step was applied correctly by checking:
-\itemize{
-\item External violations: voxels where mask == 0 (outside brain) but data has non-zero signal.
-\item Internal zeros: voxels where mask > 0 (inside brain) but all timepoints are zero.
-}
-
-Validation passes if \code{external_violations == 0}. Internal zeros are reported
-but do not cause validation to fail.
+Validation requires the complete post-mask image to equal the exact expected
+transform within \code{tolerance}. This prevents an all-zero or otherwise altered
+in-mask output from passing merely because nothing leaked outside the mask.
 }
 \keyword{internal}

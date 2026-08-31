@@ -311,7 +311,7 @@ After `setup_project` completes, it will write a file called `project_config.yam
 
 # BrainGnomes workflow in a nutshell
 
-## Step 1: Setup your project
+## Step 1: Initialize and configure the project
 
 Use `setup_project()` to interactively complete or correct configuration entries:
 
@@ -319,66 +319,112 @@ Use `setup_project()` to interactively complete or correct configuration entries
 scfg <- setup_project()
 ```
 
-This will say a `project_config.yaml` file in your project directory.
-
-## Step 2: Load your configuration
-
-The step above results in an object in your R workspace called `scfg` that contains all of your project settings. This is great for now, but if you quit R and come back later, you probably want to pick up from where you left off. You can use `load_project()` to load an existing configuration:
-
-```{r eval = FALSE}
-scfg <- load_project("/path/to/my/project")
-```
-
-## Step 3: Edit configuration
-
-Use `edit_project()` for a menu-driven interface to modify parts of the project configuration.
+This saves `project_config.yaml` in the project directory. For automation,
+`initialize_project()` creates the directory layout and a disabled-stage
+configuration without opening a prompt. Enable and fill in the stages you need
+with `edit_project()` or by using the resulting YAML as a version-controlled
+template.
 
 ```{r eval = FALSE}
+scfg <- initialize_project(
+  "my_study", "/project/my_study",
+  interactive = FALSE
+)
 scfg <- edit_project(scfg)
 ```
 
-Follow the prompts to choose what to edit. This is useful if you want to change job resources (e.g., memory or CPU for fMRIPrep) or adjust CLI options for specific pipeline steps.
+## Step 2: Validate and run preflight checks
 
-## Step 4: Run the project
-
-Once your configuration is complete, you can run the pipeline.
+Reloading and validation are non-mutating: a malformed configuration is
+reported but is never silently repaired or written. `doctor()` then checks the
+submission environment, including scheduler commands, container compatibility,
+storage permissions, stage-specific files, and SQLite tracking.
 
 ```{r eval = FALSE}
-run_project(scfg)
+scfg <- load_project("/path/to/my/project")
+validation <- validate_project_config(scfg)
+preflight <- doctor(scfg)
+
+stopifnot(validation$valid, preflight$ok)
 ```
 
-By default, this will prompt you whether to run all steps in your pipeline. It will also process all available subjects and sessions defined in the BIDS directory.
+Pass `deep = TRUE` to also initialize the active reticulate Python and inspect
+optional modules used by template-dependent postprocessing. Preflight never
+submits jobs or changes project files.
 
-If you want to run only a subset of subjects, you can use the `subject_filter` argument like:
+## Step 3: Build and save an execution plan
 
-```{r eval = FALSE}
-# run subjects 242 and 510 only
-run_project(scfg, subject_filter=c("242", "510"))
-```
-
-Likewise, if you want to skip the menu prompts for which step to run, you can use the `steps` argument. For example, to run only postprocessing on these subjects:
-
-```{r eval = FALSE}
-# run subjects 242 and 510 only
-run_project(scfg, subject_filter=c("242", "510"), steps="postprocess")
-```
-
-The available `steps` are `"flywheel_sync"`, `"bids_conversion"`, `"mriqc"`, `"fmriprep"`, `"aroma"`, `"postprocess"`, and `"extract_rois"`. BIDS validation is configured with the project but submitted separately through `run_bids_validation()`.
-Note that if you request a step in `run_project` that was never configured it will result in an error.
-
-Before submitting work, use `dry_run = TRUE` to inspect the subject/session scope and the resolved settings for every selected postprocessing and extraction stream:
+Plans resolve enabled stages, subject/session scope, streams, resources,
+dependencies, and implicit setup jobs before submission. Saved plans include
+their configuration and subject scope, making the reviewed request reusable.
 
 ```{r eval = FALSE}
-run_project(
+plan <- plan_project(
   scfg,
   steps = c("postprocess", "extract_rois"),
-  dry_run = TRUE
+  subject_filter = c("242", "510")
 )
+write_project_plan(plan, "/project/my_study/plans/analysis.yaml")
 ```
+
+The available submitted stages are `"flywheel_sync"`, `"bids_conversion"`,
+`"mriqc"`, `"fmriprep"`, `"aroma"`, `"postprocess"`, and `"extract_rois"`.
+BIDS validation is configured with the project but scheduled independently
+through `run_bids_validation()`.
+
+## Step 4: Submit and observe the run
+
+Submitting a plan returns a run handle with a stable run ID. That ID connects
+tracking rows, logs, diagnosis, retry, and cancellation.
+
+```{r eval = FALSE}
+run <- submit_project_plan(plan)
+
+get_project_runs(scfg)
+get_run_jobs(scfg, run$run_id)
+find_run_logs(scfg, run$run_id, failed_only = TRUE)
+```
+
+Direct `run_project()` calls remain supported for interactive use. They now
+return the same run handle after submission, and `dry_run = TRUE` retains the
+older submission-free preview.
+
+## Step 5: Diagnose, retry, or cancel
+
+```{r eval = FALSE}
+diagnosis <- diagnose_project(scfg, run$run_id)
+
+# Review the force-enabled retry plan before submitting it.
+retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
+
+# Preview scheduler cancellation commands before taking action.
+cancel_project_run(scfg, run$run_id, dry_run = TRUE)
+```
+
+The interactive `diagnose_pipeline()` browser remains available when a guided
+job-tree investigation is more useful than a scriptable report.
 
 # Running BrainGnomes on the command line
 
-BrainGnomes provides a command-line interface for setup, configuration editing, pipeline submission, and status reporting. This is helpful if you prefer not to start an R session or want to perform routine operations from a shell.
+BrainGnomes provides the same lifecycle without requiring an interactive R
+session. A typical shell workflow is:
+
+```bash
+BrainGnomes init my_study /project/my_study --non-interactive
+BrainGnomes config edit /project/my_study
+BrainGnomes config validate /project/my_study
+BrainGnomes doctor /project/my_study
+BrainGnomes plan /project/my_study --steps=all --output=/project/my_study/run.yaml
+BrainGnomes run /project/my_study/run.yaml
+BrainGnomes status /project/my_study --run=latest --watch
+BrainGnomes logs /project/my_study --run=latest --failed-only --tail=50
+BrainGnomes diagnose /project/my_study --run=latest
+BrainGnomes retry /project/my_study --run=latest --dry-run
+```
+
+Retry and cancellation require `--dry-run` or the explicit `--yes` confirmation
+flag. Use `BrainGnomes validate-bids /project/my_study` to submit the separately
+configured BIDS validation job.
 
 To get BrainGnomes on the command line, you need to add the location of the package to your Linux path. If you don't know
 where it is installed, run this in an R session.
@@ -407,4 +453,8 @@ cli_help <- system2(
 cat(cli_help, sep = "\n")
 ```
 
-Use `BrainGnomes <command> --help` for command-specific options and examples. On the CLI, objects such as `scfg` are not persisted in a session; configuration changes are saved to `project_config.yaml` in the project directory. BIDS validation remains an R operation configured with the project but submitted separately through `run_bids_validation()`.
+Use `BrainGnomes <command> --help` for command-specific options and examples.
+Table output is intended for people; commands that return structured results
+also provide JSON, and tabular status/log commands provide CSV. Compatibility
+aliases for `setup_project`, `edit_project`, and `run_project` remain available
+for existing scripts.

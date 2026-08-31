@@ -2,14 +2,15 @@
 % Please edit documentation in R/postproc_checks.R
 \name{validate_confound_regression}
 \alias{validate_confound_regression}
-\title{Validate confound regression (voxel-sampling replay vs output)}
+\title{Validate confound regression by deterministic spatial replay}
 \usage{
 validate_confound_regression(
   pre_file,
   post_file,
   to_regress,
   censor_file = NULL,
-  n_sample = 100L
+  n_sample = 100L,
+  mask_file = NULL
 )
 }
 \arguments{
@@ -22,13 +23,16 @@ validate_confound_regression(
 \item{censor_file}{Optional censor file (1 = keep TR).}
 
 \item{n_sample}{Number of voxels to sample (default 100).}
+
+\item{mask_file}{Optional 3D brain mask used to constrain pre-step sampling.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
 Attributes: \code{message}, \code{details} (\code{max_abs_diff}).
 }
 \description{
-Samples ~100 voxels and replays the regression via \code{lmfit_residuals_mat}
-(\code{preserve_mean = TRUE}); passes if max abs diff < 0.05.
+Selects approximately 100 pre-step voxels across normalized image space and
+replays the regression via \code{lmfit_residuals_mat} (\code{preserve_mean = TRUE});
+passes if the maximum absolute difference is below 0.05.
 }
 \keyword{internal}

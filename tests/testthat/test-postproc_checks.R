@@ -17,6 +17,66 @@ write_synth_mask <- function(arr, path, vox_mm = c(2, 2, 2)) {
   invisible(path)
 }
 
+#' Write a synthetic NIfTI with explicit, matching qform and sform transforms
+write_synth_xform <- function(arr, path, vox_mm = c(2, 2, 2),
+                              offset_mm = c(0, 0, 0)) {
+  nii <- RNifti::asNifti(arr)
+  n_dim <- length(dim(arr))
+  pixdim(nii) <- if (n_dim == 4L) c(vox_mm, 1) else vox_mm
+  affine <- diag(c(vox_mm, 1))
+  affine[1:3, 4] <- offset_mm
+  attr(affine, "code") <- 4L
+  nii <- RNifti::`qform<-`(nii, affine)
+  nii <- RNifti::`sform<-`(nii, affine)
+  RNifti::writeNifti(nii, path)
+  invisible(path)
+}
+
+test_that("spatial-grid comparison detects changed qform and sform", {
+  arr <- array(rnorm(3 * 4 * 2 * 6), dim = c(3, 4, 2, 6))
+  reference_file <- tempfile(fileext = ".nii.gz")
+  matching_file <- tempfile(fileext = ".nii.gz")
+  shifted_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(reference_file, matching_file, shifted_file)), add = TRUE)
+  write_synth_xform(arr, reference_file, offset_mm = c(-8, 4, 12))
+  write_synth_xform(arr, matching_file, offset_mm = c(-8, 4, 12))
+  write_synth_xform(arr, shifted_file, offset_mm = c(-3, 4, 12))
+
+  expect_true(pp_compare_nifti_grid(reference_file, matching_file)$passed)
+  shifted <- pp_compare_nifti_grid(reference_file, shifted_file)
+  expect_false(shifted$passed)
+  expect_true(any(grepl("transform", shifted$mismatch_reasons)))
+  expect_equal(shifted$max_qform_difference, 5)
+  expect_equal(shifted$max_sform_difference, 5)
+})
+
+test_that("postprocessing validators reject correct values on a shifted grid", {
+  dims <- c(3L, 3L, 2L, 8L)
+  pre <- array(rnorm(prod(dims)), dim = dims)
+  mask <- array(1L, dim = dims[1:3])
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  mask_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, mask_file)), add = TRUE)
+  write_synth_xform(pre, pre_file)
+  write_synth_xform(pre, post_file, offset_mm = c(10, 0, 0))
+  write_synth_xform(mask, mask_file)
+
+  result <- validate_apply_mask(pre_file, post_file, mask_file)
+  expect_false(result)
+  expect_match(attr(result, "message"), "grid mismatch")
+  expect_true(
+    "qform transform" %in%
+      attr(result, "details")$spatial_grid$mismatch_reasons
+  )
+
+  write_synth_xform(pre, post_file)
+  write_synth_xform(mask, mask_file, offset_mm = c(0, -6, 0))
+  shifted_mask <- validate_apply_mask(pre_file, post_file, mask_file)
+  expect_false(shifted_mask)
+  expect_match(attr(shifted_mask, "message"), "pre/mask spatial")
+})
+
 # --- validate_apply_mask ------------------------------------------------------
 
 test_that("validate_apply_mask passes when masking is correct", {
@@ -32,21 +92,22 @@ test_that("validate_apply_mask passes when masking is correct", {
     if (sqrt((i - 3.5)^2 + (j - 3.5)^2 + (k - 2.5)^2) <= 2.5) mask[i, j, k] <- 1L
   }
 
-  # data: nonzero only where mask == 1
-  data4d <- array(0, dim = c(nx, ny, nz, nt))
-  for (t in 1:nt) {
-    data4d[, , , t] <- mask * (runif(nx * ny * nz, 50, 200))
-  }
+  pre <- array(runif(nx * ny * nz * nt, 50, 200),
+               dim = c(nx, ny, nz, nt))
+  post <- pre * array(rep(mask, nt), dim = dim(pre))
 
   mask_file <- tempfile(fileext = ".nii.gz")
-  data_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(mask_file, data_file)), add = TRUE)
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(mask_file, pre_file, post_file)), add = TRUE)
   write_synth_mask(mask, mask_file)
-  write_synth_4d(data4d, data_file)
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(post, post_file)
 
-  result <- validate_apply_mask(mask_file, data_file)
+  result <- validate_apply_mask(pre_file, post_file, mask_file)
   expect_true(result)
   expect_equal(attr(result, "external_violations"), 0L)
+  expect_equal(attr(result, "details")$n_mismatched, 0L)
 })
 
 test_that("validate_apply_mask fails when outside-mask voxels have signal", {
@@ -58,18 +119,20 @@ test_that("validate_apply_mask fails when outside-mask voxels have signal", {
   mask <- array(0L, dim = c(nx, ny, nz))
   mask[2:5, 2:5, 2:3] <- 1L
 
-  # deliberately leak signal outside the mask
-  data4d <- array(0, dim = c(nx, ny, nz, nt))
-  for (t in 1:nt) data4d[, , , t] <- mask * runif(nx * ny * nz, 50, 200)
-  data4d[1, 1, 1, ] <- 999 # outside mask
+  pre <- array(runif(nx * ny * nz * nt, 50, 200),
+               dim = c(nx, ny, nz, nt))
+  post <- pre * array(rep(mask, nt), dim = dim(pre))
+  post[1, 1, 1, ] <- 999 # outside mask
 
   mask_file <- tempfile(fileext = ".nii.gz")
-  data_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(mask_file, data_file)), add = TRUE)
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(mask_file, pre_file, post_file)), add = TRUE)
   write_synth_mask(mask, mask_file)
-  write_synth_4d(data4d, data_file)
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(post, post_file)
 
-  result <- validate_apply_mask(mask_file, data_file)
+  result <- validate_apply_mask(pre_file, post_file, mask_file)
   expect_false(result)
   expect_gt(attr(result, "external_violations"), 0L)
 })
@@ -78,17 +141,43 @@ test_that("validate_apply_mask handles 3D input gracefully", {
   skip_if_not_installed("RNifti")
 
   mask <- array(1L, dim = c(4, 4, 4))
-  data3d <- array(runif(64, 10, 100), dim = c(4, 4, 4))
+  pre3d <- array(runif(64, 10, 100), dim = c(4, 4, 4))
+  post3d <- pre3d
 
   mask_file <- tempfile(fileext = ".nii.gz")
-  data_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(mask_file, data_file)), add = TRUE)
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(mask_file, pre_file, post_file)), add = TRUE)
   write_synth_mask(mask, mask_file)
-  write_synth_mask(data3d, data_file) # 3D, not 4D
+  write_synth_mask(pre3d, pre_file)
+  write_synth_mask(post3d, post_file)
 
   # should not error thanks to the 3D guard
-  result <- validate_apply_mask(mask_file, data_file)
-  expect_true(is.logical(result))
+  result <- validate_apply_mask(pre_file, post_file, mask_file)
+  expect_true(result)
+})
+
+test_that("validate_apply_mask rejects all-zero or altered in-mask output", {
+  mask <- array(0L, dim = c(4, 4, 3))
+  mask[2:3, 2:3, 2] <- 1L
+  pre <- array(seq_len(4 * 4 * 3 * 8), dim = c(4, 4, 3, 8))
+  correct <- pre * array(rep(mask, 8), dim = dim(pre))
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  mask_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, mask_file)), add = TRUE)
+  write_synth_4d(pre, pre_file)
+  write_synth_mask(mask, mask_file)
+
+  write_synth_4d(array(0, dim = dim(pre)), post_file)
+  expect_false(validate_apply_mask(pre_file, post_file, mask_file))
+
+  altered <- correct
+  altered[2, 2, 2, 4] <- altered[2, 2, 2, 4] + 10
+  write_synth_4d(altered, post_file)
+  result <- validate_apply_mask(pre_file, post_file, mask_file)
+  expect_false(result)
+  expect_gt(attr(result, "details")$n_mismatched, 0L)
 })
 
 # --- validate_intensity_normalize ---------------------------------------------
@@ -155,7 +244,7 @@ test_that("validate_intensity_normalize verifies denominator-guarded PSC maps", 
   on.exit(unlink(c(pre_file, post_file, scale_file)), add = TRUE)
   write_synth_4d(raw, pre_file)
   write_synth_4d(scaled, post_file)
-  RNifti::writeNifti(RNifti::asNifti(scale), scale_file)
+  write_synth_mask(scale, scale_file)
 
   result <- validate_intensity_normalize(
     pre_file, post_file, mode = "voxel_psc",
@@ -232,6 +321,23 @@ test_that("validate_scrub_timepoints fails when wrong number of TRs", {
   expect_false(result)
 })
 
+test_that("validate_scrub_timepoints rejects the wrong retained volumes", {
+  nx <- 3; ny <- 3; nz <- 2; nt <- 8
+  pre <- array(seq_len(nx * ny * nz * nt), dim = c(nx, ny, nz, nt))
+  censor <- c(1L, 0L, 1L, 1L, 0L, 1L, 1L, 1L)
+  # Correct output length, but these are the first six rather than censor == 1.
+  wrong <- pre[, , , seq_len(sum(censor)), drop = FALSE]
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file)), add = TRUE)
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(wrong, post_file)
+
+  result <- validate_scrub_timepoints(pre_file, post_file, censor)
+  expect_false(result)
+  expect_gt(attr(result, "details")$n_mismatched, 0L)
+})
+
 test_that("validate_scrub_timepoints fails on censor length mismatch", {
   skip_if_not_installed("RNifti")
 
@@ -250,6 +356,30 @@ test_that("validate_scrub_timepoints fails on censor length mismatch", {
   expect_match(attr(result, "message"), "Censor length")
 })
 
+test_that("scrub validators reject nonbinary censor values", {
+  pre <- array(rnorm(3 * 3 * 2 * 8), dim = c(3, 3, 2, 8))
+  post <- pre[, , , 1:7, drop = FALSE]
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  censor_file <- tempfile(fileext = ".txt")
+  on.exit(unlink(c(pre_file, post_file, censor_file)), add = TRUE)
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(post, post_file)
+  invalid <- c(1L, 2L, 1L, 1L, 0L, 1L, 1L, 1L)
+  writeLines(as.character(invalid), censor_file)
+
+  dropped <- validate_scrub_timepoints(pre_file, post_file, invalid)
+  expect_false(dropped)
+  expect_match(attr(dropped, "message"), "binary")
+
+  write_synth_4d(pre, post_file)
+  interpolated <- validate_scrub_interpolate(
+    pre_file, post_file, censor_file, n_sample = 5L
+  )
+  expect_false(interpolated)
+  expect_match(attr(interpolated, "message"), "binary")
+})
+
 # --- validate_scrub_interpolate -----------------------------------------------
 
 test_that("validate_scrub_interpolate passes when interpolated TRs are finite", {
@@ -259,7 +389,6 @@ test_that("validate_scrub_interpolate passes when interpolated TRs are finite", 
   nx <- 4; ny <- 4; nz <- 4; nt <- 30
 
   pre <- array(rnorm(nx * ny * nz * nt, mean = 100, sd = 10), dim = c(nx, ny, nz, nt))
-  post <- pre # pretend interpolation just kept the data for simplicity
   censor <- rep(1L, nt)
   censor[c(8, 16, 24)] <- 0L
 
@@ -268,12 +397,19 @@ test_that("validate_scrub_interpolate passes when interpolated TRs are finite", 
   censor_file <- tempfile(fileext = ".txt")
   on.exit(unlink(c(pre_file, post_file, censor_file)), add = TRUE)
   write_synth_4d(pre, pre_file)
-  write_synth_4d(post, post_file)
   writeLines(as.character(censor), censor_file)
+  natural_spline_4d(
+    pre_file, t_interpolate = which(censor == 0L), edge_nn = TRUE,
+    outfile = post_file, internal = TRUE
+  )
 
-  result <- validate_scrub_interpolate(pre_file, post_file, censor_file)
+  result <- validate_scrub_interpolate(
+    pre_file, post_file, censor_file, n_sample = 20L
+  )
   expect_true(result)
   expect_equal(attr(result, "details")$n_interpolated, 3L)
+  expect_equal(attr(result, "details")$retained_mismatches, 0L)
+  expect_equal(attr(result, "details")$spline_mismatches, 0L)
 })
 
 test_that("validate_scrub_interpolate fails on dimension mismatch", {
@@ -292,7 +428,7 @@ test_that("validate_scrub_interpolate fails on dimension mismatch", {
 
   result <- validate_scrub_interpolate(pre_file, post_file, censor_file)
   expect_false(result)
-  expect_match(attr(result, "message"), "dimensions differ")
+  expect_match(attr(result, "message"), "mismatch")
 })
 
 test_that("validate_scrub_interpolate trivially passes with no censored TRs", {
@@ -309,7 +445,41 @@ test_that("validate_scrub_interpolate trivially passes with no censored TRs", {
 
   result <- validate_scrub_interpolate(pre_file, post_file, censor_file)
   expect_true(result)
-  expect_match(attr(result, "message"), "No censored timepoints")
+  expect_equal(attr(result, "details")$n_interpolated, 0L)
+  expect_equal(attr(result, "details")$retained_mismatches, 0L)
+})
+
+test_that("validate_scrub_interpolate rejects arbitrary output and retained changes", {
+  set.seed(402)
+  dims <- c(4, 4, 3, 20)
+  pre <- array(rnorm(prod(dims), mean = 500, sd = 20), dim = dims)
+  censor <- rep(1L, dims[4])
+  censor[c(1, 8, 20)] <- 0L
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  censor_file <- tempfile(fileext = ".txt")
+  on.exit(unlink(c(pre_file, post_file, censor_file)), add = TRUE)
+  write_synth_4d(pre, pre_file)
+  writeLines(as.character(censor), censor_file)
+
+  write_synth_4d(array(42, dim = dims), post_file)
+  arbitrary <- validate_scrub_interpolate(
+    pre_file, post_file, censor_file, n_sample = 20L
+  )
+  expect_false(arbitrary)
+
+  natural_spline_4d(
+    pre_file, t_interpolate = which(censor == 0L), edge_nn = TRUE,
+    outfile = post_file, internal = TRUE
+  )
+  corrupted <- RNifti::readNifti(post_file)
+  corrupted[2, 2, 2, 10] <- corrupted[2, 2, 2, 10] + 5
+  write_synth_4d(corrupted, post_file)
+  retained_change <- validate_scrub_interpolate(
+    pre_file, post_file, censor_file, n_sample = 20L
+  )
+  expect_false(retained_change)
+  expect_gt(attr(retained_change, "details")$retained_mismatches, 0L)
 })
 
 # --- validate_apply_aroma (replay) --------------------------------------------
@@ -362,7 +532,7 @@ test_that("validate_apply_aroma replays the production AROMA specification", {
   }
 })
 
-test_that("validate_apply_aroma skips when no noise ICs", {
+test_that("validate_apply_aroma verifies no-noise-IC output is unchanged", {
   skip_if_not_installed("RNifti")
 
   pre_arr <- array(rnorm(4^3 * 20), dim = c(4, 4, 4, 20))
@@ -381,6 +551,40 @@ test_that("validate_apply_aroma skips when no noise ICs", {
   )
   expect_true(result)
   expect_match(attr(result, "message"), "No noise ICs")
+  expect_true(attr(result, "details")$no_op)
+  expect_false(attr(result, "details")$skipped)
+
+  altered <- pre_arr
+  altered[2, 2, 2, 5] <- altered[2, 2, 2, 5] + 1
+  write_synth_4d(altered, post_file)
+  changed <- validate_apply_aroma(
+    pre_file, post_file, mixing_file,
+    noise_ics = integer(0), nonaggressive = TRUE
+  )
+  expect_false(changed)
+  expect_gt(attr(changed, "details")$n_mismatched, 0L)
+})
+
+test_that("validate_apply_aroma fails when every requested IC is invalid", {
+  nt <- 20L
+  pre_arr <- array(rnorm(3^3 * nt), dim = c(3, 3, 3, nt))
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  mixing_file <- tempfile(fileext = ".txt")
+  on.exit(unlink(c(pre_file, post_file, mixing_file)), add = TRUE)
+  write_synth_4d(pre_arr, pre_file)
+  write_synth_4d(pre_arr, post_file)
+  write.table(
+    matrix(rnorm(nt * 3L), nt, 3L), mixing_file,
+    row.names = FALSE, col.names = FALSE, sep = "\t"
+  )
+
+  result <- validate_apply_aroma(
+    pre_file, post_file, mixing_file, noise_ics = c(4L, 8L)
+  )
+  expect_false(result)
+  expect_match(attr(result, "message"), "No requested AROMA noise IC")
+  expect_equal(attr(result, "details")$invalid_noise_ics, c(4L, 8L))
 })
 
 # --- validate_confound_regression (replay) ------------------------------------
@@ -404,8 +608,10 @@ test_that("validate_confound_regression passes on consistent replay", {
 
   pre_file <- tempfile(fileext = ".nii.gz")
   post_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(pre_file, post_file, regress_file)), add = TRUE)
+  mask_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, mask_file, regress_file)), add = TRUE)
   write_synth_4d(pre_arr, pre_file)
+  write_synth_mask(array(1L, dim = c(nx, ny, nz)), mask_file)
 
   # apply confound regression the same way postprocess_subject does
   lmfit_residuals_4d(
@@ -421,9 +627,153 @@ test_that("validate_confound_regression passes on consistent replay", {
     exclusive = FALSE
   )
 
-  result <- validate_confound_regression(pre_file, post_file, to_regress = regress_file)
+  result <- validate_confound_regression(
+    pre_file, post_file, to_regress = regress_file, mask_file = mask_file
+  )
   expect_true(result)
   expect_lt(attr(result, "details")$max_abs_diff, 0.05)
+
+  set.seed(99999)
+  repeated <- validate_confound_regression(
+    pre_file, post_file, to_regress = regress_file, mask_file = mask_file
+  )
+  expect_identical(
+    attr(repeated, "details")$sampled_indices,
+    attr(result, "details")$sampled_indices
+  )
+})
+
+test_that("validate_confound_regression rejects invalid censor vectors", {
+  skip_if_not_installed("RNifti")
+
+  nt <- 12L
+  dims <- c(3L, 3L, 3L, nt)
+  Xmat <- matrix(rnorm(nt * 2L), nrow = nt)
+  pre <- array(rnorm(prod(dims)), dim = dims)
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  regress_file <- tempfile(fileext = ".tsv")
+  censor_file <- tempfile(fileext = ".txt")
+  on.exit(
+    unlink(c(pre_file, post_file, regress_file, censor_file)), add = TRUE
+  )
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(pre, post_file)
+  write.table(
+    Xmat, regress_file, row.names = FALSE, col.names = FALSE, sep = "\t"
+  )
+  writeLines(as.character(c(rep(1L, nt - 1L), 2L)), censor_file)
+
+  result <- validate_confound_regression(
+    pre_file, post_file, regress_file, censor_file = censor_file
+  )
+  expect_false(result)
+  expect_match(attr(result, "message"), "binary 0/1")
+  expect_equal(attr(result, "details")$n_sampled, 0L)
+})
+
+test_that("regression replay fails empty and corrupted post-step samples", {
+  nt <- 30L
+  dims <- c(4L, 4L, 3L, nt)
+  X <- matrix(rnorm(nt * 3L), nrow = nt)
+  design_file <- tempfile(fileext = ".txt")
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  mixing_file <- tempfile(fileext = ".txt")
+  on.exit(
+    unlink(c(design_file, pre_file, post_file, mixing_file)), add = TRUE
+  )
+  write.table(X, design_file, row.names = FALSE, col.names = FALSE, sep = "\t")
+  write.table(X, mixing_file, row.names = FALSE, col.names = FALSE, sep = "\t")
+
+  zeros <- array(0, dim = dims)
+  write_synth_4d(zeros, pre_file)
+  write_synth_4d(zeros, post_file)
+  confound_empty <- validate_confound_regression(
+    pre_file, post_file, design_file
+  )
+  aroma_empty <- validate_apply_aroma(
+    pre_file, post_file, mixing_file, noise_ics = 1L
+  )
+  expect_false(confound_empty)
+  expect_false(aroma_empty)
+  expect_equal(attr(confound_empty, "details")$n_sampled, 0L)
+  expect_equal(attr(aroma_empty, "details")$n_sampled, 0L)
+
+  pre <- array(rnorm(prod(dims), mean = 1000, sd = 20), dim = dims)
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(zeros, post_file)
+  corrupted <- validate_confound_regression(
+    pre_file, post_file, design_file, n_sample = 20L
+  )
+  expect_false(corrupted)
+  expect_gt(
+    attr(corrupted, "details")$n_unexpected_constant_post, 0L
+  )
+
+  lmfit_residuals_4d(
+    infile = pre_file, X = X, include_rows = rep(TRUE, nt),
+    outfile = post_file, internal = FALSE, preserve_mean = TRUE
+  )
+  nonfinite_post <- RNifti::readNifti(post_file)
+  nonfinite_post[, , , 1L] <- NA_real_
+  write_synth_4d(nonfinite_post, post_file)
+  nonfinite <- validate_confound_regression(
+    pre_file, post_file, design_file, n_sample = 20L
+  )
+  expect_false(nonfinite)
+  expect_gt(attr(nonfinite, "details")$n_nonfinite_post, 0L)
+})
+
+test_that("spatial replay sampling scales with E2E-like matrix dimensions", {
+  ellipsoid_candidates <- function(dims) {
+    coords <- arrayInd(seq_len(prod(dims)), dims)
+    normalized <- sweep(coords - 0.5, 2L, dims, FUN = "/")
+    radius <- sweep(normalized - 0.5, 2L, c(0.42, 0.45, 0.40), FUN = "/")
+    which(rowSums(radius^2) <= 1)
+  }
+  # 58 x 72 x 61 is the MNI grid in the fMRIPrep 25.2.5 E2E reference.
+  # The second grid represents the same relative brain support at roughly
+  # half the number of samples per dimension.
+  fine_dims <- c(58L, 72L, 61L)
+  coarse_dims <- c(29L, 36L, 31L)
+  coarse <- pp_select_spatial_replay_voxels(
+    ellipsoid_candidates(coarse_dims), coarse_dims, 100L
+  )
+  fine <- pp_select_spatial_replay_voxels(
+    ellipsoid_candidates(fine_dims), fine_dims, 100L
+  )
+
+  expect_equal(length(coarse$indices), 100L)
+  expect_equal(length(fine$indices), 100L)
+  expect_equal(
+    apply(coarse$normalized_coords, 2L, range),
+    apply(fine$normalized_coords, 2L, range),
+    tolerance = 0.06
+  )
+  coarse_quantiles <- apply(
+    coarse$normalized_coords, 2L, stats::quantile,
+    probs = c(0.1, 0.5, 0.9)
+  )
+  fine_quantiles <- apply(
+    fine$normalized_coords, 2L, stats::quantile,
+    probs = c(0.1, 0.5, 0.9)
+  )
+  expect_equal(coarse_quantiles, fine_quantiles, tolerance = 0.06)
+  octant_count <- function(coords) {
+    length(unique(
+      (coords[, 1L] > 0.5) + 2L * (coords[, 2L] > 0.5) +
+        4L * (coords[, 3L] > 0.5)
+    ))
+  }
+  expect_equal(octant_count(coarse$normalized_coords), 8L)
+  expect_equal(octant_count(fine$normalized_coords), 8L)
+  coarse_cell_count <- function(coords) {
+    cells <- pmin(floor(coords * 3), 2L)
+    nrow(unique(cells))
+  }
+  expect_equal(coarse_cell_count(coarse$normalized_coords), 27L)
+  expect_equal(coarse_cell_count(fine$normalized_coords), 27L)
 })
 
 # --- validate_spatial_smooth --------------------------------------------------
@@ -513,16 +863,32 @@ test_that("validate_spatial_smooth calibration returns expected structure", {
   expect_true(details$used_mask)
   expect_true(is.finite(details$delta_expected_mm))
   expect_true(is.finite(details$post_expected_mm))
-  expect_equal(details$tolerance_mm, .pp_select_calibration("susan", TRUE)$tolerance_mm)
+  expect_equal(details$tolerance_mm, pp_select_calibration("susan", TRUE)$tolerance_mm)
   expect_equal(details$calibration_type, "quadrature_ratio_linear")
   expect_equal(
     details$calibration_model_version,
-    "smoothness-calibration-v3-fmriprep-k3-8"
+    "smoothness-calibration-v4-fullcontext-distributed96-k3-8"
   )
   expect_equal(details$calibration_estimator, "detrend_mad")
   expect_true(is.finite(details$calibration_gain))
   expect_false(details$calibration_extrapolated)
   expect_true(details$preprocessing$enabled)
+  expect_identical(details$calibration_max_volumes, 96L)
+  expect_identical(
+    details$calibration_volume_sampling, "distributed_full_run"
+  )
+  expect_identical(details$calibration_smoothing_context, "full_run")
+  expect_identical(details$volumes_used, as.integer(nt))
+  expect_identical(details$volume_indices, seq_len(nt))
+  expect_identical(details$volume_sampling, "all")
+
+  expect_error(
+    validate_spatial_smooth(
+      pre_file, post_file, mask_file, fwhm_mm = 6,
+      smoother = "susan", used_mask = TRUE, max_volumes = 95L
+    ),
+    "requires max_volumes=96"
+  )
 
   extrapolated <- validate_spatial_smooth(
     pre_file, post_file, mask_file, fwhm_mm = 10,
@@ -581,6 +947,14 @@ test_that("validate_spatial_smooth falls back to directional check without fwhm_
   expect_equal(attr(result, "details")$total_volumes, nt)
   # no calibration fields expected
   expect_null(attr(result, "details")$delta_expected_mm)
+
+  all_result <- validate_spatial_smooth(
+    pre_file, post_file, mask_file, fwhm_mm = NA_real_
+  )
+  all_details <- attr(all_result, "details")
+  expect_equal(all_details$volumes_used, nt)
+  expect_identical(all_details$volume_indices, seq_len(nt))
+  expect_identical(all_details$volume_sampling, "all")
 })
 
 test_that("validate_spatial_smooth fails when pre/post dims mismatch", {
@@ -605,42 +979,51 @@ test_that("validate_spatial_smooth fails when pre/post dims mismatch", {
 
 # --- calibration helpers ------------------------------------------------------
 
-test_that(".pp_predict_calibration linear model works", {
+test_that("pp_predict_calibration linear model works", {
   model <- list(type = "linear", coeffs = c(-2.942579, 1.198781))
   # kernel=6 -> -2.942579 + 1.198781*6 = 4.250107
-  expect_equal(.pp_predict_calibration(model, 6), -2.942579 + 1.198781 * 6, tolerance = 1e-6)
+  expect_equal(pp_predict_calibration(model, 6), -2.942579 + 1.198781 * 6, tolerance = 1e-6)
 })
 
-test_that(".pp_predict_calibration poly model works", {
+test_that("pp_predict_calibration poly model works", {
   model <- list(type = "poly", coeffs = c(-3.6270403, 1.4369376, -0.03108286))
   # kernel=6 -> -3.6270403 + 1.4369376*6 + -0.03108286*36
   expected <- -3.6270403 + 1.4369376 * 6 + (-0.03108286) * 36
-  expect_equal(.pp_predict_calibration(model, 6), expected, tolerance = 1e-6)
+  expect_equal(pp_predict_calibration(model, 6), expected, tolerance = 1e-6)
 })
 
-test_that(".pp_predict_calibration conditions quadrature delta on baseline and resolution", {
+test_that("pp_predict_calibration conditions quadrature delta on baseline and resolution", {
   model <- list(type = "quadrature_ratio_linear", coeffs = c(1.2, -0.5))
-  low_pre <- .pp_predict_calibration(model, 6, pre_fwhm = 2, voxel_mm = c(2, 2, 2))
-  high_pre <- .pp_predict_calibration(model, 6, pre_fwhm = 6, voxel_mm = c(2, 2, 2))
-  coarser <- .pp_predict_calibration(model, 6, pre_fwhm = 2, voxel_mm = c(3, 3, 3))
+  low_pre <- pp_predict_calibration(model, 6, pre_fwhm = 2, voxel_mm = c(2, 2, 2))
+  high_pre <- pp_predict_calibration(model, 6, pre_fwhm = 6, voxel_mm = c(2, 2, 2))
+  coarser <- pp_predict_calibration(model, 6, pre_fwhm = 2, voxel_mm = c(3, 3, 3))
 
   expect_gt(low_pre, high_pre)
   expect_lt(coarser, low_pre)
-  expect_equal(.pp_calibration_gain(model, 6, c(2, 2, 2)), 1.2 - 0.5 * 2 / 6)
+  expect_equal(pp_calibration_gain(model, 6, c(2, 2, 2)), 1.2 - 0.5 * 2 / 6)
 })
 
-test_that(".pp_smoothness_volume_indices limits or preserves volumes", {
-  expect_equal(.pp_smoothness_volume_indices(800L), seq_len(600L))
-  expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 3L), 1:3)
-  expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 10L), 1:5)
-  expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = Inf), 1:5)
+test_that("pp_smoothness_volume_indices distributes or preserves volumes", {
+  expect_identical(formals(pp_smoothness_volume_indices)$max_volumes, 96L)
+  expect_identical(
+    formals(pp_estimate_classic_smoothness_file)$max_volumes, 96L
+  )
+  expect_identical(formals(validate_spatial_smooth)$max_volumes, 96L)
+  distributed <- pp_smoothness_volume_indices(800L)
+  expect_length(distributed, 96L)
+  expect_identical(distributed[c(1L, 96L)], c(1L, 800L))
+  expect_true(all(diff(distributed) %in% c(8L, 9L)))
+  expect_equal(pp_smoothness_volume_indices(5L, max_volumes = 3L), c(1L, 3L, 5L))
+  expect_equal(pp_smoothness_volume_indices(5L, max_volumes = 10L), 1:5)
+  expect_equal(pp_smoothness_volume_indices(5L), 1:5)
+  expect_equal(pp_smoothness_volume_indices(5L, max_volumes = Inf), 1:5)
 })
 
-test_that(".pp_mad_scale_matrix matches row-wise MAD scaling", {
+test_that("pp_mad_scale_matrix matches row-wise MAD scaling", {
   mat <- matrix(c(1, 2, 3, 3, 3, 3, 10, 12, 14), nrow = 3, byrow = TRUE)
   expected_mad <- apply(mat, 1L, stats::mad, constant = 1.4826, na.rm = TRUE)
   expected_mad[!is.finite(expected_mad) | expected_mad <= 1e-6] <- 1
-  expect_equal(.pp_mad_scale_matrix(mat), mat / expected_mad)
+  expect_equal(pp_mad_scale_matrix(mat), mat / expected_mad)
 })
 
 test_that("file-backed smoothness estimation matches full-array preparation", {
@@ -652,7 +1035,7 @@ test_that("file-backed smoothness estimation matches full-array preparation", {
   image_file <- tempfile(fileext = ".nii.gz")
   on.exit(unlink(image_file), add = TRUE)
   RNifti::writeNifti(image, image_file)
-  voxel_mm <- .pp_pixdim_mm(image_file)
+  voxel_mm <- pp_pixdim_mm(image_file)
 
   specs <- list(
     raw = list(preprocess = FALSE, polydeg = NA_integer_, demean = FALSE, unif = FALSE),
@@ -661,7 +1044,7 @@ test_that("file-backed smoothness estimation matches full-array preparation", {
   )
   for (spec in specs) {
     expected_data <- if (isTRUE(spec$preprocess)) {
-      .pp_prepare_classic_smoothness(
+      pp_prepare_classic_smoothness(
         image, mask, polydeg = spec$polydeg,
         demean = spec$demean, unif = spec$unif
       )
@@ -669,12 +1052,34 @@ test_that("file-backed smoothness estimation matches full-array preparation", {
       image
     }
     expected <- estimate_classic_fwhm(expected_data, mask, voxel_mm)$geom
-    observed <- .pp_estimate_classic_smoothness_file(
+    observed <- pp_estimate_classic_smoothness_file(
       image_file, mask, max_volumes = Inf,
       preprocess = spec$preprocess, polydeg = spec$polydeg,
       demean = spec$demean, unif = spec$unif
     )$geom
     expect_equal(observed, expected, tolerance = 1e-12)
+
+    volume_indices <- pp_smoothness_volume_indices(20L, max_volumes = 7L)
+    subset_image <- image[, , , volume_indices, drop = FALSE]
+    subset_expected_data <- if (isTRUE(spec$preprocess)) {
+      pp_prepare_classic_smoothness(
+        subset_image, mask, polydeg = spec$polydeg,
+        demean = spec$demean, unif = spec$unif
+      )
+    } else {
+      subset_image
+    }
+    subset_expected <- estimate_classic_fwhm(
+      subset_expected_data, mask, voxel_mm
+    )$geom
+    subset_observed <- pp_estimate_classic_smoothness_file(
+      image_file, mask, max_volumes = 7L,
+      preprocess = spec$preprocess, polydeg = spec$polydeg,
+      demean = spec$demean, unif = spec$unif
+    )
+    expect_equal(subset_observed$geom, subset_expected, tolerance = 1e-12)
+    expect_identical(subset_observed$volume_indices, volume_indices)
+    expect_identical(subset_observed$volume_sampling, "distributed")
   }
 })
 
@@ -693,7 +1098,7 @@ test_that("masked-matrix classic estimator exactly matches full-array details", 
   ]
 
   reference <- estimate_classic_fwhm(image, mask, voxel_mm)
-  observed <- .pp_estimate_classic_masked_matrix(
+  observed <- pp_estimate_classic_masked_matrix(
     masked_matrix, mask, voxel_mm
   )
 
@@ -702,18 +1107,24 @@ test_that("masked-matrix classic estimator exactly matches full-array details", 
   expect_equal(observed$geom, reference$geom, tolerance = 1e-12)
 })
 
-test_that(".pp_select_calibration selects correct model", {
-  m <- .pp_select_calibration("susan", used_mask = TRUE)
+test_that("pp_select_calibration selects correct model", {
+  m <- pp_select_calibration("susan", used_mask = TRUE)
   expect_equal(m$type, "quadrature_ratio_linear")
   expect_length(m$coeffs, 2)
   expect_equal(m$mode, "fsl_susan_mask")
   expect_true(m$preprocess)
   expect_equal(m$estimator, "detrend_mad")
-  expect_equal(m$model_version, "smoothness-calibration-v3-fmriprep-k3-8")
+  expect_equal(
+    m$model_version,
+    "smoothness-calibration-v4-fullcontext-distributed96-k3-8"
+  )
+  expect_identical(m$max_volumes, 96L)
+  expect_identical(m$volume_sampling, "distributed_full_run")
+  expect_identical(m$smoothing_context, "full_run")
   expect_identical(m$calibrated_input_mask, "none")
   expect_false(m$input_mask_extrapolated)
 
-  m2 <- .pp_select_calibration("gaussian", used_mask = FALSE)
+  m2 <- pp_select_calibration("gaussian", used_mask = FALSE)
   expect_equal(m2$type, "quadrature_ratio_linear")
   expect_length(m2$coeffs, 2)
   expect_equal(m2$mode, "afni_3dmerge")
@@ -722,7 +1133,7 @@ test_that(".pp_select_calibration selects correct model", {
 
 test_that("input-mask calibration fallback is explicitly extrapolated", {
   expect_warning(
-    model <- .pp_select_calibration(
+    model <- pp_select_calibration(
       "susan", used_mask = TRUE, input_mask = "custom"
     ),
     "No exact smoothness calibration for input mask 'custom'"
@@ -732,7 +1143,7 @@ test_that("input-mask calibration fallback is explicitly extrapolated", {
 })
 
 test_that("nested input-mask calibrations select an exact mask-specific leaf", {
-  nested <- .pp_calibration_coeffs
+  nested <- pp_calibration_coeffs
   base_model <- nested$susan$classic$mask$none
   nested$susan$classic$mask <- list(
     none = modifyList(base_model, list(input_mask = "none", coeffs = c(1, -0.1))),
@@ -744,11 +1155,11 @@ test_that("nested input-mask calibrations select an exact mask-specific leaf", {
     )
   )
   testthat::local_mocked_bindings(
-    .pp_calibration_coeffs = nested,
+    pp_calibration_coeffs = nested,
     .package = "BrainGnomes"
   )
 
-  model <- .pp_select_calibration(
+  model <- pp_select_calibration(
     "susan", used_mask = TRUE, input_mask = "template"
   )
   expect_equal(model$coeffs, c(1.2, -0.3))
@@ -759,24 +1170,25 @@ test_that("nested input-mask calibrations select an exact mask-specific leaf", {
 test_that("promoted SUSAN calibrations are exact reviewed mask-specific models", {
   expected <- list(
     none = list(
-      coeffs = c(1.3120485766964101, -0.55739645314541497),
-      tolerance = 0.6
+      coeffs = c(1.27820370989578, -0.520302740093367),
+      tolerance = 0.7
     ),
     fmriprep = list(
-      coeffs = c(1.2664743891602199, -0.48666277855524398),
+      coeffs = c(1.23406155442799, -0.451054336264315),
       tolerance = 0.8
     ),
     template = list(
-      coeffs = c(1.1941731382927601, -0.41366442683986498),
+      coeffs = c(1.16494890257513, -0.381080413733339),
       tolerance = 0.6
     )
   )
   for (input_mask in names(expected)) {
-    model <- .pp_select_calibration(
+    model <- pp_select_calibration(
       "susan", used_mask = TRUE, input_mask = input_mask
     )
     expect_identical(
-      model$model_version, "smoothness-calibration-v3-fmriprep-k3-8"
+      model$model_version,
+      "smoothness-calibration-v4-fullcontext-distributed96-k3-8"
     )
     expect_identical(model$calibrated_input_mask, input_mask)
     expect_false(model$input_mask_extrapolated)
@@ -784,34 +1196,37 @@ test_that("promoted SUSAN calibrations are exact reviewed mask-specific models",
     expect_equal(model$tolerance_mm, expected[[input_mask]]$tolerance)
     expect_identical(model$estimator, "detrend_mad")
     expect_equal(model$kernel_range_mm, c(3, 8))
+    expect_identical(model$max_volumes, 96L)
+    expect_identical(model$volume_sampling, "distributed_full_run")
+    expect_identical(model$smoothing_context, "full_run")
   }
 })
 
 test_that("smoothing input-mask classification is independent of threshold masking", {
   expect_identical(
-    .smoothness_input_mask_condition(character(), "template", "/tmp/template.nii.gz"),
+    smoothness_input_mask_condition(character(), "template", "/tmp/template.nii.gz"),
     "none"
   )
   expect_identical(
-    .smoothness_input_mask_condition("apply_mask", "template", "/tmp/anything.nii.gz"),
+    smoothness_input_mask_condition("apply_mask", "template", "/tmp/anything.nii.gz"),
     "template"
   )
   expect_identical(
-    .smoothness_input_mask_condition(
+    smoothness_input_mask_condition(
       "apply_mask", "/data/mask.nii.gz",
       "/data/sub-01_space-MNI_desc-brain_mask.nii.gz"
     ),
     "fmriprep"
   )
   expect_identical(
-    .smoothness_input_mask_condition(
+    smoothness_input_mask_condition(
       "apply_mask", "/data/mask.nii.gz",
       "/data/sub-01_space-MNI_desc-preproc_templatemask.nii.gz"
     ),
     "template"
   )
   expect_identical(
-    .smoothness_input_mask_condition(
+    smoothness_input_mask_condition(
       "apply_mask", "/data/custom_mask.nii.gz", "/data/custom_mask.nii.gz"
     ),
     "custom"
@@ -819,14 +1234,14 @@ test_that("smoothing input-mask classification is independent of threshold maski
 })
 
 test_that("calibrated estimator preparation is exact and cannot be overridden", {
-  susan_model <- .pp_select_calibration("susan", used_mask = TRUE)
-  susan_preparation <- .pp_calibration_preparation(susan_model)
+  susan_model <- pp_select_calibration("susan", used_mask = TRUE)
+  susan_preparation <- pp_calibration_preparation(susan_model)
   expect_identical(susan_preparation$estimator, "detrend_mad")
   expect_true(susan_preparation$preprocess)
   expect_true(susan_preparation$unif)
 
-  detrended_model <- .pp_select_calibration("gaussian", used_mask = FALSE)
-  detrended <- .pp_calibration_preparation(detrended_model)
+  detrended_model <- pp_select_calibration("gaussian", used_mask = FALSE)
+  detrended <- pp_calibration_preparation(detrended_model)
   expect_identical(detrended$estimator, "detrend_mad")
   expect_true(detrended$preprocess)
   expect_identical(detrended$polydeg, 3L)
@@ -834,18 +1249,18 @@ test_that("calibrated estimator preparation is exact and cannot be overridden", 
   expect_true(detrended$unif)
 
   expect_error(
-    .pp_calibration_preparation(susan_model, preprocess = FALSE),
+    pp_calibration_preparation(susan_model, preprocess = FALSE),
     "incompatible override.*preprocess"
   )
   expect_error(
-    .pp_calibration_preparation(detrended_model, unif = FALSE),
+    pp_calibration_preparation(detrended_model, unif = FALSE),
     "incompatible override.*unif"
   )
 })
 
-test_that(".pp_select_calibration warns on unknown smoother", {
+test_that("pp_select_calibration warns on unknown smoother", {
   expect_warning(
-    m <- .pp_select_calibration("unknown_smoother", used_mask = TRUE),
+    m <- pp_select_calibration("unknown_smoother", used_mask = TRUE),
     "No calibration table"
   )
   # should fall back to gaussian
@@ -861,7 +1276,7 @@ test_that("embedded smoothness models match the reviewed extdata table", {
 
   for (i in seq_len(nrow(calibration))) {
     row <- calibration[i, ]
-    model <- .pp_select_calibration(
+    model <- pp_select_calibration(
       row$smoother, row$used_mask, input_mask = row$input_mask
     )
     expect_equal(model$model_version, row$model_version)
@@ -879,6 +1294,13 @@ test_that("embedded smoothness models match the reviewed extdata table", {
     if (!is.na(row$estimator)) {
       expect_identical(model$estimator, row$estimator)
     }
+    if (!is.na(row$volumes_per_run) && nzchar(row$volume_sampling)) {
+      expect_identical(model$max_volumes, as.integer(row$volumes_per_run))
+      expect_identical(model$volume_sampling, row$volume_sampling)
+    }
+    if (!is.na(row$smoothing_context) && nzchar(row$smoothing_context)) {
+      expect_identical(model$smoothing_context, row$smoothing_context)
+    }
   }
 })
 
@@ -889,7 +1311,8 @@ test_that("promoted SUSAN models retain independent-validation evidence", {
   )
   validation <- utils::read.csv(validation_path, stringsAsFactors = FALSE)
   promoted <- validation[
-    validation$model_version == "smoothness-calibration-v3-fmriprep-k3-8",
+    validation$model_version ==
+      "smoothness-calibration-v4-fullcontext-distributed96-k3-8",
   ]
 
   expect_equal(nrow(promoted), 3L)
@@ -900,6 +1323,10 @@ test_that("promoted SUSAN models retain independent-validation evidence", {
   ))
   expect_identical(promoted$n_external_subjects, rep(10L, 3L))
   expect_identical(promoted$fmriprep_version, rep("25.2.5", 3L))
+  expect_identical(promoted$volumes_per_run, rep(96L, 3L))
+  expect_identical(
+    promoted$volume_sampling, rep("distributed_full_run", 3L)
+  )
 })
 
 # --- validate_temporal_filter -------------------------------------------------
@@ -964,8 +1391,57 @@ test_that("validate_temporal_filter passes on properly bandpass-filtered data", 
   details <- attr(result, "details")
   # outside-band power should be reduced
   expect_gt(details$avg_reduction_outside_db, 0)
+  expect_gte(details$fraction_voxels_outside_reduced, 0.8)
   # passband should not lose much power
   expect_true(is.na(details$avg_passband_change_db) || details$avg_passband_change_db > -3)
+  expect_gte(details$fraction_voxels_passband_preserved, 0.8)
+
+  set.seed(999999)
+  repeated <- validate_temporal_filter(
+    pre_file = pre_file, post_file = post_file, tr = tr,
+    band_low_hz = hp, band_high_hz = lp, mask_file = mask_file,
+    n_voxels = 10L
+  )
+  expect_true(repeated)
+  expect_identical(
+    attr(repeated, "details")$sampled_indices,
+    details$sampled_indices
+  )
+
+  # Leave three deterministic samples entirely unfiltered. The aggregate mean
+  # still shows substantial attenuation, but the per-voxel coverage gate must
+  # detect that the requested filter was not applied consistently.
+  partial <- post
+  for (idx in details$sampled_indices[seq_len(3L)]) {
+    coord <- arrayInd(idx, dim(mask))
+    partial[coord[1], coord[2], coord[3], ] <-
+      pre[coord[1], coord[2], coord[3], ]
+  }
+  partial_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(partial_file), add = TRUE)
+  write_synth_4d(partial, partial_file)
+  inconsistent <- validate_temporal_filter(
+    pre_file = pre_file, post_file = partial_file, tr = tr,
+    band_low_hz = hp, band_high_hz = lp, mask_file = mask_file,
+    n_voxels = 10L
+  )
+  expect_false(inconsistent)
+  expect_equal(
+    attr(inconsistent, "details")$sampled_indices,
+    details$sampled_indices
+  )
+  expect_lt(
+    attr(inconsistent, "details")$fraction_voxels_outside_reduced, 0.8
+  )
+  expect_gt(attr(inconsistent, "details")$avg_reduction_outside_db, 0)
+
+  ineffective <- validate_temporal_filter(
+    pre_file = pre_file, post_file = post_file, tr = tr,
+    band_low_hz = NA_real_, band_high_hz = Inf,
+    mask_file = mask_file, n_voxels = 10L
+  )
+  expect_false(ineffective)
+  expect_true(attr(ineffective, "details")$invalid_band_specification)
 })
 
 test_that("validate_temporal_filter fails when pre and post have different T", {
@@ -1011,18 +1487,18 @@ test_that("validate_temporal_filter returns FALSE when mask/image dims mismatch"
   expect_match(attr(result, "message"), "dimensions", ignore.case = TRUE)
 })
 
-# --- helper: .pp_is_valid_series ----------------------------------------------
+# --- helper: pp_is_valid_series ----------------------------------------------
 
-test_that(".pp_is_valid_series detects constant and invalid series", {
-  expect_true(.pp_is_valid_series(rnorm(50)))
-  expect_false(.pp_is_valid_series(rep(5, 50)))
-  expect_false(.pp_is_valid_series(c(1, 2, NA, 4)))
-  expect_false(.pp_is_valid_series(c(1, Inf, 3)))
+test_that("pp_is_valid_series detects constant and invalid series", {
+  expect_true(pp_is_valid_series(rnorm(50)))
+  expect_false(pp_is_valid_series(rep(5, 50)))
+  expect_false(pp_is_valid_series(c(1, 2, NA, 4)))
+  expect_false(pp_is_valid_series(c(1, Inf, 3)))
 })
 
-# --- helper: .pp_power_multitaper ---------------------------------------------
+# --- helper: pp_power_multitaper ---------------------------------------------
 
-test_that(".pp_power_multitaper returns expected frequency structure", {
+test_that("pp_power_multitaper returns expected frequency structure", {
   skip_if_not_installed("multitaper")
   skip_if_not_installed("signal")
 
@@ -1033,7 +1509,7 @@ test_that(".pp_power_multitaper returns expected frequency structure", {
 
   # pure sine at 0.05 Hz
   y <- sin(2 * pi * 0.05 * t_sec) + rnorm(nt, sd = 0.1)
-  spec <- .pp_power_multitaper(y, dt = dt)
+  spec <- pp_power_multitaper(y, dt = dt)
 
   expect_s3_class(spec, "data.frame")
   expect_true(all(c("f", "power") %in% names(spec)))
@@ -1044,27 +1520,27 @@ test_that(".pp_power_multitaper returns expected frequency structure", {
   expect_true(abs(peak_freq - 0.05) < 0.02)
 })
 
-test_that(".pp_power_multitaper smooths a 50-frame spectrum safely", {
+test_that("pp_power_multitaper smooths a 50-frame spectrum safely", {
   skip_if_not_installed("multitaper")
   skip_if_not_installed("signal")
 
   set.seed(902)
   y <- sin(seq_len(50L) / 4) + rnorm(50L, sd = 0.2)
-  expect_no_error(spec <- .pp_power_multitaper(y, dt = 0.635, smooth_psd = TRUE))
+  expect_no_error(spec <- pp_power_multitaper(y, dt = 0.635, smooth_psd = TRUE))
   expect_gt(nrow(spec), 0L)
   expect_true(all(is.finite(spec$power)))
 })
 
-test_that(".pp_power_multitaper errors on constant series", {
+test_that("pp_power_multitaper errors on constant series", {
   skip_if_not_installed("multitaper")
 
-  spec <- .pp_power_multitaper(rep(0, 50), dt = 1)
+  spec <- pp_power_multitaper(rep(0, 50), dt = 1)
   expect_equal(nrow(spec), 0) # returns empty data.frame for constant series
 })
 
-# --- helper: .pp_mtm_bandpower ------------------------------------------------
+# --- helper: pp_mtm_bandpower ------------------------------------------------
 
-test_that(".pp_mtm_bandpower computes band power for defined bands", {
+test_that("pp_mtm_bandpower computes band power for defined bands", {
   skip_if_not_installed("multitaper")
 
   set.seed(902)
@@ -1081,7 +1557,7 @@ test_that(".pp_mtm_bandpower computes band power for defined bands", {
     label = c("low", "high")
   )
 
-  bp <- .pp_mtm_bandpower(y, dt = dt, bands = bands, detrend = "linear")
+  bp <- pp_mtm_bandpower(y, dt = dt, bands = bands, detrend = "linear")
   expect_s3_class(bp, "data.frame")
   expect_equal(nrow(bp), 2)
   expect_true(all(c("label", "power_linear", "relative_power") %in% names(bp)))

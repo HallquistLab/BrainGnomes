@@ -60,25 +60,57 @@ to choose an available tag.
 
 ## Typical workflow
 
-1. Create an interactive project configuration. `setup_project()` records project paths, enabled pipeline stages, container locations, scheduler settings, and resource requests in `project_config.yaml`.
-2. Review or update that configuration with `edit_project()`, or reload it later with `load_project()`.
-3. Submit the enabled stages with `run_project()`. Jobs are submitted per subject/session with their dependencies tracked automatically.
-4. Check progress with `get_project_status()` or `get_subject_status()`, including per-stream postprocessing and ROI-extraction completion. Scheduled ROI extraction records and verifies the exact files produced by each job. Use `diagnose_pipeline()` to inspect the tracked job tree and logs when a run needs attention.
+The installed command covers the lifecycle from a new project through recovery.
+`doctor` is the submission-host preflight: it checks the configuration, scheduler
+commands, container runtime, storage, stage files, and tracking database without
+changing the project.
+
+```bash
+# Create portable defaults, then use `config edit` to enable and configure stages.
+BrainGnomes init my_study /project/my_study --non-interactive
+BrainGnomes config edit /project/my_study
+
+# Validate first, inspect a serializable plan, then submit that exact plan.
+BrainGnomes config validate /project/my_study
+BrainGnomes doctor /project/my_study
+BrainGnomes plan /project/my_study --steps=all --output=/project/my_study/run.yaml
+BrainGnomes run /project/my_study/run.yaml
+
+# Observe and recover by run ID (`latest` is accepted).
+BrainGnomes status /project/my_study --runs
+BrainGnomes status /project/my_study --run=latest --watch
+BrainGnomes logs /project/my_study --run=latest --failed-only --tail=50
+BrainGnomes diagnose /project/my_study --run=latest
+BrainGnomes retry /project/my_study --run=latest --dry-run
+BrainGnomes cancel /project/my_study --run=latest --dry-run
+```
+
+The same lifecycle is available as composable R functions:
 
 ```r
 library(BrainGnomes)
 
-# Creates and saves project_config.yaml after guided setup.
+# Guided setup remains available; initialize_project(..., interactive = FALSE)
+# provides the scriptable equivalent used by `BrainGnomes init`.
 scfg <- setup_project()
 
-# Validate the planned work without submitting jobs.
-run_project(scfg, steps = "all", dry_run = TRUE)
+validation <- validate_project_config(scfg)
+preflight <- doctor(scfg)
+plan <- plan_project(scfg, steps = "all")
+write_project_plan(plan, "run.yaml")
 
-# When ready, submit enabled processing stages.
-run_project(scfg, steps = "all")
+run <- submit_project_plan(plan)
+get_project_runs(scfg)
+get_run_jobs(scfg, run$run_id)
+diagnose_project(scfg, run$run_id)
 ```
 
-`run_project()` can also target selected subjects, stages, postprocessing streams, or ROI-extraction streams. The [Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html) shows both interactive and scripted examples.
+Plans can target selected subjects, stages, postprocessing streams, or
+ROI-extraction streams. BIDS validation remains independently schedulable with
+`run_bids_validation()` or `BrainGnomes validate-bids`. Destructive CLI actions
+require either `--dry-run` or explicit `--yes`. The
+[Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
+shows interactive and scripted variants.
 
 ## Documentation
 
