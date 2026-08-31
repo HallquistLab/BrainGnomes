@@ -60,57 +60,106 @@ to choose an available tag.
 
 ## Typical workflow
 
-The installed command covers the lifecycle from a new project through recovery.
-`doctor` is the submission-host preflight: it checks the configuration, scheduler
-commands, container runtime, storage, stage files, and tracking database without
-changing the project.
-
-```bash
-# Create portable defaults, then use `config edit` to enable and configure stages.
-BrainGnomes init my_study /project/my_study --non-interactive
-BrainGnomes config edit /project/my_study
-
-# Validate first, inspect a serializable plan, then submit that exact plan.
-BrainGnomes config validate /project/my_study
-BrainGnomes doctor /project/my_study
-BrainGnomes plan /project/my_study --steps=all --output=/project/my_study/run.yaml
-BrainGnomes run /project/my_study/run.yaml
-
-# Observe and recover by run ID (`latest` is accepted).
-BrainGnomes status /project/my_study --runs
-BrainGnomes status /project/my_study --run=latest --watch
-BrainGnomes logs /project/my_study --run=latest --failed-only --tail=50
-BrainGnomes diagnose /project/my_study --run=latest
-BrainGnomes retry /project/my_study --run=latest --dry-run
-BrainGnomes cancel /project/my_study --run=latest --dry-run
-```
-
-The same lifecycle is available as composable R functions:
+The established R workflow remains the primary path. Set up a project once,
+then run it directly; use diagnosis only when a run needs investigation.
 
 ```r
 library(BrainGnomes)
 
-# Guided setup remains available; initialize_project(..., interactive = FALSE)
-# provides the scriptable equivalent used by `BrainGnomes init`.
 scfg <- setup_project()
+run <- run_project(scfg)
 
+# Only when a run needs investigation:
+diagnose_pipeline(scfg)
+```
+
+For later sessions, reload the saved configuration and run it in the same way:
+
+```r
+scfg <- load_project("/project/my_study")
+run <- run_project(scfg)
+```
+
+The command-line interface preserves the same workflow. The shorter `init` and
+`run` command names are also accepted.
+
+```bash
+BrainGnomes setup_project my_study /project/my_study
+BrainGnomes run_project /project/my_study
+
+# Only when a run needs investigation:
+BrainGnomes diagnose /project/my_study --interactive
+```
+
+### Optional inspection and automation tools
+
+None of the following is a prerequisite for `run_project()`:
+
+- **Config** (`validate_project_config()` or `BrainGnomes config`) provides a
+  non-interactive way to show, validate, or edit YAML. It is useful in scripts,
+  CI, and configuration review. Direct runs retain their existing selected-stage
+  checks.
+- **Doctor** (`doctor()` or `BrainGnomes doctor`) performs a broader,
+  non-mutating submission-host preflight. It is valuable on a new cluster, after
+  modules, containers, or storage have changed, or before an expensive run when
+  an up-front environment report is desirable.
+- **Plan** (`plan_project()` or `BrainGnomes plan`) exposes the stages, streams,
+  subject/session scope, resources, dependencies, and implicit setup work that
+  BrainGnomes has resolved. It is useful for review, persistence, and automated
+  approval workflows. `run_project()` resolves this same execution model
+  internally, so users do not need to create or submit a plan first.
+
+For example, an optional review-and-submit workflow is:
+
+```r
 validation <- validate_project_config(scfg)
 preflight <- doctor(scfg)
 plan <- plan_project(scfg, steps = "all")
 write_project_plan(plan, "run.yaml")
-
 run <- submit_project_plan(plan)
-get_project_runs(scfg)
-get_run_jobs(scfg, run$run_id)
-diagnose_project(scfg, run$run_id)
 ```
 
-Plans can target selected subjects, stages, postprocessing streams, or
-ROI-extraction streams. BIDS validation remains independently schedulable with
-`run_bids_validation()` or `BrainGnomes validate-bids`. Destructive CLI actions
-require either `--dry-run` or explicit `--yes`. The
+### Optional run operations
+
+Every submitted run records a provenance bundle beneath
+`<log_directory>/runs/<run_id>/`. It contains the exact configuration and
+resolved subject scope plus a JSON record of the request, resources,
+dependencies, BrainGnomes/R/platform versions, submission host, scheduler, and
+checksummed containers and other execution-driving files. Read it with
+`get_run_provenance(scfg, run$run_id)` or `BrainGnomes provenance <project>`.
+
+Each call to `run_project()` has a run ID, which lets you inspect one submission
+without mixing it up with earlier work. `status`, `logs`, provenance, and
+non-interactive diagnosis all accept that ID. If a run fails, first inspect the
+failed jobs and logs, correct the underlying problem, and then preview the retry:
+
+```r
+diagnosis <- diagnose_project(scfg, run$run_id)
+failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
+retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
+
+# This submits a new run; it does not change the original run.
+retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)
+```
+
+By default, retry includes jobs that failed or were cancelled. Set
+`include_blocked = TRUE` only when the new run should also include downstream
+jobs that could not start because an earlier job failed. The new run records the
+source run ID in provenance.
+
+The CLI requires an explicit choice between a preview and action:
+
+```bash
+BrainGnomes retry /project/my_study --run=<run-id> --dry-run
+BrainGnomes retry /project/my_study --run=<run-id> --yes
+```
+
+Cancellation follows the same preview-first pattern and affects only queued or
+running scheduler jobs; it does not delete project data or outputs. BIDS
+validation remains independently schedulable with
+`run_bids_validation()` or `BrainGnomes validate-bids`. The
 [Quickstart](https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
-shows interactive and scripted variants.
+shows the primary workflow and these optional tools.
 
 ## Documentation
 

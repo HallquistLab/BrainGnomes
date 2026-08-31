@@ -16,7 +16,9 @@ A \code{bg_project_validation} object containing \code{valid}, \code{issues},
 \code{messages}, and the parsed \code{config}.
 }
 \description{
-This is the non-interactive validation entry point for scripts and command-line
-clients. Unlike the historical repair path in \code{validate_project()}, it never
-opens the setup wizard and never writes the configuration.
+This optional inspection entry point is useful for scripts, continuous
+integration, and configuration review. It is not required before
+\code{\link[=run_project]{run_project()}}, which retains its selected-stage checks. Unlike the historical
+repair path in \code{validate_project()}, this function never opens the setup wizard
+and never writes the configuration.
 }

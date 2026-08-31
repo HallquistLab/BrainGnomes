@@ -2,7 +2,7 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{plan_project}
 \alias{plan_project}
-\title{Build a structured project execution plan}
+\title{Inspect or persist the resolved project execution model}
 \usage{
 plan_project(
   input,
@@ -37,5 +37,12 @@ optionally \code{ses_id}.}
 A serializable \code{bg_project_plan} object.
 }
 \description{
-Build a structured project execution plan
+\code{plan_project()} is optional inspection and automation tooling. It exposes the
+stages, streams, subject/session scope, resources, dependencies, and implicit
+setup work resolved for a request. \code{\link[=run_project]{run_project()}} resolves the same execution
+model internally, so creating or submitting a plan is not required for a
+direct run.
+}
+\seealso{
+\code{\link[=run_project]{run_project()}} for the standard direct execution path.
 }

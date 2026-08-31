@@ -2,12 +2,28 @@
 
 Released 2026-08-30
 
-* Add a complete project lifecycle to the R and command-line interfaces:
-  non-mutating configuration validation, `doctor()` preflight checks,
-  serializable execution plans, run handles and tracked-run views, log discovery,
-  non-interactive diagnosis, failed-job retry planning, and guarded scheduler
-  cancellation. Flywheel controller snapshots are now run-specific so concurrent
-  submissions cannot overwrite one another.
+* Extend the established `setup_project()` -> `run_project()` workflow across the
+  complete R and command-line lifecycle without adding required setup steps.
+  Optional inspection tooling now provides non-mutating configuration validation,
+  `doctor()` preflight checks, and serializable execution plans; direct runs
+  resolve the same execution model exposed by plans. Run handles, tracked-run
+  views, log discovery, non-interactive diagnosis, failed-job retry planning, and
+  guarded scheduler cancellation support observation and recovery. Flywheel
+  controller snapshots are now run-specific so concurrent submissions cannot
+  overwrite one another.
+* Record complete provenance before each run begins submission. Every run now
+  retains its resolved request and subject scope, exact configuration, planned
+  resources and dependencies, software/R/host/scheduler identity, and content
+  fingerprints for selected containers and other execution-driving files.
+  `get_run_provenance()` and the `BrainGnomes provenance` command expose the
+  record together with current job-tracking rows; plan and retry origins are
+  retained explicitly.
+* Expand applied-user recovery documentation around the established workflow.
+  The Quickstart and diagnosis guide now show how to select one run, inspect its
+  failed jobs, logs, and provenance, preview a retry, submit it as a separate
+  new run, decide whether to include downstream blocked work, and safely preview
+  cancellation. Function and CLI help use the same plain-language behavior and
+  safety guidance.
 * Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
   distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask conditions.
   Validation now enforces the selected detrending-plus-MAD estimator, uses up

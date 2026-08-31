@@ -2,20 +2,34 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{cancel_project_run}
 \alias{cancel_project_run}
-\title{Cancel queued or running jobs in a tracked run}
+\title{Cancel queued or running jobs from one run}
 \usage{
 cancel_project_run(input, run_id = "latest", dry_run = FALSE)
 }
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Run UUID or \code{"latest"}.}
+\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or \code{\link[=get_project_runs]{get_project_runs()}}. An
+explicit ID is recommended for cancellation.}
 
-\item{dry_run}{Report commands without invoking the scheduler.}
+\item{dry_run}{If \code{TRUE}, report the commands without contacting the
+scheduler. If \code{FALSE}, request cancellation immediately.}
 }
 \value{
 A data frame describing each cancellation attempt.
 }
 \description{
-Cancel queued or running jobs in a tracked run
+Cancellation affects only tracked jobs that are still queued or running. It
+does not delete project data, logs, or completed outputs. Calling this
+function with \code{dry_run = FALSE} immediately sends cancellation requests to
+the configured scheduler, so preview the commands first.
+}
+\examples{
+\dontrun{
+cancel_project_run(scfg, run$run_id, dry_run = TRUE)
+cancel_project_run(scfg, run$run_id, dry_run = FALSE)
+}
+}
+\seealso{
+\code{\link[=get_run_jobs]{get_run_jobs()}} to inspect current job states before cancellation.
 }

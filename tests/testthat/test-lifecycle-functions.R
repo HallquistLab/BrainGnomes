@@ -86,6 +86,70 @@ test_that("plans include implicit setup jobs and round-trip through YAML", {
   expect_equal(restored$jobs$stage, plan$jobs$stage)
 })
 
+test_that("plans expose the same resolved execution model used by direct runs", {
+  fixture <- make_lifecycle_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  execution <- BrainGnomes:::resolve_project_execution(
+    fixture$cfg,
+    steps = "fmriprep",
+    subject_filter = "01",
+    force = TRUE
+  )
+  plan <- plan_project(
+    fixture$cfg,
+    steps = "fmriprep",
+    subject_filter = "01",
+    force = TRUE,
+    quiet = TRUE
+  )
+
+  expect_identical(plan$request$steps, execution$steps)
+  expect_identical(
+    plan$request$postprocess_streams,
+    execution$postprocess_streams
+  )
+  expect_identical(plan$request$extract_streams, execution$extract_streams)
+  expect_identical(plan$request$force, execution$force)
+  expect_equal(plan$subjects, execution$subjects)
+  expect_identical(plan$scope_deferred, execution$scope_deferred)
+})
+
+test_that("Flywheel plans defer scope and preserve the requested filter", {
+  fixture <- make_lifecycle_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  fixture$cfg$flywheel_sync <- list(
+    enable = TRUE,
+    source_url = "fw://example/project"
+  )
+
+  plan <- plan_project(
+    fixture$cfg,
+    steps = c("flywheel_sync", "fmriprep"),
+    subject_filter = "01",
+    allow_invalid = TRUE,
+    quiet = TRUE
+  )
+  expect_true(plan$scope_deferred)
+  expect_identical(plan$request$subject_filter, "01")
+  expect_true(is.na(plan$jobs$n_jobs[plan$jobs$stage == "fmriprep"]))
+
+  captured_filter <- NULL
+  captured_context <- NULL
+  local_mocked_bindings(
+    run_project = function(scfg, ..., subject_filter = NULL) {
+      captured_filter <<- subject_filter
+      captured_context <<- attr(scfg, "provenance_context")
+      "submitted"
+    },
+    .package = "BrainGnomes"
+  )
+  expect_identical(submit_project_plan(plan), "submitted")
+  expect_identical(captured_filter, "01")
+  expect_identical(captured_context$interface, "in_memory_plan")
+  expect_identical(captured_context$plan_id, plan$plan_id)
+})
+
 test_that("submitting a reviewed plan preserves its subject scope", {
   fixture <- make_lifecycle_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
@@ -93,9 +157,11 @@ test_that("submitting a reviewed plan preserves its subject scope", {
   dir.create(file.path(fixture$cfg$metadata$bids_directory, "sub-02"))
 
   captured_filter <- NULL
+  captured_context <- NULL
   local_mocked_bindings(
     run_project = function(scfg, ..., subject_filter = NULL) {
       captured_filter <<- subject_filter
+      captured_context <<- attr(scfg, "provenance_context")
       "submitted"
     },
     .package = "BrainGnomes"
@@ -104,6 +170,8 @@ test_that("submitting a reviewed plan preserves its subject scope", {
   expect_identical(submit_project_plan(plan), "submitted")
   expect_s3_class(captured_filter, "data.frame")
   expect_identical(captured_filter$sub_id, "01")
+  expect_identical(captured_context$interface, "in_memory_plan")
+  expect_identical(captured_context$plan_id, plan$plan_id)
 })
 
 test_that("tracked run APIs summarize, diagnose, locate logs, and preview cancellation", {
@@ -155,6 +223,31 @@ test_that("retry dry runs derive a force plan from failed jobs", {
   expect_identical(retry$request$steps, "fmriprep")
   expect_true(retry$request$force)
   expect_identical(retry$request$subject_filter, "01")
+})
+
+test_that("submitted retries record their source run", {
+  fixture <- make_lifecycle_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  db <- fixture$cfg$metadata$sqlite_db
+  insert_tracked_job(db, "82101", list(
+    job_name = "fmriprep_sub-01", sequence_id = "retry-parent",
+    n_nodes = 1, n_cpus = 2, status = "FAILED", scheduler = "slurm"
+  ))
+
+  captured_context <- NULL
+  local_mocked_bindings(
+    run_project = function(scfg, ...) {
+      captured_context <<- attr(scfg, "provenance_context")
+      "submitted"
+    },
+    .package = "BrainGnomes"
+  )
+  expect_identical(
+    retry_project_run(fixture$cfg, "retry-parent"),
+    "submitted"
+  )
+  expect_identical(captured_context$interface, "retry")
+  expect_identical(captured_context$parent_run_id, "retry-parent")
 })
 
 test_that("CANCELLED is a supported terminal tracking status", {

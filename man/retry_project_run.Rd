@@ -2,7 +2,7 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{retry_project_run}
 \alias{retry_project_run}
-\title{Retry failed work from a tracked run}
+\title{Create a new run for failed work}
 \usage{
 retry_project_run(
   input,
@@ -14,15 +14,44 @@ retry_project_run(
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Run UUID or \code{"latest"}.}
+\item{run_id}{Source run ID returned by \code{\link[=run_project]{run_project()}} or
+\code{\link[=get_project_runs]{get_project_runs()}}. An explicit ID is recommended for retry.}
 
-\item{include_blocked}{Also retry jobs marked \code{FAILED_BY_EXT}.}
+\item{include_blocked}{Also include downstream jobs marked \code{FAILED_BY_EXT}.
+These jobs did not fail themselves; they could not run because an earlier
+required job failed. They are excluded by default.}
 
-\item{dry_run}{Return a plan without submitting jobs.}
+\item{dry_run}{If \code{TRUE}, return a plan without submitting jobs. If \code{FALSE},
+submit the new run immediately.}
 }
 \value{
 A \code{bg_project_plan} for a dry run or \code{bg_project_run} after submission.
 }
 \description{
-Retry failed work from a tracked run
+A retry does not resume scheduler jobs in place and does not change the
+original run. It creates a new \code{\link[=run_project]{run_project()}} submission containing the
+failed or cancelled stages and subjects found in the source run. The selected
+work is rerun even if old completion markers would normally skip it, and the
+new provenance record identifies the source run.
+}
+\details{
+Preview with \code{dry_run = TRUE} before submitting. The preview returns a plan
+and contacts no scheduler. With \code{dry_run = FALSE}, submission begins
+immediately and the function returns the new run handle.
+}
+\examples{
+\dontrun{
+# Inspect and correct the failure before retrying.
+diagnosis <- diagnose_project(scfg, run$run_id)
+
+# Preview only; no jobs are submitted.
+retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
+
+# Submit a separate new run after reviewing the plan.
+retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)
+}
+}
+\seealso{
+\code{\link[=diagnose_project]{diagnose_project()}} to inspect the source failure and
+\code{\link[=get_run_provenance]{get_run_provenance()}} to compare the original and retry runs.
 }

@@ -2,18 +2,32 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{get_run_jobs}
 \alias{get_run_jobs}
-\title{Get tracked jobs for one project run}
+\title{Inspect the jobs submitted for one project run}
 \usage{
 get_run_jobs(input, run_id = "latest")
 }
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Run UUID or \code{"latest"}.}
+\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or \code{\link[=get_project_runs]{get_project_runs()}}. Use
+\code{"latest"} for the most recently recorded run.}
 }
 \value{
 The tracking rows for the run.
 }
 \description{
-Get tracked jobs for one project run
+Returns the job-tracking rows for one run. This is useful for checking which
+processing step and subject each scheduler job belongs to and whether it is
+queued, running, completed, failed, cancelled, or blocked by an earlier
+failure.
+}
+\examples{
+\dontrun{
+jobs <- get_run_jobs(scfg, run$run_id)
+jobs[, c("job_id", "job_name", "status")]
+}
+}
+\seealso{
+\code{\link[=diagnose_project]{diagnose_project()}} for a failure-focused summary and
+\code{\link[=find_run_logs]{find_run_logs()}} for log-file locations.
 }

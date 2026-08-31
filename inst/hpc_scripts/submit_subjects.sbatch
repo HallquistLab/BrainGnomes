@@ -34,7 +34,11 @@ fi
 "$RSCRIPT_BIN" --vanilla -e '
   snap <- readRDS(Sys.getenv("snapshot_rds"));
   if (!requireNamespace("BrainGnomes", quietly = TRUE)) stop("BrainGnomes package is required.");
-  do.call(BrainGnomes:::submit_subjects, snap);
+  resolved_subjects <- do.call(BrainGnomes:::submit_subjects, snap);
+  BrainGnomes:::update_run_provenance_submission(
+    snap$scfg, snap$sequence_id, deferred = TRUE,
+    resolved_subjects = resolved_subjects
+  );
   try(unlink(Sys.getenv("snapshot_rds")), silent = TRUE)
 '
 

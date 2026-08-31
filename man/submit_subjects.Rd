@@ -8,6 +8,7 @@ submit_subjects(
   scfg,
   steps,
   subject_filter = NULL,
+  resolved_subjects = NULL,
   postprocess_streams = NULL,
   extract_streams = NULL,
   parent_ids = NULL,
@@ -22,6 +23,10 @@ submit_subjects(
 \item{steps}{Named logical vector of steps}
 
 \item{subject_filter}{Optional subject/session filter (character or data.frame)}
+
+\item{resolved_subjects}{Optional subject/session table already resolved by
+\code{resolve_project_execution()}. Deferred Flywheel controllers omit it so
+discovery occurs after synchronization.}
 
 \item{postprocess_streams}{Optional character vector of postprocess streams}
 

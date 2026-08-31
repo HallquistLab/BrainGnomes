@@ -1,6 +1,16 @@
-#' Function for diagnosing errors in a run of the pipeline
+#' Interactively investigate jobs and logs from pipeline runs
 #'
-#' @param input A character path to an scfg object or an scfg object itself.
+#' Opens the established guided diagnosis browser. You can start with one
+#' subject across runs or select one run, follow its job relationships, and
+#' inspect output or error logs. Diagnosis does not submit jobs or change the
+#' project. Use [diagnose_project()] instead when a script or report needs a
+#' prompt-free summary.
+#'
+#' @param input A project configuration object or project directory.
+#' @return Depending on the selected action, the chosen run's job tree, log
+#'   contents, or invisibly `NULL`.
+#' @seealso [get_project_runs()] to find run IDs, [diagnose_project()] for a
+#'   prompt-free summary, and [retry_project_run()] after correcting a failure.
 #'
 #' @importFrom cli cli_abort cli_warn cli_inform cli_alert no qty
 #' @export

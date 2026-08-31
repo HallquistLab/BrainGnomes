@@ -19,7 +19,10 @@ doctor_project(input, steps = NULL, deep = FALSE, quiet = FALSE)
 A \code{bg_project_doctor} object with an \code{ok} flag and a checks data frame.
 }
 \description{
-\code{doctor_project()} checks configuration, scheduler commands, container runtime,
-enabled-stage files, project storage, and the job-tracking database. It does
-not submit work, create directories, or modify the configuration.
+This optional comprehensive preflight is useful on a new cluster, after the
+submission environment changes, or before an expensive run. \code{doctor_project()}
+checks configuration, scheduler commands, container runtime, enabled-stage
+files, project storage, and the job-tracking database. It is not required
+before \code{\link[=run_project]{run_project()}} and does not submit work, create directories, or modify
+the configuration.
 }

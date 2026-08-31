@@ -22,9 +22,11 @@ empty_issue_df <- function() {
 
 #' Validate a BrainGnomes project configuration without changing it
 #'
-#' This is the non-interactive validation entry point for scripts and command-line
-#' clients. Unlike the historical repair path in `validate_project()`, it never
-#' opens the setup wizard and never writes the configuration.
+#' This optional inspection entry point is useful for scripts, continuous
+#' integration, and configuration review. It is not required before
+#' [run_project()], which retains its selected-stage checks. Unlike the historical
+#' repair path in `validate_project()`, this function never opens the setup wizard
+#' and never writes the configuration.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
 #' @param quiet Suppress the printed validation summary.
@@ -118,9 +120,12 @@ doctor_check_df <- function() {
 
 #' Run non-mutating project and runtime preflight checks
 #'
-#' `doctor_project()` checks configuration, scheduler commands, container runtime,
-#' enabled-stage files, project storage, and the job-tracking database. It does
-#' not submit work, create directories, or modify the configuration.
+#' This optional comprehensive preflight is useful on a new cluster, after the
+#' submission environment changes, or before an expensive run. `doctor_project()`
+#' checks configuration, scheduler commands, container runtime, enabled-stage
+#' files, project storage, and the job-tracking database. It is not required
+#' before [run_project()] and does not submit work, create directories, or modify
+#' the configuration.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
 #' @param steps Optional stages to check. By default all enabled stages are used.
@@ -489,6 +494,99 @@ discover_project_subjects <- function(scfg, steps, subject_filter = NULL, allow_
   subjects
 }
 
+resolve_project_selection <- function(scfg, steps, postprocess_streams = NULL,
+                                      extract_streams = NULL, force = FALSE) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+  checkmate::assert_character(steps, null.ok = TRUE)
+  checkmate::assert_character(postprocess_streams, null.ok = TRUE)
+  checkmate::assert_character(extract_streams, null.ok = TRUE)
+  checkmate::assert_flag(force)
+
+  resolved_steps <- resolve_project_steps(scfg, steps)
+  available_postprocess <- get_postprocess_stream_names(scfg)
+  available_extract <- get_extract_stream_names(scfg)
+  checkmate::assert_subset(
+    postprocess_streams, available_postprocess, empty.ok = TRUE
+  )
+  checkmate::assert_subset(
+    extract_streams, available_extract, empty.ok = TRUE
+  )
+
+  if ("postprocess" %in% resolved_steps) {
+    if (length(available_postprocess) == 0L) {
+      stop(
+        "Cannot run postprocessing without at least one postprocess configuration.",
+        call. = FALSE
+      )
+    }
+    if (is.null(postprocess_streams)) {
+      postprocess_streams <- available_postprocess
+    }
+  } else {
+    postprocess_streams <- character()
+  }
+
+  if ("extract_rois" %in% resolved_steps) {
+    if (length(available_extract) == 0L) {
+      stop(
+        "Cannot run extraction without at least one extract_rois configuration.",
+        call. = FALSE
+      )
+    }
+    if (is.null(extract_streams)) extract_streams <- available_extract
+  } else {
+    extract_streams <- character()
+  }
+
+  step_flags <- stats::setNames(
+    supported_project_steps() %in% resolved_steps,
+    supported_project_steps()
+  )
+  structure(list(
+    steps = resolved_steps,
+    step_flags = step_flags,
+    postprocess_streams = postprocess_streams,
+    extract_streams = extract_streams,
+    force = force
+  ), class = "bg_project_selection")
+}
+
+resolve_project_execution <- function(scfg, steps, subject_filter = NULL,
+                                      postprocess_streams = NULL,
+                                      extract_streams = NULL, force = FALSE) {
+  checkmate::assert(
+    checkmate::check_character(
+      subject_filter, any.missing = FALSE, null.ok = TRUE
+    ),
+    checkmate::check_data_frame(subject_filter, null.ok = TRUE)
+  )
+  selection <- resolve_project_selection(
+    scfg, steps, postprocess_streams, extract_streams, force
+  )
+  subject_steps <- setdiff(selection$steps, "flywheel_sync")
+  scope_deferred <-
+    "flywheel_sync" %in% selection$steps && length(subject_steps) > 0L
+  subjects <- if (length(subject_steps) > 0L) {
+    discover_project_subjects(
+      scfg, selection$steps, subject_filter,
+      allow_empty = scope_deferred
+    )
+  } else {
+    data.frame(
+      sub_id = character(), ses_id = character(),
+      dicom_sub_dir = character(), dicom_ses_dir = character(),
+      bids_sub_dir = character(), bids_ses_dir = character(),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  structure(c(unclass(selection), list(
+    subject_filter = subject_filter,
+    subjects = subjects,
+    scope_deferred = scope_deferred
+  )), class = "bg_project_execution")
+}
+
 stage_resource <- function(scfg, stage, stream = NA_character_) {
   cfg <- if (stage == "fsaverage_setup") {
     list(ncores = 1, memgb = 8, nhours = 0.15)
@@ -506,7 +604,111 @@ stage_resource <- function(scfg, stage, stream = NA_character_) {
   )
 }
 
-#' Build a structured project execution plan
+build_project_jobs <- function(scfg, execution) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+  checkmate::assert_class(execution, "bg_project_execution")
+  resolved_steps <- execution$steps
+  postprocess_streams <- execution$postprocess_streams
+  extract_streams <- execution$extract_streams
+  subjects <- execution$subjects
+  n_subjects <- length(unique(subjects$sub_id))
+  n_sessions <- nrow(subjects)
+  scope_count <- function(stage) {
+    if (execution$scope_deferred && stage != "flywheel_sync") {
+      return(NA_integer_)
+    }
+    if (stage %in% c("mriqc", "fmriprep", "aroma")) n_subjects else n_sessions
+  }
+
+  jobs <- data.frame(
+    stage = character(), stream = character(), scope = character(),
+    n_jobs = integer(), depends_on = character(), ncores = numeric(),
+    memgb = numeric(), nhours = numeric(), stringsAsFactors = FALSE
+  )
+  add_job <- function(stage, stream = NA_character_, scope, n_jobs,
+                      depends_on = "") {
+    resource <- stage_resource(scfg, stage, stream)
+    jobs[nrow(jobs) + 1L, ] <<- list(
+      stage, stream, scope, as.integer(n_jobs), depends_on,
+      resource[["ncores"]], resource[["memgb"]], resource[["nhours"]]
+    )
+  }
+  if ("flywheel_sync" %in% resolved_steps) {
+    add_job("flywheel_sync", scope = "project", n_jobs = 1L)
+  }
+  if ("fmriprep" %in% resolved_steps) {
+    add_job("fsaverage_setup", scope = "project", n_jobs = 1L)
+  }
+  if (length(intersect(
+    resolved_steps, c("mriqc", "fmriprep", "aroma")
+  )) > 0L) {
+    add_job("prefetch_templates", scope = "project", n_jobs = 1L)
+  }
+  for (stage in intersect(
+    c("bids_conversion", "mriqc", "fmriprep", "aroma"), resolved_steps
+  )) {
+    dependency_candidates <- switch(stage,
+      bids_conversion = if ("flywheel_sync" %in% resolved_steps) {
+        "flywheel_sync"
+      } else "",
+      mriqc = "bids_conversion",
+      fmriprep = "bids_conversion",
+      aroma = "fmriprep"
+    )
+    dependency <- paste(
+      intersect(dependency_candidates, resolved_steps), collapse = ","
+    )
+    if (stage %in% c("mriqc", "fmriprep", "aroma")) {
+      dependency <- paste(
+        c(dependency, "prefetch_templates")[
+          nzchar(c(dependency, "prefetch_templates"))
+        ],
+        collapse = ","
+      )
+    }
+    if (stage == "fmriprep") {
+      dependency <- paste(
+        c(dependency, "fsaverage_setup")[
+          nzchar(c(dependency, "fsaverage_setup"))
+        ],
+        collapse = ","
+      )
+    }
+    add_job(
+      stage,
+      scope = if (stage == "bids_conversion") "session" else "subject",
+      n_jobs = scope_count(stage),
+      depends_on = dependency
+    )
+  }
+  if ("postprocess" %in% resolved_steps) {
+    for (stream in postprocess_streams) {
+      deps <- intersect(c("fmriprep", "aroma"), resolved_steps)
+      add_job(
+        "postprocess", stream, "session", scope_count("postprocess"),
+        paste(deps, collapse = ",")
+      )
+    }
+  }
+  if ("extract_rois" %in% resolved_steps) {
+    for (stream in extract_streams) {
+      deps <- intersect("postprocess", resolved_steps)
+      add_job(
+        "extract_rois", stream, "session", scope_count("extract_rois"),
+        paste(deps, collapse = ",")
+      )
+    }
+  }
+  jobs
+}
+
+#' Inspect or persist the resolved project execution model
+#'
+#' `plan_project()` is optional inspection and automation tooling. It exposes the
+#' stages, streams, subject/session scope, resources, dependencies, and implicit
+#' setup work resolved for a request. [run_project()] resolves the same execution
+#' model internally, so creating or submitting a plan is not required for a
+#' direct run.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
 #' @param steps Pipeline stages or `"all"`.
@@ -518,6 +720,7 @@ stage_resource <- function(scfg, stage, stream = NA_character_) {
 #' @param allow_invalid Build the plan despite configuration validation errors.
 #' @param quiet Suppress the printed plan.
 #' @return A serializable `bg_project_plan` object.
+#' @seealso [run_project()] for the standard direct execution path.
 #' @export
 plan_project <- function(input, steps = "all", subject_filter = NULL,
                          postprocess_streams = NULL, extract_streams = NULL,
@@ -530,75 +733,14 @@ plan_project <- function(input, steps = "all", subject_filter = NULL,
     stop("Project configuration is invalid. Run validate_project_config() or `BrainGnomes config validate` for details.", call. = FALSE)
   }
   scfg <- validation$config
-  resolved_steps <- resolve_project_steps(scfg, steps)
-
-  pp_all <- get_postprocess_stream_names(scfg)
-  ex_all <- get_extract_stream_names(scfg)
-  if ("postprocess" %in% resolved_steps) {
-    if (is.null(postprocess_streams)) postprocess_streams <- pp_all
-    checkmate::assert_subset(postprocess_streams, pp_all)
-  } else postprocess_streams <- character()
-  if ("extract_rois" %in% resolved_steps) {
-    if (is.null(extract_streams)) extract_streams <- ex_all
-    checkmate::assert_subset(extract_streams, ex_all)
-  } else extract_streams <- character()
-
-  deferred_scope <- "flywheel_sync" %in% resolved_steps
-  subjects <- discover_project_subjects(
-    scfg, resolved_steps, subject_filter,
-    allow_empty = deferred_scope
+  execution <- resolve_project_execution(
+    scfg, steps, subject_filter, postprocess_streams, extract_streams, force
   )
-  n_subjects <- length(unique(subjects$sub_id))
-  n_sessions <- nrow(subjects)
-  scope_count <- function(stage) {
-    if (deferred_scope && n_sessions == 0L && stage != "flywheel_sync") return(NA_integer_)
-    if (stage %in% c("mriqc", "fmriprep", "aroma")) n_subjects else n_sessions
-  }
-
-  jobs <- data.frame(
-    stage = character(), stream = character(), scope = character(),
-    n_jobs = integer(), depends_on = character(), ncores = numeric(),
-    memgb = numeric(), nhours = numeric(), stringsAsFactors = FALSE
-  )
-  add_job <- function(stage, stream = NA_character_, scope, n_jobs, depends_on = "") {
-    resource <- stage_resource(scfg, stage, stream)
-    jobs[nrow(jobs) + 1L, ] <<- list(
-      stage, stream, scope, as.integer(n_jobs), depends_on,
-      resource[["ncores"]], resource[["memgb"]], resource[["nhours"]]
-    )
-  }
-  if ("flywheel_sync" %in% resolved_steps) add_job("flywheel_sync", scope = "project", n_jobs = 1L)
-  if ("fmriprep" %in% resolved_steps) {
-    add_job("fsaverage_setup", scope = "project", n_jobs = 1L)
-  }
-  if (length(intersect(resolved_steps, c("mriqc", "fmriprep", "aroma"))) > 0L) {
-    add_job("prefetch_templates", scope = "project", n_jobs = 1L)
-  }
-  for (stage in intersect(c("bids_conversion", "mriqc", "fmriprep", "aroma"), resolved_steps)) {
-    dependency_candidates <- switch(stage,
-      bids_conversion = if ("flywheel_sync" %in% resolved_steps) "flywheel_sync" else "",
-      mriqc = "bids_conversion", fmriprep = "bids_conversion", aroma = "fmriprep"
-    )
-    dependency <- paste(intersect(dependency_candidates, resolved_steps), collapse = ",")
-    if (stage %in% c("mriqc", "fmriprep", "aroma")) {
-      dependency <- paste(c(dependency, "prefetch_templates")[nzchar(c(dependency, "prefetch_templates"))], collapse = ",")
-    }
-    if (stage == "fmriprep") dependency <- paste(c(dependency, "fsaverage_setup")[nzchar(c(dependency, "fsaverage_setup"))], collapse = ",")
-    add_job(stage, scope = if (stage == "bids_conversion") "session" else "subject",
-      n_jobs = scope_count(stage), depends_on = dependency)
-  }
-  if ("postprocess" %in% resolved_steps) {
-    for (stream in postprocess_streams) {
-      deps <- intersect(c("fmriprep", "aroma"), resolved_steps)
-      add_job("postprocess", stream, "session", scope_count("postprocess"), paste(deps, collapse = ","))
-    }
-  }
-  if ("extract_rois" %in% resolved_steps) {
-    for (stream in extract_streams) {
-      deps <- intersect("postprocess", resolved_steps)
-      add_job("extract_rois", stream, "session", scope_count("extract_rois"), paste(deps, collapse = ","))
-    }
-  }
+  resolved_steps <- execution$steps
+  postprocess_streams <- execution$postprocess_streams
+  extract_streams <- execution$extract_streams
+  subjects <- execution$subjects
+  jobs <- build_project_jobs(scfg, execution)
 
   result <- structure(list(
     schema_version = "brain-gnomes-plan-v1",
@@ -608,12 +750,12 @@ plan_project <- function(input, steps = "all", subject_filter = NULL,
     config = scfg,
     validation = validation[c("valid", "issues", "messages")],
     request = list(
-      steps = resolved_steps, subject_filter = subject_filter,
+      steps = resolved_steps, subject_filter = execution$subject_filter,
       postprocess_streams = postprocess_streams, extract_streams = extract_streams,
       force = force
     ),
     subjects = subjects,
-    scope_deferred = deferred_scope && nrow(subjects) == 0L,
+    scope_deferred = execution$scope_deferred,
     jobs = jobs
   ), class = "bg_project_plan")
   if (!quiet) print(result)
@@ -660,6 +802,7 @@ write_project_plan <- function(plan, file, overwrite = FALSE) {
 #' @export
 read_project_plan <- function(file) {
   checkmate::assert_file_exists(file)
+  source_file <- normalizePath(file, winslash = "/", mustWork = TRUE)
   plan <- yaml::read_yaml(file)
   if (!identical(plan$schema_version, "brain-gnomes-plan-v1")) {
     stop("Unsupported project plan schema: ", value_or_default(plan$schema_version, "<missing>"), call. = FALSE)
@@ -668,6 +811,7 @@ read_project_plan <- function(file) {
   plan$subjects <- as.data.frame(plan$subjects, stringsAsFactors = FALSE)
   plan$jobs <- as.data.frame(plan$jobs, stringsAsFactors = FALSE)
   class(plan) <- "bg_project_plan"
+  attr(plan, "source_file") <- source_file
   plan
 }
 
@@ -681,13 +825,31 @@ submit_project_plan <- function(plan, debug = FALSE, log_level = "INFO") {
   if (checkmate::test_string(plan)) plan <- read_project_plan(plan)
   checkmate::assert_class(plan, "bg_project_plan")
   request <- plan$request
-  planned_subjects <- NULL
+  planned_subjects <- request$subject_filter
+  if (is.list(planned_subjects) && !is.data.frame(planned_subjects)) {
+    planned_subjects <- if ("sub_id" %in% names(planned_subjects)) {
+      as.data.frame(planned_subjects, stringsAsFactors = FALSE)
+    } else {
+      unlist(planned_subjects, use.names = FALSE)
+    }
+  }
   if (!isTRUE(plan$scope_deferred) && nrow(plan$subjects) > 0L) {
     subject_columns <- intersect(c("sub_id", "ses_id"), names(plan$subjects))
     planned_subjects <- plan$subjects[, subject_columns, drop = FALSE]
   }
+  scfg <- plan$config
+  attr(scfg, "provenance_context") <- list(
+    interface = if (checkmate::test_string(attr(plan, "source_file"))) {
+      "saved_plan"
+    } else {
+      "in_memory_plan"
+    },
+    plan_id = plan$plan_id,
+    plan_created_at = plan$created_at,
+    plan_file = attr(plan, "source_file", exact = TRUE)
+  )
   run_project(
-    plan$config,
+    scfg,
     steps = unlist(request$steps, use.names = FALSE),
     subject_filter = planned_subjects,
     postprocess_streams = unlist(request$postprocess_streams, use.names = FALSE),
@@ -696,7 +858,8 @@ submit_project_plan <- function(plan, debug = FALSE, log_level = "INFO") {
   )
 }
 
-new_project_run <- function(scfg, run_id, submitted_ids = NULL, deferred = FALSE) {
+new_project_run <- function(scfg, run_id, submitted_ids = NULL, deferred = FALSE,
+                            provenance_file = NULL) {
   tracked_ids <- character()
   sqlite_db <- scfg$metadata$sqlite_db
   if (checkmate::test_file_exists(sqlite_db) && sqlite_table_exists(sqlite_db, "job_tracking")) {
@@ -708,14 +871,25 @@ new_project_run <- function(scfg, run_id, submitted_ids = NULL, deferred = FALSE
       tracked_ids <- as.character(tracked$job_id)
     }
   }
-  structure(list(
+  run <- structure(list(
     run_id = run_id,
     job_ids = unique(c(as.character(submitted_ids), tracked_ids)),
     submitted_at = as.character(Sys.time()),
     deferred_subject_submission = isTRUE(deferred),
     project_directory = scfg$metadata$project_directory,
-    sqlite_db = sqlite_db
+    sqlite_db = sqlite_db,
+    provenance_file = provenance_file
   ), class = "bg_project_run")
+  tryCatch(
+    update_run_provenance_submission(
+      scfg, run_id, submitted_ids = run$job_ids, deferred = deferred
+    ),
+    error = function(e) warning(
+      "Run was submitted, but its provenance record could not be finalized: ",
+      conditionMessage(e), call. = FALSE
+    )
+  )
+  run
 }
 
 #' @export
@@ -725,15 +899,20 @@ print.bg_project_run <- function(x, ...) {
   if (isTRUE(x$deferred_subject_submission)) {
     cli::cli_alert_info("Subject discovery and submission are deferred until Flywheel synchronization completes.")
   }
+  if (checkmate::test_string(x$provenance_file)) {
+    cli::cli_text("Provenance: {.file {x$provenance_file}}")
+  }
   invisible(x)
 }
 
 resolve_run_id <- function(scfg, run_id = "latest") {
+  if (!identical(run_id, "latest")) return(as.character(run_id))
+  provenance_id <- latest_run_provenance_id(scfg)
+  if (checkmate::test_string(provenance_id)) return(provenance_id)
   sqlite_db <- scfg$metadata$sqlite_db
   if (!checkmate::test_file_exists(sqlite_db) || !sqlite_table_exists(sqlite_db, "job_tracking")) {
     stop("No job-tracking database is available for this project.", call. = FALSE)
   }
-  if (!identical(run_id, "latest")) return(as.character(run_id))
   con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   latest <- DBI::dbGetQuery(con,
@@ -742,9 +921,22 @@ resolve_run_id <- function(scfg, run_id = "latest") {
   latest$sequence_id[[1L]]
 }
 
-#' List tracked project runs
+#' List submitted runs for a project
+#'
+#' A run is one submission from [run_project()] or [retry_project_run()]. Use
+#' this function to find the run ID needed by the status, log, diagnosis,
+#' provenance, retry, and cancellation functions. The newest run is listed
+#' first.
+#'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @return A data frame with one row per run.
+#' @return A data frame with one row per run, including its ID, submission and
+#'   end times, number of tracked jobs, and overall status.
+#' @examples
+#' \dontrun{
+#' runs <- get_project_runs(scfg)
+#' run_id <- runs$run_id[[1L]]
+#' }
+#' @seealso [get_run_jobs()] to inspect the jobs in one run.
 #' @export
 get_project_runs <- function(input) {
   scfg <- project_config_from_input(input)
@@ -783,10 +975,24 @@ get_project_runs <- function(input) {
   result[order(result$submitted, decreasing = TRUE), , drop = FALSE]
 }
 
-#' Get tracked jobs for one project run
+#' Inspect the jobs submitted for one project run
+#'
+#' Returns the job-tracking rows for one run. This is useful for checking which
+#' processing step and subject each scheduler job belongs to and whether it is
+#' queued, running, completed, failed, cancelled, or blocked by an earlier
+#' failure.
+#'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run UUID or `"latest"`.
+#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. Use
+#'   `"latest"` for the most recently recorded run.
 #' @return The tracking rows for the run.
+#' @examples
+#' \dontrun{
+#' jobs <- get_run_jobs(scfg, run$run_id)
+#' jobs[, c("job_id", "job_name", "status")]
+#' }
+#' @seealso [diagnose_project()] for a failure-focused summary and
+#'   [find_run_logs()] for log-file locations.
 #' @export
 get_run_jobs <- function(input, run_id = "latest") {
   scfg <- project_config_from_input(input)
@@ -796,11 +1002,24 @@ get_run_jobs <- function(input, run_id = "latest") {
   jobs
 }
 
-#' Find scheduler logs associated with a tracked run
+#' Find output and error logs for one run
+#'
+#' Matches tracked job IDs to scheduler output (`.out`) and error (`.err`) files
+#' beneath the configured log directory. It returns file locations without
+#' opening or changing the logs.
+#'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run UUID or `"latest"`.
-#' @param failed_only Restrict results to failed or externally failed jobs.
+#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. Use
+#'   `"latest"` for the most recently recorded run.
+#' @param failed_only If `TRUE`, include only failed, cancelled, or downstream
+#'   jobs that could not run because an earlier job failed.
 #' @return A data frame mapping jobs to stdout/stderr log files.
+#' @examples
+#' \dontrun{
+#' failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
+#' failed_logs[, c("job_name", "status", "type", "path")]
+#' }
+#' @seealso [diagnose_project()] for a run summary that includes these logs.
 #' @export
 find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
   checkmate::assert_flag(failed_only)
@@ -829,10 +1048,26 @@ find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
   do.call(rbind, rows)
 }
 
-#' Build a non-interactive diagnosis report for a tracked run
+#' Summarize failures and logs for one run without prompts
+#'
+#' Use this function in scripts, reports, or an R session when you already know
+#' which run to inspect. It reports all tracked jobs, separates failed,
+#' cancelled, and blocked jobs, and locates their logs. For a guided interactive
+#' browser, continue to use [diagnose_pipeline()].
+#'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run UUID or `"latest"`.
-#' @return A `bg_project_diagnosis` object.
+#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. Use
+#'   `"latest"` for the most recently recorded run.
+#' @return A `bg_project_diagnosis` object containing `jobs`, `failures`, and
+#'   matching `logs` for the selected run.
+#' @examples
+#' \dontrun{
+#' diagnosis <- diagnose_project(scfg, run$run_id)
+#' diagnosis$failures
+#' diagnosis$logs
+#' }
+#' @seealso [diagnose_pipeline()] for interactive investigation and
+#'   [retry_project_run()] to preview a new run after correcting a failure.
 #' @export
 diagnose_project <- function(input, run_id = "latest") {
   scfg <- project_config_from_input(input)
@@ -862,11 +1097,25 @@ print.bg_project_diagnosis <- function(x, ...) {
   invisible(x)
 }
 
-#' Cancel queued or running jobs in a tracked run
+#' Cancel queued or running jobs from one run
+#'
+#' Cancellation affects only tracked jobs that are still queued or running. It
+#' does not delete project data, logs, or completed outputs. Calling this
+#' function with `dry_run = FALSE` immediately sends cancellation requests to
+#' the configured scheduler, so preview the commands first.
+#'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run UUID or `"latest"`.
-#' @param dry_run Report commands without invoking the scheduler.
+#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. An
+#'   explicit ID is recommended for cancellation.
+#' @param dry_run If `TRUE`, report the commands without contacting the
+#'   scheduler. If `FALSE`, request cancellation immediately.
 #' @return A data frame describing each cancellation attempt.
+#' @examples
+#' \dontrun{
+#' cancel_project_run(scfg, run$run_id, dry_run = TRUE)
+#' cancel_project_run(scfg, run$run_id, dry_run = FALSE)
+#' }
+#' @seealso [get_run_jobs()] to inspect current job states before cancellation.
 #' @export
 cancel_project_run <- function(input, run_id = "latest", dry_run = FALSE) {
   checkmate::assert_flag(dry_run)
@@ -925,19 +1174,48 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
   )
 }
 
-#' Retry failed work from a tracked run
+#' Create a new run for failed work
+#'
+#' A retry does not resume scheduler jobs in place and does not change the
+#' original run. It creates a new [run_project()] submission containing the
+#' failed or cancelled stages and subjects found in the source run. The selected
+#' work is rerun even if old completion markers would normally skip it, and the
+#' new provenance record identifies the source run.
+#'
+#' Preview with `dry_run = TRUE` before submitting. The preview returns a plan
+#' and contacts no scheduler. With `dry_run = FALSE`, submission begins
+#' immediately and the function returns the new run handle.
+#'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run UUID or `"latest"`.
-#' @param include_blocked Also retry jobs marked `FAILED_BY_EXT`.
-#' @param dry_run Return a plan without submitting jobs.
+#' @param run_id Source run ID returned by [run_project()] or
+#'   [get_project_runs()]. An explicit ID is recommended for retry.
+#' @param include_blocked Also include downstream jobs marked `FAILED_BY_EXT`.
+#'   These jobs did not fail themselves; they could not run because an earlier
+#'   required job failed. They are excluded by default.
+#' @param dry_run If `TRUE`, return a plan without submitting jobs. If `FALSE`,
+#'   submit the new run immediately.
 #' @return A `bg_project_plan` for a dry run or `bg_project_run` after submission.
+#' @examples
+#' \dontrun{
+#' # Inspect and correct the failure before retrying.
+#' diagnosis <- diagnose_project(scfg, run$run_id)
+#'
+#' # Preview only; no jobs are submitted.
+#' retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
+#'
+#' # Submit a separate new run after reviewing the plan.
+#' retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)
+#' }
+#' @seealso [diagnose_project()] to inspect the source failure and
+#'   [get_run_provenance()] to compare the original and retry runs.
 #' @export
 retry_project_run <- function(input, run_id = "latest", include_blocked = FALSE,
                               dry_run = FALSE) {
   checkmate::assert_flag(include_blocked)
   checkmate::assert_flag(dry_run)
   scfg <- project_config_from_input(input)
-  jobs <- get_run_jobs(scfg, run_id)
+  source_run_id <- resolve_run_id(scfg, run_id)
+  jobs <- get_run_jobs(scfg, source_run_id)
   request <- retry_request_from_jobs(jobs, include_blocked)
   if (length(request$steps) == 0L) stop("No retryable failed jobs were found in this run.", call. = FALSE)
   if (dry_run) {
@@ -949,6 +1227,11 @@ retry_project_run <- function(input, run_id = "latest", include_blocked = FALSE,
       force = TRUE
     ))
   }
+  attr(scfg, "provenance_context") <- list(
+    interface = "retry",
+    parent_run_id = source_run_id,
+    include_blocked = include_blocked
+  )
   run_project(
     scfg, steps = request$steps,
     subject_filter = if (length(request$subject_filter)) request$subject_filter else NULL,

@@ -2,7 +2,7 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{get_project_runs}
 \alias{get_project_runs}
-\title{List tracked project runs}
+\title{List submitted runs for a project}
 \usage{
 get_project_runs(input)
 }
@@ -10,8 +10,21 @@ get_project_runs(input)
 \item{input}{A project configuration object, YAML file, or project directory.}
 }
 \value{
-A data frame with one row per run.
+A data frame with one row per run, including its ID, submission and
+end times, number of tracked jobs, and overall status.
 }
 \description{
-List tracked project runs
+A run is one submission from \code{\link[=run_project]{run_project()}} or \code{\link[=retry_project_run]{retry_project_run()}}. Use
+this function to find the run ID needed by the status, log, diagnosis,
+provenance, retry, and cancellation functions. The newest run is listed
+first.
+}
+\examples{
+\dontrun{
+runs <- get_project_runs(scfg)
+run_id <- runs$run_id[[1L]]
+}
+}
+\seealso{
+\code{\link[=get_run_jobs]{get_run_jobs()}} to inspect the jobs in one run.
 }

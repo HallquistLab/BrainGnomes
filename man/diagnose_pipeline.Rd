@@ -2,15 +2,27 @@
 % Please edit documentation in R/diagnose_pipeline.R
 \name{diagnose_pipeline}
 \alias{diagnose_pipeline}
-\title{Function for diagnosing errors in a run of the pipeline}
+\title{Interactively investigate jobs and logs from pipeline runs}
 \usage{
 diagnose_pipeline(input)
 }
 \arguments{
-\item{input}{A character path to an scfg object or an scfg object itself.}
+\item{input}{A project configuration object or project directory.}
+}
+\value{
+Depending on the selected action, the chosen run's job tree, log
+contents, or invisibly \code{NULL}.
 }
 \description{
-Function for diagnosing errors in a run of the pipeline
+Opens the established guided diagnosis browser. You can start with one
+subject across runs or select one run, follow its job relationships, and
+inspect output or error logs. Diagnosis does not submit jobs or change the
+project. Use \code{\link[=diagnose_project]{diagnose_project()}} instead when a script or report needs a
+prompt-free summary.
+}
+\seealso{
+\code{\link[=get_project_runs]{get_project_runs()}} to find run IDs, \code{\link[=diagnose_project]{diagnose_project()}} for a
+prompt-free summary, and \code{\link[=retry_project_run]{retry_project_run()}} after correcting a failure.
 }
 \author{
 Zach Vig & Dan Shallal

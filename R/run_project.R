@@ -81,6 +81,11 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 }
 
 #' Run the processing pipeline
+#'
+#' This remains the standard execution path after [setup_project()]. It resolves
+#' the same stages, streams, subject/session scope, and force setting exposed by
+#' [plan_project()] before submission; calling `plan_project()` first is optional.
+#'
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param steps Character vector of pipeline stages to execute. Supported stages
 #'   are `"flywheel_sync"`, `"bids_conversion"`, `"mriqc"`, `"fmriprep"`,
@@ -109,16 +114,21 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #'   `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, or `FATAL`.
 #' 
 #' @return For submitted work, an invisible `bg_project_run` object containing
-#'   the run UUID and scheduler job IDs known at submission time. Dry runs
-#'   invisibly return `TRUE` after printing the resolved plan.
+#'   the run UUID, scheduler job IDs known at submission time, and the path to
+#'   the complete run provenance record. Dry runs invisibly return `TRUE` after
+#'   printing the resolved plan.
 #' @export
 #' @examples
 #'   \dontrun{
 #'     # Assuming you have a valid project configuration list named `study_config`
 #'     run_project(study_config, steps = "fmriprep", force = FALSE)
 #'   }
-#' @seealso [run_bids_validation()] to submit the BIDS validation configured
-#'   with the project.
+#' @seealso [get_run_provenance()] to read the recorded configuration,
+#'   execution context, and artifact fingerprints; [plan_project()] for optional
+#'   inspection or persistence of the resolved request; [run_bids_validation()]
+#'   to submit the BIDS validation configured with the project;
+#'   [diagnose_project()] and [retry_project_run()] for optional recovery after
+#'   a submitted run fails.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
@@ -127,6 +137,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")) {
 
   checkmate::assert_class(scfg, "bg_project_cfg")
+  provenance_context <- attr(scfg, "provenance_context", exact = TRUE)
   checkmate::assert_character(steps, null.ok = TRUE)
   checkmate::assert(
     checkmate::check_character(subject_filter, any.missing = FALSE, null.ok = TRUE),
@@ -149,9 +160,6 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   all_pp_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
   all_ex_streams <- get_extract_stream_names(scfg) # vector of potential extraction streams
 
-  checkmate::assert_subset(postprocess_streams, choices = all_pp_streams, empty.ok = TRUE)
-  checkmate::assert_subset(extract_streams, choices = all_ex_streams, empty.ok = TRUE)
-
   # Shared permission-check cache: setup_project_directories primes it with
   # verified-writable dirs; downstream preflight checks get instant hits.
   permission_check_cache <- new.env(parent = emptyenv())
@@ -168,10 +176,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   # by passing steps, user is asking for unattended execution
   prompt <- is.null(steps)
-  supported_steps <- supported_project_steps()
 
-  if (isFALSE(prompt)) {   
-    user_steps <- resolve_project_steps(scfg, steps)
+  if (isFALSE(prompt)) {
+    selection <- resolve_project_selection(
+      scfg, steps, postprocess_streams, extract_streams, force
+    )
+    user_steps <- selection$steps
+    postprocess_streams <- selection$postprocess_streams
+    extract_streams <- selection$extract_streams
 
     if ("flywheel_sync" %in% user_steps) {
       if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
@@ -194,20 +206,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     
     if ("postprocess" %in% user_steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
-      if (length(all_pp_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
-      if (is.null(postprocess_streams)) postprocess_streams <- all_pp_streams # run all streams if no specifics were requested
     }
 
     if ("extract_rois" %in% user_steps) {
       if (!isTRUE(scfg$extract_rois$enable)) stop("extract_rois was requested, but it is disabled in the configuration.")
-      if (length(all_ex_streams) == 0L) stop("Cannot run extraction without at least one extract_rois configuration.")
-      if (is.null(extract_streams)) extract_streams <- all_ex_streams # run all streams if no specifics were requested
     }
 
-    # convert steps to logicals to match downstream expectations (e.g., in process_subject)
-    steps <- rep(FALSE, length(supported_steps))
-    names(steps) <- supported_steps
-    for (s in user_steps) steps[s] <- TRUE
+    # Downstream scheduling uses the same resolved stage flags exposed by plans.
+    steps <- selection$step_flags
     
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
@@ -303,6 +309,18 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     stop("Cannot run postprocessing without a valid FSL container.")
   }
 
+  execution <- resolve_project_execution(
+    scfg,
+    steps = names(steps)[steps],
+    subject_filter = subject_filter,
+    postprocess_streams = postprocess_streams,
+    extract_streams = extract_streams,
+    force = isTRUE(scfg$force)
+  )
+  steps <- execution$step_flags
+  postprocess_streams <- execution$postprocess_streams
+  extract_streams <- execution$extract_streams
+
   if (isTRUE(scfg$dry_run)) {
     dry_requested <- names(steps)[steps]
     cat("\nDry run enabled. No jobs will be submitted.\n")
@@ -322,9 +340,12 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       }
     }
 
-    if (any(steps[names(steps) != "flywheel_sync"])) {
+    if (isTRUE(execution$scope_deferred)) {
+      cat("Subject/session discovery will occur after Flywheel synchronization.\n")
+    } else if (any(steps[names(steps) != "flywheel_sync"])) {
       submit_subjects(
         scfg = scfg, steps = steps, subject_filter = subject_filter,
+        resolved_subjects = execution$subjects,
         postprocess_streams = postprocess_streams, extract_streams = extract_streams,
         parent_ids = NULL, sequence_id = NULL,
         permission_check_cache = permission_check_cache,
@@ -337,13 +358,26 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # generate sequence ID for job tracking
   sequence_id <- uuid::UUIDgenerate()
   scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
+  if (!is.null(provenance_context)) {
+    attr(scfg, "provenance_context") <- provenance_context
+  }
+  provenance_file <- record_run_provenance(
+    scfg = scfg,
+    run_id = sequence_id,
+    execution = execution,
+    debug = isTRUE(scfg$debug),
+    log_level = scfg$log_level
+  )
 
   flywheel_id <- NULL
   if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg, sequence_id = sequence_id)
 
   # If only sync was requested, don't enter subject-level processing
   if (!any(steps[names(steps) != "flywheel_sync"])) {
-    return(invisible(new_project_run(scfg, sequence_id, submitted_ids = flywheel_id)))
+    return(invisible(new_project_run(
+      scfg, sequence_id, submitted_ids = flywheel_id,
+      provenance_file = provenance_file
+    )))
   }
 
   # Submit fsaverage setup early (used by fmriprep) to avoid race conditions
@@ -403,19 +437,23 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     return(invisible(new_project_run(
       scfg, sequence_id,
       submitted_ids = c(flywheel_id, fsaverage_id, prefetch_id, controller_id),
-      deferred = TRUE
+      deferred = TRUE,
+      provenance_file = provenance_file
     )))
   }
 
   # No flywheel sync: schedule subjects immediately
   submit_subjects(
-    scfg = scfg, steps = steps, subject_filter = subject_filter, postprocess_streams = postprocess_streams, 
+    scfg = scfg, steps = steps, subject_filter = subject_filter,
+    resolved_subjects = execution$subjects,
+    postprocess_streams = postprocess_streams,
     extract_streams = extract_streams, parent_ids = parent_ids, sequence_id = sequence_id,
     permission_check_cache = permission_check_cache
   )
   return(invisible(new_project_run(
     scfg, sequence_id,
-    submitted_ids = c(fsaverage_id, prefetch_id)
+    submitted_ids = c(fsaverage_id, prefetch_id),
+    provenance_file = provenance_file
   )))
 }
 
@@ -423,6 +461,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 #' @param scfg A bg_project_cfg object
 #' @param steps Named logical vector of steps
 #' @param subject_filter Optional subject/session filter (character or data.frame)
+#' @param resolved_subjects Optional subject/session table already resolved by
+#'   `resolve_project_execution()`. Deferred Flywheel controllers omit it so
+#'   discovery occurs after synchronization.
 #' @param postprocess_streams Optional character vector of postprocess streams
 #' @param extract_streams Optional character vector of extraction streams
 #' @param parent_ids Optional character vector of job IDs to depend on
@@ -436,18 +477,27 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 #'   This function is not meant to be called by users! Instead, it is called internally
 #'   after flywheel sync completes.
 #' @keywords internal
-submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
+submit_subjects <- function(scfg, steps, subject_filter = NULL,
+  resolved_subjects = NULL, postprocess_streams = NULL,
   extract_streams = NULL, parent_ids = NULL, sequence_id = NULL,
   permission_check_cache = NULL, dry_run = FALSE) {
 
   checkmate::assert_flag(dry_run)
+  checkmate::assert_data_frame(resolved_subjects, null.ok = TRUE)
 
-  subject_dirs <- discover_project_subjects(
-    scfg,
-    steps = names(steps)[steps],
-    subject_filter = subject_filter,
-    allow_empty = FALSE
-  )
+  subject_dirs <- if (is.null(resolved_subjects)) {
+    discover_project_subjects(
+      scfg,
+      steps = names(steps)[steps],
+      subject_filter = subject_filter,
+      allow_empty = FALSE
+    )
+  } else {
+    resolved_subjects
+  }
+  if (nrow(subject_dirs) == 0L) {
+    stop("No subject/session inputs match the requested run.", call. = FALSE)
+  }
 
   if (!is.null(subject_filter)) {
     msg_df <- unique(subject_dirs[, c("sub_id", "ses_id")])
@@ -480,7 +530,7 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_stre
     )
   }
 
-  invisible(TRUE)
+  invisible(do.call(rbind, subject_dirs))
 }
 
 #' submit Flywheel sync job -- superordinate to subjects

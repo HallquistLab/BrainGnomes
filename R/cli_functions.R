@@ -214,6 +214,10 @@ run_project_cli <- function(input, cli_args = list()) {
   if (is.null(dry_run_opt)) dry_run_opt <- cli_args$dry_run
 
   scfg <- load_project(input)
+  attr(scfg, "provenance_context") <- list(
+    interface = "cli",
+    input = normalizePath(input, winslash = "/", mustWork = FALSE)
+  )
   run_project(
     scfg,
     steps = cli_args$steps,

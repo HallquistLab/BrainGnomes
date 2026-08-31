@@ -6,6 +6,7 @@ test_that("run_project dry_run avoids scheduling and passes dry_run to submit_su
   dirs <- c("dicom", "bids", "fmriprep", "postproc", "mriqc", "logs", "scratch")
   dirs <- file.path(root, dirs)
   vapply(dirs, dir.create, recursive = TRUE, showWarnings = FALSE, FUN.VALUE = logical(1))
+  dir.create(file.path(root, "bids", "sub-01"))
 
   scfg <- list(
     metadata = list(
@@ -35,6 +36,7 @@ test_that("run_project dry_run avoids scheduling and passes dry_run to submit_su
 
   submit_called <- FALSE
   submit_dry_run <- NULL
+  submitted_subjects <- NULL
   flywheel_called <- FALSE
 
   local_mocked_bindings(
@@ -44,11 +46,13 @@ test_that("run_project dry_run avoids scheduling and passes dry_run to submit_su
       flywheel_called <<- TRUE
       "flywheel123"
     },
-    submit_subjects = function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
+    submit_subjects = function(scfg, steps, subject_filter = NULL,
+                               resolved_subjects = NULL, postprocess_streams = NULL,
                                extract_streams = NULL, parent_ids = NULL, sequence_id = NULL,
                                permission_check_cache = NULL, dry_run = FALSE) {
       submit_called <<- TRUE
       submit_dry_run <<- dry_run
+      submitted_subjects <<- resolved_subjects
       invisible(TRUE)
     },
     .package = "BrainGnomes"
@@ -58,6 +62,7 @@ test_that("run_project dry_run avoids scheduling and passes dry_run to submit_su
 
   expect_true(submit_called)
   expect_true(isTRUE(submit_dry_run))
+  expect_identical(submitted_subjects$sub_id, "01")
   expect_false(flywheel_called)
 })
 
@@ -69,6 +74,7 @@ test_that("run_project interactive mode prompts for dry run and honors selection
   dirs <- c("dicom", "bids", "fmriprep", "postproc", "mriqc", "logs", "scratch")
   dirs <- file.path(root, dirs)
   vapply(dirs, dir.create, recursive = TRUE, showWarnings = FALSE, FUN.VALUE = logical(1))
+  dir.create(file.path(root, "dicom", "sub-01"))
 
   scfg <- list(
     metadata = list(
@@ -83,7 +89,13 @@ test_that("run_project interactive mode prompts for dry run and honors selection
       scratch_directory = file.path(root, "scratch")
     ),
     flywheel_sync = list(enable = FALSE),
-    bids_conversion = list(enable = TRUE),
+    bids_conversion = list(
+      enable = TRUE,
+      sub_regex = "^sub-.+",
+      sub_id_match = "sub-(.*)",
+      ses_regex = NA_character_,
+      ses_id_match = NA_character_
+    ),
     mriqc = list(enable = FALSE),
     fmriprep = list(enable = FALSE),
     aroma = list(enable = FALSE),
@@ -102,7 +114,8 @@ test_that("run_project interactive mode prompts for dry run and honors selection
   local_mocked_bindings(
     setup_project_directories = function(scfg, check_cache = NULL) scfg,
     validate_exists = function(...) TRUE,
-    submit_subjects = function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
+    submit_subjects = function(scfg, steps, subject_filter = NULL,
+                               resolved_subjects = NULL, postprocess_streams = NULL,
                                extract_streams = NULL, parent_ids = NULL, sequence_id = NULL,
                                permission_check_cache = NULL, dry_run = FALSE) {
       submit_dry_run <<- dry_run
@@ -131,6 +144,7 @@ test_that("run_project dry_run prints resolved stream settings", {
   root <- tempfile("run_project_stream_plan_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+  dir.create(file.path(root, "bids", "sub-01"), recursive = TRUE)
 
   scfg <- list(
     metadata = list(
