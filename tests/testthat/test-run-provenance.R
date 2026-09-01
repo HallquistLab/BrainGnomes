@@ -67,6 +67,27 @@ test_that("run provenance captures the complete resolved submission context", {
   expect_true(nzchar(provenance$host$system$nodename))
 })
 
+test_that("large uncached files get a plain-language first-read message", {
+  root <- tempfile("artifact-message-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+  artifact <- file.path(root, "container.sif")
+  writeLines("container identity", artifact)
+  cache <- file.path(root, "checksums.rds")
+
+  expect_message(
+    BrainGnomes:::cached_artifact_checksum(
+      artifact, cache, label = "test container", message_threshold_bytes = 0
+    ),
+    "Reading the full test container.*exact copy used.*first used.*changed"
+  )
+  expect_no_message(
+    BrainGnomes:::cached_artifact_checksum(
+      artifact, cache, label = "test container", message_threshold_bytes = 0
+    )
+  )
+})
+
 test_that("provenance links submitted and current scheduler jobs", {
   fixture <- make_provenance_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)

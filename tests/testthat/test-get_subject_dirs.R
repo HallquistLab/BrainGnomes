@@ -45,7 +45,21 @@ test_that("get_subject_dirs works with and without sessions", {
   expect_equal(result_with_ses$ses_id[result_with_ses$sub_id == "002"], "01")
   expect_true(is.na(result_with_ses$ses_id[result_with_ses$sub_id == "003"]))
 
+  # Filtering is applied before the session walk and returns only the requested
+  # subject's sessions.
+  result_filtered <- get_subject_dirs(
+    root = root,
+    sub_regex = "sub-[0-9]+",
+    sub_id_match = "sub-([0-9]+)",
+    ses_regex = "ses-[0-9]+",
+    ses_id_match = "ses-([0-9]+)",
+    full.names = FALSE,
+    subject_filter = "002"
+  )
+  expect_equal(nrow(result_filtered), 1L)
+  expect_identical(result_filtered$sub_id, "002")
+  expect_identical(result_filtered$ses_id, "01")
+
   # Clean up
   unlink(root, recursive = TRUE)
 })
-

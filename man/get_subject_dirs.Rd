@@ -10,7 +10,8 @@ get_subject_dirs(
   sub_id_match = "([0-9]+)",
   ses_regex = NULL,
   ses_id_match = "([0-9]+)",
-  full.names = FALSE
+  full.names = FALSE,
+  subject_filter = NULL
 )
 }
 \arguments{
@@ -25,6 +26,10 @@ get_subject_dirs(
 \item{ses_id_match}{A regex pattern for extracting the session ID from the session folder name. Default: \code{"([0-9]+)"}.}
 
 \item{full.names}{If \code{TRUE}, return absolute paths to the folders; if \code{FALSE}, return paths relative to \code{root}. Default: \code{FALSE}.}
+
+\item{subject_filter}{Optional character vector of subject IDs to retain.
+Filtering occurs before session folders are inspected, which avoids walking
+unrequested subject directories in large projects.}
 }
 \value{
 A data frame with one row per subject (or per subject-session combination) and columns:

@@ -449,6 +449,13 @@ resolve_project_steps <- function(scfg, steps = NULL) {
 }
 
 discover_project_subjects <- function(scfg, steps, subject_filter = NULL, allow_empty = FALSE) {
+  requested_subjects <- if (is.data.frame(subject_filter)) {
+    as.character(subject_filter$sub_id)
+  } else if (!is.null(subject_filter)) {
+    as.character(subject_filter)
+  } else {
+    NULL
+  }
   dicom <- data.frame(
     sub_id = character(), ses_id = character(), dicom_sub_dir = character(),
     dicom_ses_dir = character(), stringsAsFactors = FALSE
@@ -460,7 +467,8 @@ discover_project_subjects <- function(scfg, steps, subject_filter = NULL, allow_
       sub_id_match = scfg$bids_conversion$sub_id_match,
       ses_regex = scfg$bids_conversion$ses_regex,
       ses_id_match = scfg$bids_conversion$ses_id_match,
-      full.names = TRUE
+      full.names = TRUE,
+      subject_filter = requested_subjects
     )
     names(dicom) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(dicom))
   }
@@ -473,7 +481,8 @@ discover_project_subjects <- function(scfg, steps, subject_filter = NULL, allow_
     bids <- get_subject_dirs(
       scfg$metadata$bids_directory,
       sub_regex = "^sub-.+", ses_regex = "^ses-.+",
-      sub_id_match = "sub-(.*)", ses_id_match = "ses-(.*)", full.names = TRUE
+      sub_id_match = "sub-(.*)", ses_id_match = "ses-(.*)", full.names = TRUE,
+      subject_filter = requested_subjects
     )
     names(bids) <- sub("(sub|ses)_dir", "bids_\\1_dir", names(bids))
   }

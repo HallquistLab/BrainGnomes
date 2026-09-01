@@ -127,6 +127,11 @@ resolved subject scope plus a JSON record of the request, resources,
 dependencies, BrainGnomes/R/platform versions, submission host, scheduler, and
 checksummed containers and other execution-driving files. Read it with
 `get_run_provenance(scfg, run$run_id)` or `BrainGnomes provenance <project>`.
+Before jobs are submitted, `run_project()` reports when it is finding subjects
+and saving this run record. The first use of a large container in a project can
+take a minute because BrainGnomes reads the complete file to identify the exact
+copy used; later runs reuse the project's saved result while the file is
+unchanged.
 
 Each call to `run_project()` has a run ID, which lets you inspect one submission
 without mixing it up with earlier work. `status`, `logs`, provenance, and
