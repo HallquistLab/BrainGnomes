@@ -56,7 +56,8 @@
 <span>  sub_id_match <span class="op">=</span> <span class="st">"([0-9]+)"</span>,</span>
 <span>  ses_regex <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  ses_id_match <span class="op">=</span> <span class="st">"([0-9]+)"</span>,</span>
-<span>  full.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  full.names <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  subject_filter <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -86,6 +87,12 @@
 
 <dt id="arg-full-names">full.names<a class="anchor" aria-label="anchor" href="#arg-full-names"></a></dt>
 <dd><p>If <code>TRUE</code>, return absolute paths to the folders; if <code>FALSE</code>, return paths relative to <code>root</code>. Default: <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-subject-filter">subject_filter<a class="anchor" aria-label="anchor" href="#arg-subject-filter"></a></dt>
+<dd><p>Optional character vector of subject IDs to retain.
+Filtering occurs before session folders are inspected, which avoids walking
+unrequested subject directories in large projects.</p></dd>
 
 </dl></div>
     <div class="section level2">

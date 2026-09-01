@@ -134,6 +134,14 @@ the complete run provenance record. Dry runs invisibly return <code>TRUE</code> 
 printing the resolved plan.</p>
     </div>
     <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Before submission, BrainGnomes reports when it is checking project
+folders, finding matching subjects, and saving the run record. The first
+use of a large container in a project may take longer because BrainGnomes
+reads the complete file once to identify the exact copy used. During large
+submissions, periodic messages report progress through the subject list.</p>
+    </div>
+    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="get_run_provenance.html">get_run_provenance()</a></code> to read the recorded configuration,
 execution context, and artifact fingerprints; <code><a href="plan_project.html">plan_project()</a></code> for optional
