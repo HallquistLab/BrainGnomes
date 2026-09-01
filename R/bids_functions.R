@@ -473,6 +473,9 @@ get_fmriprep_outputs <- function(in_file) {
 #' @param ses_regex A regex pattern to match session folders. Default: `NULL`. If `NULL`, session folders are not expected.
 #' @param ses_id_match A regex pattern for extracting the session ID from the session folder name. Default: `"([0-9]+)"`.
 #' @param full.names If `TRUE`, return absolute paths to the folders; if `FALSE`, return paths relative to `root`. Default: `FALSE`.
+#' @param subject_filter Optional character vector of subject IDs to retain.
+#'   Filtering occurs before session folders are inspected, which avoids walking
+#'   unrequested subject directories in large projects.
 #' @return A data frame with one row per subject (or per subject-session combination) and columns:
 #'   - `sub_id`: Subject ID extracted from each folder name.
 #'   - `ses_id`: Session ID (or `NA` if no session level).
@@ -498,7 +501,8 @@ get_fmriprep_outputs <- function(in_file) {
 #' @keywords internal
 #' @importFrom checkmate assert_directory_exists assert_flag assert_string
 get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "([0-9]+)", 
-  ses_regex = NULL, ses_id_match = "([0-9]+)", full.names = FALSE) {
+  ses_regex = NULL, ses_id_match = "([0-9]+)", full.names = FALSE,
+  subject_filter = NULL) {
   
   checkmate::assert_directory_exists(root)
   checkmate::assert_string(sub_regex)
@@ -508,11 +512,21 @@ get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "
   if (is.null(ses_id_match) || is.na(ses_id_match[1L])) ses_id_match <- "(.*)" # all characters
   checkmate::assert_string(ses_id_match)
   checkmate::assert_flag(full.names)
+  checkmate::assert_character(subject_filter, any.missing = FALSE, null.ok = TRUE)
 
   # List directories in the root folder
   entries <- list.dirs(root, recursive = FALSE, full.names = FALSE)
   subject_entries <- entries[grepl(sub_regex, entries)]
   subject_ids <- extract_capturing_groups(subject_entries, sub_id_match)
+
+  # Apply the requested scope before looking inside subject folders. Session
+  # discovery can be the expensive part on networked filesystems, and callers
+  # selecting a small subset should not pay that cost for the full project.
+  if (!is.null(subject_filter)) {
+    keep <- subject_ids %in% subject_filter
+    subject_entries <- subject_entries[keep]
+    subject_ids <- subject_ids[keep]
+  }
   
   if (length(subject_entries) == 0) {
     # warning("No subject directories found in: ", root, " the regex pattern: ", sub_regex, ".")

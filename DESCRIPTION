@@ -1,7 +1,7 @@
 Package: BrainGnomes
 Title: HPC Workflows for Functional MRI Preprocessing and Analysis
 Version: 0.9-2
-Date: 2026-08-31
+Date: 2026-09-01
 Authors@R: 
     person("Michael", "Hallquist", email="michael.hallquist@gmail.com", role = c("aut", "cre"))
 Description: Configures, submits, and monitors reproducible functional magnetic

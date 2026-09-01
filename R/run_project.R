@@ -117,6 +117,11 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #'   the run UUID, scheduler job IDs known at submission time, and the path to
 #'   the complete run provenance record. Dry runs invisibly return `TRUE` after
 #'   printing the resolved plan.
+#' @details Before submission, BrainGnomes reports when it is checking project
+#'   folders, finding matching subjects, and saving the run record. The first
+#'   use of a large container in a project may take longer because BrainGnomes
+#'   reads the complete file once to identify the exact copy used. During large
+#'   submissions, periodic messages report progress through the subject list.
 #' @export
 #' @examples
 #'   \dontrun{
@@ -162,6 +167,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   # Shared permission-check cache: setup_project_directories primes it with
   # verified-writable dirs; downstream preflight checks get instant hits.
+  cli::cli_alert_info("Checking the project folders needed for this run...")
   permission_check_cache <- new.env(parent = emptyenv())
   scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
 
@@ -309,6 +315,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     stop("Cannot run postprocessing without a valid FSL container.")
   }
 
+  cli::cli_alert_info("Finding the subjects and sessions that match this run...")
   execution <- resolve_project_execution(
     scfg,
     steps = names(steps)[steps],
@@ -320,6 +327,22 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   steps <- execution$step_flags
   postprocess_streams <- execution$postprocess_streams
   extract_streams <- execution$extract_streams
+
+  if (isTRUE(execution$scope_deferred)) {
+    cli::cli_alert_info(
+      "Subjects and sessions will be found after Flywheel synchronization finishes."
+    )
+  } else {
+    n_subjects <- length(unique(execution$subjects$sub_id))
+    n_sessions <- sum(!is.na(execution$subjects$ses_id))
+    if (n_sessions > 0L) {
+      cli::cli_alert_success(
+        "Found {n_subjects} matching subject{?s} across {n_sessions} session{?s}."
+      )
+    } else {
+      cli::cli_alert_success("Found {n_subjects} matching subject{?s}.")
+    }
+  }
 
   if (isTRUE(scfg$dry_run)) {
     dry_requested <- names(steps)[steps]
@@ -361,6 +384,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   if (!is.null(provenance_context)) {
     attr(scfg, "provenance_context") <- provenance_context
   }
+  cli::cli_alert_info(
+    "Saving a record of the settings, subjects, and software used for this run..."
+  )
   provenance_file <- record_run_provenance(
     scfg = scfg,
     run_id = sequence_id,
@@ -368,6 +394,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     debug = isTRUE(scfg$debug),
     log_level = scfg$log_level
   )
+  cli::cli_alert_success("Saved the run record. Starting job submission.")
 
   flywheel_id <- NULL
   if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg, sequence_id = sequence_id)
@@ -504,7 +531,13 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
     msg_lines <- apply(msg_df, 1, function(rr) {
       if (!is.na(rr["ses_id"])) glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}") else glue("  sub-{rr['sub_id']}")
     })
-    cat("Processing the following subjects:\n", paste(msg_lines, collapse = "\n"), "\n")
+    preview_limit <- 20L
+    preview <- utils::head(msg_lines, preview_limit)
+    cat("Processing the following requested subjects:\n",
+        paste(preview, collapse = "\n"), "\n")
+    if (length(msg_lines) > preview_limit) {
+      cat(glue("  ... and {length(msg_lines) - preview_limit} more matching subject/session entries.\n"))
+    }
   }
 
   if (isTRUE(dry_run)) {
@@ -521,7 +554,21 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
   subject_dirs <- split(subject_dirs, subject_dirs$sub_id)
   if (is.null(permission_check_cache)) permission_check_cache <- new.env(parent = emptyenv())
 
+  n_subjects <- length(subject_dirs)
+  progress_every <- max(1L, ceiling(n_subjects / 20L))
+  progress_points <- unique(c(
+    1L, seq.int(progress_every, n_subjects, by = progress_every), n_subjects
+  ))
+  cli::cli_alert_info(
+    "Checking and submitting jobs for {n_subjects} subject{?s}."
+  )
+
   for (ss in seq_along(subject_dirs)) {
+    if (ss %in% progress_points) {
+      cli::cli_alert_info(
+        "Preparing jobs for subject {ss} of {n_subjects}: sub-{subject_dirs[[ss]]$sub_id[[1L]]}."
+      )
+    }
     process_subject(
       scfg, subject_dirs[[ss]], steps,
       postprocess_streams = postprocess_streams, extract_streams = extract_streams,
@@ -529,6 +576,10 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
       permission_check_cache = permission_check_cache
     )
   }
+
+  cli::cli_alert_success(
+    "Finished checking and submitting jobs for {n_subjects} subject{?s}."
+  )
 
   invisible(do.call(rbind, subject_dirs))
 }

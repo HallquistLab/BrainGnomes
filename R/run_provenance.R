@@ -57,8 +57,49 @@ write_table_atomic <- function(value, file) {
   invisible(normalizePath(file, winslash = "/", mustWork = TRUE))
 }
 
-cached_artifact_checksum <- function(path, cache_file = NULL) {
+format_artifact_size <- function(size_bytes) {
+  units <- c("bytes", "KiB", "MiB", "GiB", "TiB")
+  unit <- 1L
+  size <- as.numeric(size_bytes)
+  while (is.finite(size) && size >= 1024 && unit < length(units)) {
+    size <- size / 1024
+    unit <- unit + 1L
+  }
+  digits <- if (unit == 1L || size >= 10) 0L else 1L
+  paste0(format(round(size, digits), nsmall = digits, trim = TRUE), " ", units[[unit]])
+}
+
+run_artifact_display_name <- function(role, path) {
+  labels <- c(
+    "bids_conversion.heudiconv_container" = "HeuDiConv container",
+    "mriqc.mriqc_container" = "MRIQC container",
+    "fmriprep.fmriprep_container" = "fMRIPrep container",
+    "aroma.aroma_container" = "AROMA container",
+    "postprocess.fsl_container" = "FSL container"
+  )
+  if (role %in% names(labels)) return(unname(labels[[role]]))
+  paste0("file ", basename(path))
+}
+
+announce_full_artifact_read <- function(path, label = NULL,
+                                        threshold_bytes = 100 * 1024^2) {
+  info <- file.info(path)
+  size <- as.numeric(info$size[[1L]])
+  if (!is.finite(size) || size < threshold_bytes) return(invisible(FALSE))
+  if (!checkmate::test_string(label)) label <- paste0("file ", basename(path))
+  cli::cli_alert_info(paste0(
+    "Reading the full ", label, " (", format_artifact_size(size), ") so ",
+    "BrainGnomes can identify the exact copy used. This can take a minute ",
+    "when the file is first used in this project or has changed since the ",
+    "last run."
+  ))
+  invisible(TRUE)
+}
+
+cached_artifact_checksum <- function(path, cache_file = NULL, label = NULL,
+                                     message_threshold_bytes = 100 * 1024^2) {
   if (!checkmate::test_string(cache_file)) {
+    announce_full_artifact_read(path, label, message_threshold_bytes)
     return(unname(tools::md5sum(path)))
   }
   dir.create(dirname(cache_file), recursive = TRUE, showWarnings = FALSE)
@@ -67,7 +108,10 @@ cached_artifact_checksum <- function(path, cache_file = NULL) {
     filelock::lock(lock_file, timeout = 10000),
     error = function(e) NULL
   )
-  if (is.null(lock)) return(unname(tools::md5sum(path)))
+  if (is.null(lock)) {
+    announce_full_artifact_read(path, label, message_threshold_bytes)
+    return(unname(tools::md5sum(path)))
+  }
   on.exit(filelock::unlock(lock), add = TRUE)
 
   resolved <- normalizePath(path, winslash = "/", mustWork = TRUE)
@@ -90,6 +134,7 @@ cached_artifact_checksum <- function(path, cache_file = NULL) {
     cache$modified == modified & cache$changed == changed
   if (any(match)) return(cache$checksum[which(match)[[1L]]])
 
+  announce_full_artifact_read(path, label, message_threshold_bytes)
   checksum <- unname(tools::md5sum(path))
   cache <- cache[cache$path != resolved, , drop = FALSE]
   cache <- rbind(cache, data.frame(
@@ -130,7 +175,10 @@ fingerprint_run_artifact <- function(role, path, checksum_cache = NULL) {
     } else NA_character_,
     checksum_algorithm = if (is_file) "md5" else NA_character_,
     checksum = if (is_file) {
-      cached_artifact_checksum(configured_path, checksum_cache)
+      cached_artifact_checksum(
+        configured_path, checksum_cache,
+        label = run_artifact_display_name(role, configured_path)
+      )
     } else NA_character_,
     stringsAsFactors = FALSE
   )

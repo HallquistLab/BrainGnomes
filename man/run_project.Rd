@@ -63,6 +63,13 @@ This remains the standard execution path after \code{\link[=setup_project]{setup
 the same stages, streams, subject/session scope, and force setting exposed by
 \code{\link[=plan_project]{plan_project()}} before submission; calling \code{plan_project()} first is optional.
 }
+\details{
+Before submission, BrainGnomes reports when it is checking project
+folders, finding matching subjects, and saving the run record. The first
+use of a large container in a project may take longer because BrainGnomes
+reads the complete file once to identify the exact copy used. During large
+submissions, periodic messages report progress through the subject list.
+}
 \examples{
   \dontrun{
     # Assuming you have a valid project configuration list named `study_config`

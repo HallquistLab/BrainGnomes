@@ -1,7 +1,13 @@
 # BrainGnomes 0.9-2
 
-Released 2026-08-31
+Released 2026-09-01
 
+* Make `run_project()` explain its pre-submission work in plain language,
+  including subject discovery, run-record creation, and the first full read of
+  a large container file. Large cohort submissions now report bounded progress
+  through the subject list, and explicit subject filters are applied before
+  session directories are inspected so small requested subsets do not scan the
+  full project tree.
 * Extend the established `setup_project()` -> `run_project()` workflow across the
   complete R and command-line lifecycle without adding required setup steps.
   Optional inspection tooling now provides non-mutating configuration validation,
