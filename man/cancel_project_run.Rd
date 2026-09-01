@@ -4,7 +4,7 @@
 \alias{cancel_project_run}
 \title{Cancel queued or running jobs from one run}
 \usage{
-cancel_project_run(input, run_id = "latest", dry_run = FALSE)
+cancel_project_run(input, run_id = "latest", dry_run = TRUE)
 }
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}

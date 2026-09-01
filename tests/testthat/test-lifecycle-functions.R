@@ -203,7 +203,7 @@ test_that("tracked run APIs summarize, diagnose, locate logs, and preview cancel
   expect_equal(diagnosis$failures$job_id, "81001")
   expect_equal(diagnosis$logs$path, log_file)
 
-  cancellation <- cancel_project_run(fixture$cfg, run_id, dry_run = TRUE)
+  cancellation <- cancel_project_run(fixture$cfg, run_id)
   expect_equal(cancellation$job_id, "81002")
   expect_equal(cancellation$status, "would_cancel")
   expect_equal(cancellation$command, "scancel 81002")
@@ -218,11 +218,30 @@ test_that("retry dry runs derive a force plan from failed jobs", {
     job_name = "fmriprep_sub-01", sequence_id = "retry-source",
     n_nodes = 1, n_cpus = 2, status = "FAILED", scheduler = "slurm"
   ))
-  retry <- retry_project_run(fixture$cfg, "retry-source", dry_run = TRUE)
+  retry <- retry_project_run(fixture$cfg, "retry-source")
   expect_s3_class(retry, "bg_project_plan")
   expect_identical(retry$request$steps, "fmriprep")
   expect_true(retry$request$force)
   expect_identical(retry$request$subject_filter, "01")
+})
+
+test_that("retry previews preserve stream names containing underscores", {
+  jobs <- data.frame(
+    job_name = c(
+      "postprocess_rest_clean_sub-01_ses-A",
+      "postprocess_rest_clean_sentinel",
+      "extract_rois_schaefer_task_sub-01_ses-A"
+    ),
+    status = rep("FAILED", 3L),
+    stringsAsFactors = FALSE
+  )
+
+  request <- BrainGnomes:::retry_request_from_jobs(jobs)
+
+  expect_setequal(request$steps, c("postprocess", "extract_rois"))
+  expect_identical(request$postprocess_streams, "rest_clean")
+  expect_identical(request$extract_streams, "schaefer_task")
+  expect_identical(request$subject_filter, "01")
 })
 
 test_that("submitted retries record their source run", {
@@ -243,7 +262,7 @@ test_that("submitted retries record their source run", {
     .package = "BrainGnomes"
   )
   expect_identical(
-    retry_project_run(fixture$cfg, "retry-parent"),
+    retry_project_run(fixture$cfg, "retry-parent", dry_run = FALSE),
     "submitted"
   )
   expect_identical(captured_context$interface, "retry")

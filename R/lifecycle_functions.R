@@ -1117,7 +1117,7 @@ print.bg_project_diagnosis <- function(x, ...) {
 #' }
 #' @seealso [get_run_jobs()] to inspect current job states before cancellation.
 #' @export
-cancel_project_run <- function(input, run_id = "latest", dry_run = FALSE) {
+cancel_project_run <- function(input, run_id = "latest", dry_run = TRUE) {
   checkmate::assert_flag(dry_run)
   scfg <- project_config_from_input(input)
   resolved <- resolve_run_id(scfg, run_id)
@@ -1163,8 +1163,24 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
   stage <- stage[keep]
   subjects <- regmatches(failed$job_name, regexpr("(?<=sub-)[^_]+", failed$job_name, perl = TRUE))
   subjects[subjects == ""] <- NA_character_
-  pp <- regmatches(failed$job_name, regexpr("(?<=^postprocess_)[^_]+", failed$job_name, perl = TRUE))
-  ex <- regmatches(failed$job_name, regexpr("(?<=^extract_rois_)[^_]+", failed$job_name, perl = TRUE))
+  stream_from_job_name <- function(job_name, prefix) {
+    marker <- paste0(prefix, "_")
+    if (!startsWith(job_name, marker)) return("")
+    value <- substring(job_name, nchar(marker) + 1L)
+    value <- sub("_sub-.*$", "", value)
+    if (identical(prefix, "postprocess")) {
+      value <- sub("_(sentinel|array)$", "", value)
+    }
+    if (!nzchar(value)) "" else value
+  }
+  pp <- vapply(
+    failed$job_name, stream_from_job_name, character(1),
+    prefix = "postprocess"
+  )
+  ex <- vapply(
+    failed$job_name, stream_from_job_name, character(1),
+    prefix = "extract_rois"
+  )
   list(
     steps = unique(stage),
     subject_filter = unique(subjects[!is.na(subjects)]),
@@ -1210,7 +1226,7 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
 #'   [get_run_provenance()] to compare the original and retry runs.
 #' @export
 retry_project_run <- function(input, run_id = "latest", include_blocked = FALSE,
-                              dry_run = FALSE) {
+                              dry_run = TRUE) {
   checkmate::assert_flag(include_blocked)
   checkmate::assert_flag(dry_run)
   scfg <- project_config_from_input(input)

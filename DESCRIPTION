@@ -1,7 +1,7 @@
 Package: BrainGnomes
 Title: HPC Workflows for Functional MRI Preprocessing and Analysis
 Version: 0.9-2
-Date: 2026-08-30
+Date: 2026-08-31
 Authors@R: 
     person("Michael", "Hallquist", email="michael.hallquist@gmail.com", role = c("aut", "cre"))
 Description: Configures, submits, and monitors reproducible functional magnetic
@@ -24,7 +24,6 @@ LazyData: yes
 LazyLoad: yes
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports:
     checkmate,
     cli,
@@ -38,6 +37,7 @@ Imports:
     lubridate,
     lgr,
     matrixStats,
+    multitaper,
     reticulate,
     Rcpp,
     RNifti,
@@ -46,7 +46,6 @@ Imports:
     uuid,
     yaml
 Suggests: 
-    multitaper,
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
@@ -55,3 +54,4 @@ Config/testthat/edition: 3
 LinkingTo: Rcpp, RNifti, RcppArmadillo
 URL: https://hallquistlab.github.io/BrainGnomes/
 VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0

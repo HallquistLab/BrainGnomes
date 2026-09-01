@@ -1281,11 +1281,17 @@ test_that("setup_project_directories warns and remediates unwritable directories
 
   cache <- new.env(parent = emptyenv())
 
-  # Should warn about unwritable directory and attempt remediation
-  expect_warning(
+  # Capture both the remediation notice and any follow-up warning when the
+  # current user cannot change permissions in the test environment.
+  observed_warnings <- character()
+  withCallingHandlers(
     setup_project_directories(scfg, check_cache = cache),
-    "not user-writable"
+    warning = function(w) {
+      observed_warnings <<- c(observed_warnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
   )
+  expect_true(any(grepl("not user-writable", observed_warnings, fixed = TRUE)))
 
   # proj_dir should be in cache (it was writable)
   proj_key <- norm_path_raw(proj_dir, mustWork = FALSE)

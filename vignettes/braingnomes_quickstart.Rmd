@@ -29,7 +29,13 @@ Full pipeline submission is designed for HPC clusters using SLURM or TORQUE/PBS.
 
 BrainGnomes identifies data for all subjects (and sessions) in your DICOM and BIDS folders, then determines which subjects need to be processed. It processes data by looping over subjects, submitting jobs for each subject and processing step to the HPC scheduler. This ensures that each subject is processed fully (unless a crash occurs).
 
-![BrainGnomes flow](braingnomes_flow.png){#id .class width=70%}
+```{r quickstart-flow, echo=FALSE, out.width="70%", fig.align="center", fig.alt="BrainGnomes pipeline flow"}
+knitr::include_graphics(system.file(
+  "extdata", "braingnomes_flow.png",
+  package = "BrainGnomes",
+  mustWork = TRUE
+))
+```
 
 
 ## Running a subset of subject or a subset of processing steps

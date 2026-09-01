@@ -8,7 +8,7 @@ retry_project_run(
   input,
   run_id = "latest",
   include_blocked = FALSE,
-  dry_run = FALSE
+  dry_run = TRUE
 )
 }
 \arguments{
