@@ -8,7 +8,7 @@ requests to the configured scheduler, so preview the commands first.
 ## Usage
 
 ``` r
-cancel_project_run(input, run_id = "latest", dry_run = FALSE)
+cancel_project_run(input, run_id = "latest", dry_run = TRUE)
 ```
 
 ## Arguments

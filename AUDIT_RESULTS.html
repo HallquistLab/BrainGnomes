@@ -590,6 +590,49 @@ Status: OK
 <p>The source-control/reproducibility gate identified earlier in this report is therefore complete. No unresolved F01-F15 implementation or artifact blocker remains for the 0.9 tag.</p>
 </div>
 </div>
+<div class="section level2">
+<h2 id="braingnomes-09-2-release-audit">BrainGnomes 0.9-2 release audit<a class="anchor" aria-label="anchor" href="#braingnomes-09-2-release-audit"></a></h2>
+<p><strong>Status:</strong> Release candidate prepared and verified on 2026-08-31.</p>
+<div class="section level3">
+<h3 id="scope-and-findings">Scope and findings<a class="anchor" aria-label="anchor" href="#scope-and-findings"></a></h3>
+<ul><li>Audited the eleven commits after tag <code>0.9</code> through <code>7d750da</code>, together with the release-candidate corrections made during this audit. The reviewed delta spans 98 tracked paths and covers the 0.9-1 safety fixes, postprocessing validation and orchestration, smoothness recalibration, project lifecycle and run provenance, atomic guided saves, fMRIPrep 25.2.5 E2E evidence, TemplateFlow transform preservation, <code><a href="reference/image_quantile.html">image_quantile()</a></code> memory reduction, and motion-QC guidance.</li>
+<li>Confirmed that the established <code><a href="reference/setup_project.html">setup_project()</a></code> -&gt; <code><a href="reference/run_project.html">run_project()</a></code> workflow remains the primary user journey. The validation, planning, provenance, status, retry, and cancellation interfaces are additive; CLI submission and cancellation remain guarded. The package has no graphical UI surface.</li>
+<li>Reviewed the committed fMRIPrep 25.2.5 E2E record. Its 28 postprocessing checks passed, and the two release-qualification issues it identified are resolved in this candidate: the transform-preservation patch is committed and <code>multitaper</code> is now a required runtime dependency. The external Slurm/container E2E was not rerun during this local release audit.</li>
+<li>Accepted deterministic distributed sampling in image validators as an intentional performance and memory tradeoff. The public documentation now states the exact default sampling limits and retains an exhaustive option where supported.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="release-candidate-corrections">Release-candidate corrections<a class="anchor" aria-label="anchor" href="#release-candidate-corrections"></a></h3>
+<ul><li>Make the R recovery APIs match their documented safe behavior: <code><a href="reference/retry_project_run.html">retry_project_run()</a></code> and <code><a href="reference/cancel_project_run.html">cancel_project_run()</a></code> now default to preview mode, while an explicit <code>dry_run = FALSE</code> is required for scheduler mutation.</li>
+<li>Preserve complete postprocessing and ROI-extraction stream names, including underscores, when reconstructing retry requests from scheduler job names.</li>
+<li>Promote <code>multitaper</code> from <code>Suggests</code> to <code>Imports</code>, because strict temporal filter validation uses it in ordinary runtime execution.</li>
+<li>Update <code>NEWS.md</code>, generated lifecycle and mask-validation help, the README tagged-install example, the fMRIPrep E2E disposition, and release metadata. <code>NEWS.md</code> remains the repository’s canonical changelog; no separate <code>CHANGELOG</code> file is maintained.</li>
+<li>Fix a source-package-only Quickstart asset failure. The pipeline graphic now ships from <code>inst/extdata</code>, is loaded through <code><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file()</a></code>, retains its rendered placement, and has explicit alternative text. This avoids both a missing installed-vignette asset and an <code>inst/doc</code> packaging note.</li>
+<li>Make the permission preflight test collect and assert all expected warnings, preventing environment-dependent warning leakage without weakening the production permission checks.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-and-ux-verification">Documentation and UX verification<a class="anchor" aria-label="anchor" href="#documentation-and-ux-verification"></a></h3>
+<ul><li>
+<code>DESCRIPTION</code> declares <code>Version: 0.9-2</code> and <code>Date: 2026-08-31</code>; <code>NEWS.md</code> declares the same release and date; the README installs tag <code>0.9-2</code>.</li>
+<li>Every <code>vignettes/*.Rmd</code> file has a literal <code>DD Mon YYYY</code> date. The edited Quickstart is dated <code>31 Aug 2026</code>; every clean vignette date matches its most recent Git commit date.</li>
+<li>The Quickstart rendered successfully after the asset relocation, and its documentation contract passed 119 assertions. Existing setup/run prompts, dry-run output, command help, and optional recovery guidance remain covered by the complete test suite.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="verification-evidence-1">Verification evidence<a class="anchor" aria-label="anchor" href="#verification-evidence-1"></a></h3>
+<p>The complete development suite passed:</p>
+<pre class="text"><code>[ FAIL 0 | WARN 0 | SKIP 2 | PASS 2046 ]</code></pre>
+<p>The skips are intentional: one requires the opt-in Slurm/TemplateFlow integration environment, and one compares CLI exports against the older package installed in the developer library. The installed-package check runs the candidate exports and passed.</p>
+<p>The final vignette-enabled source archive passed <code>R CMD check --as-cran</code> through installation, examples, compiled-code checks, all tests, and vignette rebuilding:</p>
+<pre class="text"><code>0 errors | 1 warning | 1 note</code></pre>
+<p>The warning is the absence of host utility <code>qpdf</code>; the note is that the sandbox could not verify external current time. With the developer’s global Makevars disabled, all package compilation-flag checks passed. Neither finding comes from the BrainGnomes source.</p>
+<p>The persistent release artifact is <code>BrainGnomes_0.9-2.tar.gz</code> (1,115,197 bytes), with SHA-256:</p>
+<pre class="text"><code><span><span class="va">bf322c22bef3ecd59eaedd288ec14e8a61935015cf93e26d6ee62a5973f23190</span></span></code></pre>
+<p>Tarball inspection found 363 entries, all eight R Markdown vignettes, release metadata, and <code>inst/extdata/braingnomes_flow.png</code>. It contained zero audit, Codex, cache, local-data, temporary-tree, nested-tarball, or misplaced <code>inst/doc/braingnomes_flow.png</code> entries.</p>
+</div>
+<div class="section level3">
+<h3 id="release-disposition">Release disposition<a class="anchor" aria-label="anchor" href="#release-disposition"></a></h3>
+<p>No unresolved implementation, documentation, CLI/UX, test, vignette, or artifact blocker remains for 0.9-2. The candidate source changes still need to be committed before creating the <code>0.9-2</code> tag; this audit did not publish or tag the release.</p>
+</div>
+</div>
 </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

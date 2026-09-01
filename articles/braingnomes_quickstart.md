@@ -53,9 +53,8 @@ processed. It processes data by looping over subjects, submitting jobs
 for each subject and processing step to the HPC scheduler. This ensures
 that each subject is processed fully (unless a crash occurs).
 
-![BrainGnomes flow](braingnomes_flow.png)
-
-BrainGnomes flow
+![BrainGnomes pipeline
+flow](../../../_temp/Library/BrainGnomes/extdata/braingnomes_flow.png)
 
 ### Running a subset of subject or a subset of processing steps
 

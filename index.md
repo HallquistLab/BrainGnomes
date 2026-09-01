@@ -68,7 +68,7 @@ development version, supply its tag with `ref`. For example:
 
 ``` r
 
-remotes::install_github("HallquistLab/BrainGnomes", ref = "0.9")
+remotes::install_github("HallquistLab/BrainGnomes", ref = "0.9-2")
 ```
 
 See the [available

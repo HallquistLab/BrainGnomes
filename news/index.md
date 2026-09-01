@@ -2,7 +2,7 @@
 
 ## BrainGnomes 0.9-2
 
-Released 2026-08-30
+Released 2026-08-31
 
 - Extend the established
   [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
@@ -33,6 +33,13 @@ Released 2026-08-30
   retry, submit it as a separate new run, decide whether to include
   downstream blocked work, and safely preview cancellation. Function and
   CLI help use the same plain-language behavior and safety guidance.
+- Make the R recovery APIs preview-first as well:
+  [`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
+  and
+  [`cancel_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/cancel_project_run.md)
+  now default to `dry_run = TRUE`, and require an explicit
+  `dry_run = FALSE` to submit or cancel work. Retry planning preserves
+  postprocessing and extraction stream names containing underscores.
 - Add an executable motion-QC vignette for
   [`calculate_motion_outliers()`](https://hallquistlab.github.io/BrainGnomes/reference/calculate_motion_outliers.md).
   It demonstrates raw and filtered FD summaries, strict threshold
@@ -62,16 +69,28 @@ Released 2026-08-30
 - Allow Slurm and PBS fsaverage setup to copy with GNU `cp` when newer
   fMRIPrep containers do not provide `rsync`, while retaining the
   existing `rsync` path when present.
-- Strengthen postprocessing validation so masking is replayed exactly,
-  interpolation preserves retained volumes and matches sampled
-  natural-spline values, removed volumes match the censor vector in
-  order, and AROMA/confound regression samples are deterministic,
-  pre-selected, and spatially balanced across image resolutions.
+- Strengthen postprocessing validation so masking is replayed exactly on
+  32 deterministic volumes distributed across the complete run (or every
+  volume in shorter runs), interpolation preserves retained volumes and
+  matches sampled natural-spline values, removed volumes match the
+  censor vector in order, and AROMA/confound regression samples are
+  deterministic, pre-selected, and spatially balanced across image
+  resolutions.
 - Make temporal-filter validation deterministic and pre-selected,
   require finite per-voxel stopband and passband evidence, verify that
   no-noise-IC AROMA output is actually unchanged, reject wholly invalid
   AROMA component requests, and fail every image validator when spatial
   NIfTI grid metadata change unexpectedly.
+- Install `multitaper` as a required runtime dependency so strict
+  temporal-filter validation is available in ordinary package
+  installations. Preserve target qform/sform matrices and
+  coordinate-system codes when resampling TemplateFlow masks, and
+  automatically rebuild incompatible cached masks rather than failing
+  later validation.
+- Reduce peak memory use in
+  [`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md)
+  by avoiding a second full image copy and whole-image inclusion bitmap;
+  masked quantile values and numerical behavior are unchanged.
 - Route postprocessing checks through a common validation runner:
   validator errors now obey the configured continue/stop policy, reused
   intermediates are checked, structured results are retained in a JSON

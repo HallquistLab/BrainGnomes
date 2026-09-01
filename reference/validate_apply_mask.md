@@ -2,8 +2,8 @@
 
 Replays the masking operation in volume chunks and checks that the
 post-mask image equals the pre-mask image inside the mask and is exactly
-zero outside it. Voxels inside the mask that remain zero for the full
-run are reported.
+zero outside it. Voxels inside the mask that remain zero across the
+compared volumes are reported.
 
 ## Usage
 
@@ -13,6 +13,7 @@ validate_apply_mask(
   post_file,
   mask_file,
   tolerance = 1e-05,
+  max_volumes = 32L,
   chunk_size = 100L
 )
 ```
@@ -35,6 +36,13 @@ validate_apply_mask(
 
   Maximum relative numerical error allowed inside the mask.
 
+- max_volumes:
+
+  Maximum number of timepoints compared. The default uses 32 timepoints
+  deterministically distributed over the complete run, including the
+  first and last. Runs with 32 or fewer timepoints use every volume. Use
+  `Inf` for exhaustive replay.
+
 - chunk_size:
 
   Number of volumes compared at a time.
@@ -49,12 +57,13 @@ Attributes:
 - `external_violations`: Integer count of voxels outside mask with
   non-zero signal.
 
-- `internal_zeros`: Integer count of voxels inside mask that are all
-  zero.
+- `internal_zeros`: Integer count of voxels inside mask that are zero in
+  all compared volumes.
 
 ## Details
 
-Validation requires the complete post-mask image to equal the exact
+Validation requires the sampled post-mask volumes to equal the exact
 expected transform within `tolerance`. This prevents an all-zero or
 otherwise altered in-mask output from passing merely because nothing
-leaked outside the mask.
+leaked outside the mask. Spatial-grid and mask-validity checks remain
+exhaustive.
