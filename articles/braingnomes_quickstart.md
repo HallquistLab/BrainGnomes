@@ -609,35 +609,47 @@ with the project but scheduled independently through
 [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md).
 
 The returned run handle has a stable run ID connecting tracking rows,
-logs, diagnosis, provenance, retry, and cancellation. Before the first
-scheduler submission, BrainGnomes writes a run-specific provenance
-bundle beneath `<log_directory>/runs/<run_id>/`. It captures the
-resolved request and subjects, exact configuration, modeled resources
-and dependencies, software and host details, scheduler identity, and
-content fingerprints for containers, heuristics, licenses, atlases,
-masks, and other selected execution files.
+logs, inspection, diagnosis, provenance, retry, and cancellation. Before
+the first scheduler submission, BrainGnomes writes a run-specific
+provenance bundle beneath `<log_directory>/runs/<run_id>/`. It captures
+the resolved request and subjects, exact configuration, modeled
+resources and dependencies, software and host details, scheduler
+identity, and content fingerprints for containers, heuristics, licenses,
+atlases, masks, and other selected execution files.
 
 ``` r
 
-get_project_runs(scfg)
-get_run_jobs(scfg, run$run_id)
+status <- inspect_project(scfg)
+status$stages
+status$subjects
+
+# Restrict the same views to this submission.
+run_status <- inspect_project(scfg, run_id = run$run_id)
 provenance <- get_run_provenance(scfg, run$run_id)
 find_run_logs(scfg, run$run_id, failed_only = TRUE)
 ```
 
 ### Step 3: Diagnose when needed
 
-Diagnosis is not a routine prerequisite. Use the established interactive
-browser when a run needs investigation:
+Diagnosis is not a routine prerequisite. Use
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
+when current failed, blocked, or cancelled work needs investigation:
 
 ``` r
 
-diagnose_pipeline(scfg)
+diagnosis <- diagnose_project(scfg)
+diagnosis$failures
+diagnosis$logs
 ```
 
-For scripts and automated reporting,
-`diagnose_project(scfg, run$run_id)` returns a non-interactive diagnosis
-object.
+Supply a run ID for a historical post-mortem. The guided dependency and
+log browser is available through `interactive = TRUE`:
+
+``` r
+
+diagnose_project(scfg, run_id = run$run_id)
+diagnose_project(scfg, run_id = run$run_id, interactive = TRUE)
+```
 
 ## Optional inspection and automation tools
 
@@ -714,16 +726,22 @@ run <- submit_project_plan(plan)
 
 ## Optional run operations
 
-Each call to
-[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-has a run ID. Use that ID to inspect the jobs and logs from one
-submission without mixing them up with earlier runs. If a run fails,
-diagnose the failure and correct its cause before retrying it.
+By default,
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+integrates the newest attempt for every tracked subject, stage, and
+stream across runs. Use a run ID when you specifically want one
+submission. If work fails, diagnose the failure and correct its cause
+before retrying it.
 
 ``` r
 
-# Summarize failed, blocked, and cancelled jobs and locate their logs.
-diagnosis <- diagnose_project(scfg, run$run_id)
+# Inspect current project progress, then diagnose unresolved failures.
+status <- inspect_project(scfg)
+diagnosis <- diagnose_project(status)
+
+# Select one run when preparing a run-specific retry.
+run_status <- inspect_project(scfg, run_id = run$run_id)
+diagnosis <- diagnose_project(scfg, run_id = run$run_id)
 failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
 
 # Review what would be retried. This does not submit anything.
@@ -779,6 +797,8 @@ BrainGnomes run /project/my_study/run.yaml
 Run operations support observation and recovery:
 
 ``` bash
+BrainGnomes status /project/my_study
+BrainGnomes status /project/my_study --view=subjects
 BrainGnomes status /project/my_study --run=latest --watch
 BrainGnomes provenance /project/my_study --run=latest --format=json
 BrainGnomes logs /project/my_study --run=latest --failed-only --tail=50
@@ -819,6 +839,7 @@ stays synchronized with `inst/BrainGnomes`:
     Typical workflow:
       setup_project <project_name> <project_directory> [--non-interactive]
       run_project <project_directory|config.yaml> [run options]
+      status <project_directory|config.yaml> [--run=<id|latest>] [--watch]
       diagnose <project_directory|config.yaml> [--interactive]
 
     Optional inspection and automation:
@@ -829,7 +850,6 @@ stays synchronized with `inst/BrainGnomes`:
       plan <project_directory|config.yaml> [run options] [--output=<plan.yaml>]
 
     Run operations:
-      status <project_directory|config.yaml> [--run=<id|latest>|--runs] [--watch]
       provenance <project_directory|config.yaml> [--run=<id|latest>] [--format=table|json]
       logs <project_directory|config.yaml> [--run=<id|latest>] [--failed-only]
       retry <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes

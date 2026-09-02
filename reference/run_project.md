@@ -93,8 +93,19 @@ run UUID, scheduler job IDs known at submission time, and the path to
 the complete run provenance record. Dry runs invisibly return `TRUE`
 after printing the resolved plan.
 
+## Details
+
+Before submission, BrainGnomes reports when it is checking project
+folders, finding matching subjects, and saving the run record. The first
+use of a large container in a project may take longer because
+BrainGnomes reads the complete file once to identify the exact copy
+used. During large submissions, periodic messages report progress
+through the subject list.
+
 ## See also
 
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+to monitor current progress;
 [`get_run_provenance()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_provenance.md)
 to read the recorded configuration, execution context, and artifact
 fingerprints;

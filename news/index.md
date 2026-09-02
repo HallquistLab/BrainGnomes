@@ -2,7 +2,31 @@
 
 ## BrainGnomes 0.9-2
 
-Released 2026-08-31
+Released 2026-09-02
+
+- Add
+  [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+  as the single front door for database-backed project and run
+  monitoring. Its compact dashboard integrates the newest attempt for
+  each work unit across runs, while ordinary data frames expose project,
+  run, stage, subject, subject-stage, attempt, and raw-job resolutions.
+  Consolidate post-mortem investigation in
+  [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md),
+  add matching CLI status views, and deprecate the overlapping
+  [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md),
+  [`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md),
+  and
+  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  entry points.
+
+- Make
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
+  explain its pre-submission work in plain language, including subject
+  discovery, run-record creation, and the first full read of a large
+  container file. Large cohort submissions now report bounded progress
+  through the subject list, and explicit subject filters are applied
+  before session directories are inspected so small requested subsets do
+  not scan the full project tree.
 
 - Extend the established
   [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
@@ -18,6 +42,7 @@ Released 2026-08-31
   failed-job retry planning, and guarded scheduler cancellation support
   observation and recovery. Flywheel controller snapshots are now
   run-specific so concurrent submissions cannot overwrite one another.
+
 - Record complete provenance before each run begins submission. Every
   run now retains its resolved request and subject scope, exact
   configuration, planned resources and dependencies,
@@ -27,12 +52,14 @@ Released 2026-08-31
   and the `BrainGnomes provenance` command expose the record together
   with current job-tracking rows; plan and retry origins are retained
   explicitly.
+
 - Expand applied-user recovery documentation around the established
   workflow. The Quickstart and diagnosis guide now show how to select
   one run, inspect its failed jobs, logs, and provenance, preview a
   retry, submit it as a separate new run, decide whether to include
   downstream blocked work, and safely preview cancellation. Function and
   CLI help use the same plain-language behavior and safety guidance.
+
 - Make the R recovery APIs preview-first as well:
   [`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
   and
@@ -40,12 +67,14 @@ Released 2026-08-31
   now default to `dry_run = TRUE`, and require an explicit
   `dry_run = FALSE` to submit or cancel work. Retry planning preserves
   postprocessing and extraction stream names containing underscores.
+
 - Add an executable motion-QC vignette for
   [`calculate_motion_outliers()`](https://hallquistlab.github.io/BrainGnomes/reference/calculate_motion_outliers.md).
   It demonstrates raw and filtered FD summaries, strict threshold
   interpretation, unavailable-filter handling, run-level QC/exclusion
   exports, and the boundary between interactive QC summaries and
   postprocessing scrubbing.
+
 - Make guided
   [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
   and
@@ -53,6 +82,7 @@ Released 2026-08-31
   saves use the same atomic configuration writer as non-interactive
   lifecycle tooling after the user confirms replacement of an existing
   file.
+
 - Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
   distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask
   conditions. Validation now enforces the selected detrending-plus-MAD
@@ -62,13 +92,16 @@ Released 2026-08-31
   input-mask, kernel-size, voxel-size, or sampling support. Calibration
   retains the full-run SUSAN threshold, temporal mean, and extents while
   estimating smoothness from the selected timepoints.
+
 - Validate the promoted 3–8 mm masked-SUSAN models on independent
   fMRIPrep 25.2.5 derivatives and a 96-volume postprocessing E2E fixture
   drawn across the complete run. The 10 mm stress kernel remains outside
   the supported calibration range.
+
 - Allow Slurm and PBS fsaverage setup to copy with GNU `cp` when newer
   fMRIPrep containers do not provide `rsync`, while retaining the
   existing `rsync` path when present.
+
 - Strengthen postprocessing validation so masking is replayed exactly on
   32 deterministic volumes distributed across the complete run (or every
   volume in shorter runs), interpolation preserves retained volumes and
@@ -76,21 +109,25 @@ Released 2026-08-31
   censor vector in order, and AROMA/confound regression samples are
   deterministic, pre-selected, and spatially balanced across image
   resolutions.
+
 - Make temporal-filter validation deterministic and pre-selected,
   require finite per-voxel stopband and passband evidence, verify that
   no-noise-IC AROMA output is actually unchanged, reject wholly invalid
   AROMA component requests, and fail every image validator when spatial
   NIfTI grid metadata change unexpectedly.
+
 - Install `multitaper` as a required runtime dependency so strict
   temporal-filter validation is available in ordinary package
   installations. Preserve target qform/sform matrices and
   coordinate-system codes when resampling TemplateFlow masks, and
   automatically rebuild incompatible cached masks rather than failing
   later validation.
+
 - Reduce peak memory use in
   [`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md)
   by avoiding a second full image copy and whole-image inclusion bitmap;
   masked quantile values and numerical behavior are unchanged.
+
 - Route postprocessing checks through a common validation runner:
   validator errors now obey the configured continue/stop policy, reused
   intermediates are checked, structured results are retained in a JSON

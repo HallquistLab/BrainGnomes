@@ -25,9 +25,9 @@
 - [`derive_reference_core()`](https://hallquistlab.github.io/BrainGnomes/reference/derive_reference_core.md)
   : Derive a conservative functional reference core from 4D BOLD data
 - [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  : Interactively investigate jobs and logs from pipeline runs
+  : Deprecated interactive pipeline diagnosis
 - [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
-  : Summarize failures and logs for one run without prompts
+  : Diagnose failed project work
 - [`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
   : Project preflight shorthand
 - [`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md)
@@ -72,6 +72,8 @@
 - [`insert_tracked_job()`](https://hallquistlab.github.io/BrainGnomes/reference/insert_tracked_job.md)
   : Internal helper function to insert a job into the tracking SQLite
   database
+- [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+  : Inspect current project progress
 - [`lmfit_residuals_4d()`](https://hallquistlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md)
   : Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear
   Models

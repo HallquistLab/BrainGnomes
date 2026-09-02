@@ -24,7 +24,7 @@ plan_project() before submission; calling plan_project() first is optional."></h
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a></li>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
-    <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
+    <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Inspecting and Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
@@ -44,7 +44,7 @@ plan_project() before submission; calling plan_project() first is optional."></h
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Run the processing pipeline</h1>
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/0.9-2/R/run_project.R" class="external-link"><code>R/run_project.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/R/run_project.R" class="external-link"><code>R/run_project.R</code></a></small>
       <div class="d-none name"><code>run_project.Rd</code></div>
     </div>
 
@@ -134,9 +134,18 @@ the complete run provenance record. Dry runs invisibly return <code>TRUE</code> 
 printing the resolved plan.</p>
     </div>
     <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Before submission, BrainGnomes reports when it is checking project
+folders, finding matching subjects, and saving the run record. The first
+use of a large container in a project may take longer because BrainGnomes
+reads the complete file once to identify the exact copy used. During large
+submissions, periodic messages report progress through the subject list.</p>
+    </div>
+    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="get_run_provenance.html">get_run_provenance()</a></code> to read the recorded configuration,
-execution context, and artifact fingerprints; <code><a href="plan_project.html">plan_project()</a></code> for optional
+    <div class="dont-index"><p><code><a href="inspect_project.html">inspect_project()</a></code> to monitor current progress;
+<code><a href="get_run_provenance.html">get_run_provenance()</a></code> to read the recorded configuration, execution
+context, and artifact fingerprints; <code><a href="plan_project.html">plan_project()</a></code> for optional
 inspection or persistence of the resolved request; <code><a href="run_bids_validation.html">run_bids_validation()</a></code>
 to submit the BIDS validation configured with the project;
 <code><a href="diagnose_project.html">diagnose_project()</a></code> and <code><a href="retry_project_run.html">retry_project_run()</a></code> for optional recovery after

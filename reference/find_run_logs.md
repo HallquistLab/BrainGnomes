@@ -20,9 +20,8 @@ find_run_logs(input, run_id = "latest", failed_only = FALSE)
 
   Run ID returned by
   [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-  or
-  [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md).
-  Use `"latest"` for the most recently recorded run.
+  or listed in `inspect_project(input)$runs`. Use `"latest"` for the
+  most recently recorded run.
 
 - failed_only:
 

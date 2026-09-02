@@ -30,3 +30,15 @@ A data.frame with columns indicating completion status and times for
 each enabled step. ROI-extraction streams use columns named
 `extract_rois_<stream>_complete` and `extract_rois_<stream>_time`,
 keeping them distinct from postprocessing streams with the same name.
+
+## Details
+
+This function verifies completion markers on disk. Use
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+instead to inspect queued, running, failed, blocked, and completed jobs
+recorded in the tracking database.
+
+## See also
+
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+for scheduler-lifecycle status.

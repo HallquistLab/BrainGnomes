@@ -20,7 +20,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a></li>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
-    <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
+    <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Inspecting and Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
@@ -40,7 +40,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Get processing status for a single subject</h1>
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/0.9-2/R/status_functions.R" class="external-link"><code>R/status_functions.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/R/status_functions.R" class="external-link"><code>R/status_functions.R</code></a></small>
       <div class="d-none name"><code>get_subject_status.Rd</code></div>
     </div>
 
@@ -76,6 +76,16 @@ subject's directory are returned.</p></dd>
 each enabled step. ROI-extraction streams use columns named
 <code>extract_rois_&lt;stream&gt;_complete</code> and <code>extract_rois_&lt;stream&gt;_time</code>, keeping
 them distinct from postprocessing streams with the same name.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>This function verifies completion markers on disk. Use
+<code><a href="inspect_project.html">inspect_project()</a></code> instead to inspect queued, running, failed, blocked,
+and completed jobs recorded in the tracking database.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="inspect_project.html">inspect_project()</a></code> for scheduler-lifecycle status.</p></div>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

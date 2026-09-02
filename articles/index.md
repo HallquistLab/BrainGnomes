@@ -6,7 +6,7 @@
   Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.md):
 - [Building Singularity containers for
   BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/building_containers.md):
-- [Diagnosing Pipeline
+- [Inspecting and Diagnosing Pipeline
   Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md):
 - [Extracting ROI Timeseries and
   Connectivity](https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.md):

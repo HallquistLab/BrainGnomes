@@ -1,205 +1,189 @@
-# Diagnosing Pipeline Runs
+# Inspecting and Diagnosing Pipeline Runs
 
 ## Overview
 
-Running an fMRI pipeline with BrainGnomes typically means launching many
-jobs: BIDS conversion, MRIQC, fMRIPrep, ICA-AROMA, one or more
-postprocessing streams, and optional ROI extraction. Some jobs must wait
-for earlier jobs to finish. Each job writes logs and completion markers,
-and a project can have many runs. Without a run-specific view, it is
-hard to answer even basic questions:
+BrainGnomes separates routine progress inspection from failure
+diagnosis:
 
-- What already succeeded?
-- What is still running or queued?
-- What failed, and was it the *root cause* or just downstream of another
-  failure?
-- Where should I look next in the logs?
+- [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+  answers, “What is happening now?”
+- [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
+  answers, “What failed, and where are its logs?”
 
-BrainGnomes provides two useful levels of information:
-
-- [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
-  gives a project-wide table of step-level completion flags and times
-  for all subjects.
-- [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
-  focuses that same information on a single subject (and session),
-  making it easy to see where one subject is stuck.
-- [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md),
-  [`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md),
-  [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md),
-  and
-  [`find_run_logs()`](https://hallquistlab.github.io/BrainGnomes/reference/find_run_logs.md)
-  inspect one submitted run without prompts.
-- [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  provides the established interactive browser when you want to follow
-  job relationships and read logs step by step.
-
-This vignette walks through a practical workflow that starts with the
-high-level status summaries, narrows the problem to one run, and then
-shows how to inspect provenance, retry failed work, or cancel work that
-is still active.
-
-### Load the project
+Both functions use the project’s job-tracking database. Inspection does
+not contact the scheduler, submit work, or change project files.
 
 ``` r
 
 library(BrainGnomes)
-
-project_dir <- "/project/my_study"
-scfg <- load_project(project_dir)
+scfg <- load_project("/project/my_study")
 ```
 
-Loading a project validates its configuration without opening the setup
-wizard or changing the saved YAML file. This is the same configuration
-object used by
-[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-and the diagnosis functions below.
+## Inspect current project progress
+
+The default inspection integrates all tracked runs:
+
+``` r
+
+status <- inspect_project(scfg)
+status
+```
+
+The printed dashboard gives overall counts, stage/stream progress, and a
+bounded list of subjects that are active or need attention. Long
+tracking fields such as scheduler options, paths, and manifests remain
+available in the returned object but are not printed automatically.
+
+The object contains ordinary data frames at several resolutions:
+
+``` r
+
+status$overview
+status$stages
+status$subjects
+status$subject_stages
+status$runs
+status$attempts
+status$jobs
+```
+
+The same tables are available through
+[`summary()`](https://rdrr.io/r/base/summary.html):
+
+``` r
+
+summary(status)                         # one-row overview
+summary(status, by = "stage")
+summary(status, by = "subject")
+summary(status, by = "subject_stage")
+```
+
+Because these are data frames, ordinary R queries work without another
+API:
+
+``` r
+
+subset(status$subjects, status != "COMPLETED")
+subset(status$subject_stages, sub_id == "540296")
+subset(status$jobs, lifecycle_status %in% c("RUNNING", "QUEUED"))
+```
+
+### How status is integrated across runs
+
+Each subject/session/stage/stream combination is treated as a logical
+work unit. Related controller, array, and sentinel jobs are grouped into
+that unit. For current project status, BrainGnomes uses the **newest
+attempt** for every unit rather than the best status ever observed.
+
+Consequently, a successful retry supersedes an older failure, while a
+failed forced rerun is not hidden by an older success. Work omitted from
+a later partial retry retains its newest earlier state. Historical
+attempts remain available in `status$attempts` and `status$runs`.
+
+Project-wide inspection describes work represented in the tracking
+database. It does not invent a status for configured work that has never
+been submitted.
+
+### Interpreting statuses
+
+Raw database statuses are retained in `status$jobs$status`. Summarized
+views use friendlier lifecycle labels:
+
+- `COMPLETED`: all jobs in the work unit completed.
+- `RUNNING`: at least one job has started and no failure takes
+  precedence.
+- `QUEUED`: submitted work has not started.
+- `FAILED`: the work itself failed.
+- `BLOCKED`: the database records `FAILED_BY_EXT`, meaning required
+  upstream work failed.
+- `CANCELLED`: the work was cancelled.
+- `UNKNOWN`: the recorded state is missing or unrecognized.
+
+Counts are always retained alongside the convenience status, so mixed
+states remain visible.
 
 ## Choose the run you mean
 
-Every submitted
-[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-call returns a run handle. Its `run_id` is a stable label that connects
-the jobs, logs, diagnosis, and provenance from that submission.
+Use the run table to find historical IDs:
 
 ``` r
 
-run <- run_project(scfg)
-run_id <- run$run_id
+status$runs
+run_id <- status$runs$run_id[[1L]]
 ```
 
-In a later R session, list previous runs and copy the ID you want to
-inspect:
-
-``` r
-
-runs <- get_project_runs(scfg)
-runs
-run_id <- runs$run_id[[1]]
-```
-
-Most run-based functions also accept `run_id = "latest"`. That shortcut
-is convenient for inspection. For retry or cancellation, an explicit ID
-is safer because another submission could otherwise become the latest
-run.
-
-## Project-level triage with `get_project_status()`
-
-Start with a table of completion flags and times for all subjects:
-
-``` r
-
-status_df <- get_project_status(scfg)
-status_df
-summary(status_df)
-```
-
-Captured output (16 Feb 2026):
-
-    rows: 10 cols: 12
-
-    sub_id  bids_conversion_complete  mriqc_complete  fmriprep_complete  aroma_complete  task_complete
-    540294  TRUE                     TRUE            FALSE              FALSE           FALSE
-    540295  TRUE                     TRUE            FALSE              FALSE           FALSE
-    ...     ...                      ...             ...                ...             ...
-    540311  TRUE                     TRUE            FALSE              FALSE           FALSE
-
-    Summary:
-    step                       n_complete
-    bids_conversion_complete   10
-    mriqc_complete             10
-    fmriprep_complete           0
-    aroma_complete              0
-    task_complete               0
-
-This gives a quick pass/fail style view. In this run, BIDS conversion
-and MRIQC are complete for all subjects, while downstream steps are not
-yet complete.
-
-Under the hood,
-[`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
-and
-[`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md):
-
-- look in the project’s BIDS directory to discover which
-  subjects/sessions exist, and
-- scan each subject’s log directory for BrainGnomes `.complete` (and
-  related) marker files.
-
-From these filesystem markers, they derive strict `*_complete` flags and
-completion times for each enabled step.
-
-You can also scan log markers for explicit failures:
-
-``` r
-
-list.files(
-  scfg$metadata$log_directory,
-  pattern = "_fail$",
-  recursive = TRUE,
-  full.names = FALSE
-)
-```
-
-Captured output:
-
-    [1] "sub-540295/.fmriprep_sub-540295_fail"
-    [2] "sub-540300/.fmriprep_sub-540300_fail"
-    [3] "sub-540301/.fmriprep_sub-540301_fail"
-    [4] "sub-540302/.fmriprep_sub-540302_fail"
-    [5] "sub-540303/.aroma_sub-540303_fail"
-
-## Subject-level check with `get_subject_status()`
-
-To check one subject:
-
-``` r
-
-get_subject_status(scfg, "540296")
-```
-
-Captured output:
-
-      sub_id ses_id bids_conversion_complete bids_conversion_time mriqc_complete
-    1 540296   <NA>                     TRUE  2026-02-14 18:27:01           TRUE
-               mriqc_time fmriprep_complete fmriprep_time aroma_complete aroma_time
-    1 2026-02-15 04:00:02             FALSE          <NA>          FALSE       <NA>
-      task_complete task_time
-    1         FALSE      <NA>
-
-This is often the fastest way to answer, “Where is subject X stuck?”
+For retry or cancellation, an explicit run ID is safer than `"latest"`
+because another submission could become the newest run.
 
 ## Inspect one run without prompts
 
-Use
-[`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md)
-to see every tracked job in the selected run. The returned table
-includes the processing step, subject, scheduler job number, timing, and
-current status.
+Supply `"latest"` or an explicit ID to restrict every inspection view to
+one submission:
 
 ``` r
 
-jobs <- get_run_jobs(scfg, run_id)
-jobs[, c("job_id", "job_name", "status", "time_submitted", "time_ended")]
+latest <- inspect_project(scfg, run_id = "latest")
+selected <- inspect_project(scfg, run_id = run_id)
+
+selected$overview
+selected$subjects
+selected$subject_stages
+selected$jobs
 ```
 
-For a shorter failure-focused report, use
-[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md).
-It separates jobs that failed, were cancelled, or could not run because
-an earlier job failed, and it locates their output and error logs when
-those files are present.
+The older
+[`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md)
+and
+[`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md)
+functions remain as deprecated compatibility wrappers. New code should
+use `$runs` and `$jobs` from
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md).
+
+## Diagnose failures
+
+Routine monitoring belongs in
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md).
+When current work has failed, use
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
+to collect the unresolved job records and matching logs:
 
 ``` r
 
-diagnosis <- diagnose_project(scfg, run_id)
+diagnosis <- diagnose_project(scfg)
 diagnosis$failures
 diagnosis$logs
-
-# Or ask only for the log-file locations.
-failed_logs <- find_run_logs(scfg, run_id, failed_only = TRUE)
 ```
 
-Before deciding what to rerun, inspect the settings that produced the
-run:
+An existing inspection snapshot can be reused:
+
+``` r
+
+diagnosis <- diagnose_project(status)
+```
+
+For a historical post-mortem, select the run explicitly:
+
+``` r
+
+diagnosis <- diagnose_project(scfg, run_id = run_id)
+```
+
+The guided dependency and log browser is now reached through the same
+function:
+
+``` r
+
+diagnose_project(scfg, run_id = run_id, interactive = TRUE)
+```
+
+[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+remains temporarily as a deprecated compatibility wrapper for
+interactive diagnosis.
+
+## Inspect run provenance
+
+Before deciding what to rerun, inspect the settings and scope that
+produced the selected run:
 
 ``` r
 
@@ -209,180 +193,14 @@ provenance$execution$subjects
 provenance$configuration$snapshot_file
 ```
 
-The provenance record contains the resolved stages and subjects, a copy
-of the project configuration, requested computing resources, software
-and host details, and checksums that identify containers and other files
-that controlled the run. This makes it easier to answer, “What was
-different about this run?”
-
-## Interactive diagnosis with `diagnose_pipeline()`
-
-Running a full fMRI preprocessing + postprocessing pipeline generates
-many jobs, log files, and potential failure points. Manually chasing
-SLURM job IDs and log files quickly becomes unmanageable. The goal of
-[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-is to wrap all of this job-tracking information into a single,
-interactive view.
-
-Behind the scenes, every job submitted by
-[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-is recorded in the project’s job-tracking database. Each record stores:
-
-- the **run ID** (called a sequence ID in some older prompts and
-  records),
-- the **subject**, job name, scheduler ID, and parent/child
-  relationships,
-- timestamps (submitted, started, finished),
-- scheduler options and exit codes,
-- and a derived **status** (`COMPLETED`, `STARTED`, `QUEUED`, `FAILED`,
-  `FAILED_BY_EXT`).
-
-[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-reads this job-tracking database, reconstructs the job dependency tree,
-and then guides you through it interactively. The function returns that
-raw tree structure invisibly so you can also inspect it yourself:
-
-``` r
-
-tree <- diagnose_pipeline(scfg)
-print(tree)
-```
-
-Each node in `tree` corresponds to a single tracked job and includes its
-subject, status, scheduler metadata, and parent/child links. This is the
-same structure BrainGnomes uses internally to understand job
-dependencies.
-
-### Run-level diagnosis
-
-The first prompt asks whether to diagnose by **subject** or by
-**sequence ID**. Here, sequence ID means the same thing as run ID:
-
-    Enter 1 for subject summary or 2 for sequence ID
-    > 2
-
-    Enter which pipeline run to diagnose. The default is the most recent.
-    > [Enter]
-
-Choosing the run-first path lets you pick a specific pipeline run (for
-example, if you re‑ran the project with a different configuration). Once
-you select a run,
-[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-shows all **top-level jobs** for that run, grouped by subject, with
-their current status:
-
-    Postprocess stream1
-      postprocess_stream1_sub-540294                  [STARTED]
-      ---postprocess_sub-540294_task-ridl_run-01_...   [FAILED]
-
-For postprocessing, this view expands nested structure: the
-subject‑level postprocess job has **child jobs** for each postprocess
-stream, and those in turn have children for each image‑level job (e.g.,
-individual BOLD runs). At a glance you can see which specific image(s)
-caused a stream or subject to fail.
-
-From the run-level view you can choose a job and drill down:
-
-- show a detailed summary (times, parent/child jobs, exit codes),
-- open the associated stdout or stderr log in the console,
-- or return the log contents as a character vector for further
-  inspection.
-
-This is usually the fastest way to answer, *“Why did this particular run
-of the pipeline fail?”* and *“Which exact job needs debugging?”*
-
-### Subject-level diagnosis across runs
-
-If you already know which subject you care about, you can start with the
-subject‑summary branch:
-
-    Enter 1 for subject summary or 2 for sequence ID
-    > 1
-
-    Found 10 subject(s) across all runs.
-    Enter the number corresponding to the subject you want to view
-    > 3
-
-Here,
-[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-looks across **all runs** in the job-tracking database and shows, for
-the chosen subject, which combination of runs produced the best overall
-completion pattern. This helps with questions like:
-
-- Did subject `sub-540303` ever complete fMRIPrep + AROMA +
-  postprocessing?
-- If so, which run and configuration produced that success?
-
-The summary groups jobs by step (BIDS conversion, MRIQC, fMRIPrep,
-AROMA, postprocessing streams, etc.) and highlights, for each step,
-which run had the most successful outcome. You can then jump from this
-high‑level summary back into run- or job-level inspection for detailed
-debugging.
-
-Example subject‑level summary for `sub-540303`:
-
-    BIDS Conversion
-      ✓ bids_conversion_sub-540303 (job 15135998, sequence 18303423-c037-477a-91af-b6289525dad2) [COMPLETED]
-
-    fMRIPrep
-      • fmriprep_sub-540303 (job 15136000, sequence 18303423-c037-477a-91af-b6289525dad2) [STARTED]
-
-### Interpreting job statuses
-
-[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-uses the following job‑level statuses:
-
-- `COMPLETED`: the job finished successfully (based on scheduler status
-  and BrainGnomes tracking).
-- `STARTED`: the job has begun running or previously ran without a
-  terminal status yet recorded.
-- `QUEUED`: the scheduler knows about the job, but it is waiting on
-  dependencies or resources.
-- `FAILED`: the job itself failed (non‑zero exit code or explicit
-  failure marker).
-- `FAILED_BY_EXT`: the job could not run because an earlier required job
-  failed. For example, postprocessing cannot run if its required
-  fMRIPrep job failed.
-
-This distinction is important: start with a `FAILED` job, because that
-is often the cause. A `FAILED_BY_EXT` job is usually affected downstream
-work rather than the original problem.
-
-In contrast,
-[`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
-and
-[`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
-report simple `*_complete` flags per step; these are stricter than raw
-scheduler status and rely on BrainGnomes completion markers and expected
-outputs. A common workflow is:
-
-1.  Use
-    [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
-    or
-    [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)
-    for a quick overview of which steps are done. These functions do
-    **not** consult the job-tracking database; instead they scan the
-    project’s BIDS and log directories for `.complete` marker files and
-    expected outputs, then derive strict `*_complete` flags and
-    completion times per step.
-2.  Use
-    [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
-    and
-    [`find_run_logs()`](https://hallquistlab.github.io/BrainGnomes/reference/find_run_logs.md)
-    for a prompt-free report of one run, or
-    [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-    for guided interactive investigation. These functions read the
-    job-tracking database to connect jobs, statuses, and logs.
+The provenance bundle records the resolved stages and subjects,
+configuration, resources, software, host, and fingerprints of
+execution-driving files.
 
 ## Retry failed work after correcting the cause
 
 A retry creates a **new run**. It does not restart scheduler jobs in
-place and does not change the original run. By default it includes
-stages and subjects whose jobs are `FAILED` or `CANCELLED`. BrainGnomes
-tells the new run to rerun that selected work even if an old completion
-marker would normally skip it.
-
-Always preview the retry first:
+place and does not change the original run. Always preview it first:
 
 ``` r
 
@@ -391,21 +209,15 @@ retry_plan$jobs
 retry_plan$subjects
 ```
 
-The preview is a plan only; it submits no jobs. Check that its stages,
-subjects, and streams match what you intend. After correcting the
-underlying problem, submit the retry explicitly:
+After correcting the underlying cause, submit the retry explicitly:
 
 ``` r
 
 retry_run <- retry_project_run(scfg, run_id, dry_run = FALSE)
-retry_run$run_id
-get_run_provenance(scfg, retry_run$run_id)$invocation$parent_run_id
 ```
 
-Jobs marked `FAILED_BY_EXT` are excluded by default because they were
-blocked by an earlier failure rather than failing themselves. Use
-`include_blocked = TRUE` when you want the same new run to include those
-affected downstream stages as well:
+Jobs marked `FAILED_BY_EXT` were blocked by an earlier failure and are
+excluded by default. Include them when appropriate:
 
 ``` r
 
@@ -418,7 +230,7 @@ retry_plan <- retry_project_run(
 
 Cancellation applies only to tracked jobs that are queued or running. It
 does not delete data, logs, or completed outputs. Preview the scheduler
-commands first, then make a separate explicit call if they are correct:
+commands before making a separate explicit cancellation request:
 
 ``` r
 
@@ -426,20 +238,28 @@ cancel_project_run(scfg, run_id, dry_run = TRUE)
 cancel_project_run(scfg, run_id, dry_run = FALSE)
 ```
 
-## The same recovery workflow from the command line
+## Command-line inspection and recovery
 
-The command line requires either `--dry-run` for a preview or `--yes`
-for an action. Use an explicit run ID for retry and cancellation:
+The command line exposes the same inspection resolutions:
 
 ``` bash
-BrainGnomes status /project/my_study --runs
-BrainGnomes diagnose /project/my_study --run=<run-id>
+BrainGnomes status /project/my_study
+BrainGnomes status /project/my_study --view=stages
+BrainGnomes status /project/my_study --view=subjects
+BrainGnomes status /project/my_study --run=latest --watch
+BrainGnomes status /project/my_study --run=<run-id> --view=jobs --format=csv
+
+BrainGnomes diagnose /project/my_study
+BrainGnomes diagnose /project/my_study --run=<run-id> --interactive
 BrainGnomes logs /project/my_study --run=<run-id> --failed-only --tail=50
 BrainGnomes provenance /project/my_study --run=<run-id> --format=json
 
 BrainGnomes retry /project/my_study --run=<run-id> --dry-run
 BrainGnomes retry /project/my_study --run=<run-id> --yes
-
 BrainGnomes cancel /project/my_study --run=<run-id> --dry-run
 BrainGnomes cancel /project/my_study --run=<run-id> --yes
 ```
+
+Retry and cancellation require either a dry-run preview or explicit
+confirmation. Neither routine inspection nor diagnosis changes scheduler
+state.
