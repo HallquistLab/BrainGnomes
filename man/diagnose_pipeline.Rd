@@ -2,7 +2,7 @@
 % Please edit documentation in R/diagnose_pipeline.R
 \name{diagnose_pipeline}
 \alias{diagnose_pipeline}
-\title{Interactively investigate jobs and logs from pipeline runs}
+\title{Deprecated interactive pipeline diagnosis}
 \usage{
 diagnose_pipeline(input)
 }
@@ -10,20 +10,14 @@ diagnose_pipeline(input)
 \item{input}{A project configuration object or project directory.}
 }
 \value{
-Depending on the selected action, the chosen run's job tree, log
-contents, or invisibly \code{NULL}.
+The value returned by \code{diagnose_project(input, interactive = TRUE)}.
 }
 \description{
-Opens the established guided diagnosis browser. You can start with one
-subject across runs or select one run, follow its job relationships, and
-inspect output or error logs. Diagnosis does not submit jobs or change the
-project. Use \code{\link[=diagnose_project]{diagnose_project()}} instead when a script or report needs a
-prompt-free summary.
+\code{diagnose_pipeline()} has been superseded by
+\code{diagnose_project(..., interactive = TRUE)}. It remains as a compatibility
+wrapper for the established guided dependency and log browser.
 }
 \seealso{
-\code{\link[=get_project_runs]{get_project_runs()}} to find run IDs, \code{\link[=diagnose_project]{diagnose_project()}} for a
-prompt-free summary, and \code{\link[=retry_project_run]{retry_project_run()}} after correcting a failure.
-}
-\author{
-Zach Vig & Dan Shallal
+\code{\link[=inspect_project]{inspect_project()}} for routine progress monitoring and
+\code{\link[=diagnose_project]{diagnose_project()}} for current or historical failure investigation.
 }

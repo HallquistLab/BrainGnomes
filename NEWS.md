@@ -1,6 +1,14 @@
 # BrainGnomes 0.9-2
 
-Released 2026-09-01
+Released 2026-09-02
+
+* Add `inspect_project()` as the single front door for database-backed project
+  and run monitoring. Its compact dashboard integrates the newest attempt for
+  each work unit across runs, while ordinary data frames expose project, run,
+  stage, subject, subject-stage, attempt, and raw-job resolutions. Consolidate
+  post-mortem investigation in `diagnose_project()`, add matching CLI status
+  views, and deprecate the overlapping `get_project_runs()`, `get_run_jobs()`,
+  and `diagnose_pipeline()` entry points.
 
 * Make `run_project()` explain its pre-submission work in plain language,
   including subject discovery, run-record creation, and the first full read of

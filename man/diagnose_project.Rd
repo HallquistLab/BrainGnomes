@@ -2,34 +2,41 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{diagnose_project}
 \alias{diagnose_project}
-\title{Summarize failures and logs for one run without prompts}
+\title{Diagnose failed project work}
 \usage{
-diagnose_project(input, run_id = "latest")
+diagnose_project(input, run_id = NULL, interactive = FALSE)
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, project directory, or
+a \code{bg_project_inspection} object returned by \code{\link[=inspect_project]{inspect_project()}}.}
 
-\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or \code{\link[=get_project_runs]{get_project_runs()}}. Use
-\code{"latest"} for the most recently recorded run.}
+\item{run_id}{Optional run ID. Use \code{NULL} for current project failures across
+runs, \code{"latest"} for the newest run, or an explicit historical run ID.}
+
+\item{interactive}{If \code{TRUE}, open the guided interactive browser. This mode
+retains the behavior formerly provided by \code{\link[=diagnose_pipeline]{diagnose_pipeline()}}.}
 }
 \value{
-A \code{bg_project_diagnosis} object containing \code{jobs}, \code{failures}, and
-matching \code{logs} for the selected run.
+A \code{bg_project_diagnosis} object containing the underlying
+\code{inspection}, its \code{jobs}, unresolved \code{failures}, and matching \code{logs} for
+the current project state or selected run.
 }
 \description{
-Use this function in scripts, reports, or an R session when you already know
-which run to inspect. It reports all tracked jobs, separates failed,
-cancelled, and blocked jobs, and locates their logs. For a guided interactive
-browser, continue to use \code{\link[=diagnose_pipeline]{diagnose_pipeline()}}.
+Reports unresolved failed, cancelled, and blocked work and locates matching
+logs. By default, diagnosis follows the current project state assembled by
+\code{\link[=inspect_project]{inspect_project()}} across runs. Select a run for a historical post-mortem.
+Set \code{interactive = TRUE} to open the guided dependency and log browser.
 }
 \examples{
 \dontrun{
-diagnosis <- diagnose_project(scfg, run$run_id)
+diagnosis <- diagnose_project(scfg)
 diagnosis$failures
 diagnosis$logs
+
+old_run <- diagnose_project(scfg, run$run_id)
 }
 }
 \seealso{
-\code{\link[=diagnose_pipeline]{diagnose_pipeline()}} for interactive investigation and
+\code{\link[=inspect_project]{inspect_project()}} for routine progress monitoring and
 \code{\link[=retry_project_run]{retry_project_run()}} to preview a new run after correcting a failure.
 }

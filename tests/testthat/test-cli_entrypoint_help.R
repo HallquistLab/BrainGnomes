@@ -97,6 +97,7 @@ test_that("BrainGnomes status --help prints command help", {
   expect_true(any(grepl("^  --sub-id=<id>", res$output)))
   expect_true(any(grepl("^  --summary", res$output)))
   expect_true(any(grepl("^  --run=<id\\|latest>", res$output)))
+  expect_true(any(grepl("^  --view=<view>", res$output)))
   expect_true(any(grepl("^  --watch", res$output)))
 })
 
@@ -126,8 +127,8 @@ test_that("BrainGnomes provenance help describes the complete record", {
 test_that("BrainGnomes diagnose help distinguishes guided and prompt-free use", {
   res <- run_brain_gnomes_cli(c("diagnose", "--help"))
   expect_equal(res$status, 0L)
-  expect_true(any(grepl("prompt-free summary", res$output, fixed = TRUE)))
-  expect_true(any(grepl("guided browser, which asks what to inspect", res$output, fixed = TRUE)))
+  expect_true(any(grepl("newest attempt for each work unit", res$output, fixed = TRUE)))
+  expect_true(any(grepl("guided dependency and log browser", res$output, fixed = TRUE)))
 })
 
 test_that("inspection command help makes optional use cases explicit", {

@@ -9,8 +9,9 @@ cancel_project_run(input, run_id = "latest", dry_run = TRUE)
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or \code{\link[=get_project_runs]{get_project_runs()}}. An
-explicit ID is recommended for cancellation.}
+\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or listed in
+\code{inspect_project(input)$runs}. An explicit ID is recommended for
+cancellation.}
 
 \item{dry_run}{If \code{TRUE}, report the commands without contacting the
 scheduler. If \code{FALSE}, request cancellation immediately.}
@@ -31,5 +32,6 @@ cancel_project_run(scfg, run$run_id, dry_run = FALSE)
 }
 }
 \seealso{
-\code{\link[=get_run_jobs]{get_run_jobs()}} to inspect current job states before cancellation.
+\code{\link[=inspect_project]{inspect_project()}} to inspect current job states before
+cancellation.
 }

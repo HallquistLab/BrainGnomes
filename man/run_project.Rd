@@ -77,8 +77,9 @@ submissions, periodic messages report progress through the subject list.
   }
 }
 \seealso{
-\code{\link[=get_run_provenance]{get_run_provenance()}} to read the recorded configuration,
-execution context, and artifact fingerprints; \code{\link[=plan_project]{plan_project()}} for optional
+\code{\link[=inspect_project]{inspect_project()}} to monitor current progress;
+\code{\link[=get_run_provenance]{get_run_provenance()}} to read the recorded configuration, execution
+context, and artifact fingerprints; \code{\link[=plan_project]{plan_project()}} for optional
 inspection or persistence of the resolved request; \code{\link[=run_bids_validation]{run_bids_validation()}}
 to submit the BIDS validation configured with the project;
 \code{\link[=diagnose_project]{diagnose_project()}} and \code{\link[=retry_project_run]{retry_project_run()}} for optional recovery after

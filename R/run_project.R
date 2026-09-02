@@ -128,8 +128,9 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #'     # Assuming you have a valid project configuration list named `study_config`
 #'     run_project(study_config, steps = "fmriprep", force = FALSE)
 #'   }
-#' @seealso [get_run_provenance()] to read the recorded configuration,
-#'   execution context, and artifact fingerprints; [plan_project()] for optional
+#' @seealso [inspect_project()] to monitor current progress;
+#'   [get_run_provenance()] to read the recorded configuration, execution
+#'   context, and artifact fingerprints; [plan_project()] for optional
 #'   inspection or persistence of the resolved request; [run_bids_validation()]
 #'   to submit the BIDS validation configured with the project;
 #'   [diagnose_project()] and [retry_project_run()] for optional recovery after

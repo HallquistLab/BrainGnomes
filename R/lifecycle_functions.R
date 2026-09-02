@@ -932,10 +932,8 @@ resolve_run_id <- function(scfg, run_id = "latest") {
 
 #' List submitted runs for a project
 #'
-#' A run is one submission from [run_project()] or [retry_project_run()]. Use
-#' this function to find the run ID needed by the status, log, diagnosis,
-#' provenance, retry, and cancellation functions. The newest run is listed
-#' first.
+#' `get_project_runs()` is superseded by `inspect_project()$runs`. It remains
+#' available as a compatibility wrapper for code that needs only the run table.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
 #' @return A data frame with one row per run, including its ID, submission and
@@ -945,70 +943,35 @@ resolve_run_id <- function(scfg, run_id = "latest") {
 #' runs <- get_project_runs(scfg)
 #' run_id <- runs$run_id[[1L]]
 #' }
-#' @seealso [get_run_jobs()] to inspect the jobs in one run.
+#' @seealso [inspect_project()] for project and run-level progress.
 #' @export
 get_project_runs <- function(input) {
-  scfg <- project_config_from_input(input)
-  db <- scfg$metadata$sqlite_db
-  if (!checkmate::test_file_exists(db) || !sqlite_table_exists(db, "job_tracking")) {
-    return(data.frame(
-      run_id = character(), submitted = character(), ended = character(),
-      n_jobs = integer(), status = character(), stringsAsFactors = FALSE
-    ))
-  }
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  jobs <- DBI::dbGetQuery(con, "SELECT sequence_id, status, time_submitted, time_ended FROM job_tracking WHERE sequence_id IS NOT NULL")
-  if (nrow(jobs) == 0L) return(data.frame(
-    run_id = character(), submitted = character(), ended = character(),
-    n_jobs = integer(), status = character(), stringsAsFactors = FALSE
-  ))
-  split_jobs <- split(jobs, jobs$sequence_id)
-  rows <- lapply(split_jobs, function(run_jobs) {
-    statuses <- toupper(run_jobs$status)
-    overall <- if (any(statuses %in% c("FAILED", "FAILED_BY_EXT"))) "FAILED" else if (any(statuses == "CANCELLED")) {
-      "CANCELLED"
-    } else if (any(statuses == "STARTED")) "RUNNING" else if (any(statuses == "QUEUED")) {
-      "QUEUED"
-    } else if (length(statuses) > 0L && all(statuses == "COMPLETED")) "COMPLETED" else "UNKNOWN"
-    submitted_values <- run_jobs$time_submitted[!is.na(run_jobs$time_submitted)]
-    ended_values <- run_jobs$time_ended[!is.na(run_jobs$time_ended)]
-    data.frame(
-      run_id = run_jobs$sequence_id[[1L]],
-      submitted = if (length(submitted_values) == 0L) NA_character_ else min(submitted_values),
-      ended = if (length(ended_values) == 0L) NA_character_ else max(ended_values),
-      n_jobs = nrow(run_jobs), status = overall, stringsAsFactors = FALSE
-    )
-  })
-  result <- do.call(rbind, rows)
-  result[order(result$submitted, decreasing = TRUE), , drop = FALSE]
+  .Deprecated("inspect_project", package = "BrainGnomes")
+  .get_project_runs_data(input)
 }
 
 #' Inspect the jobs submitted for one project run
 #'
-#' Returns the job-tracking rows for one run. This is useful for checking which
-#' processing step and subject each scheduler job belongs to and whether it is
-#' queued, running, completed, failed, cancelled, or blocked by an earlier
-#' failure.
+#' `get_run_jobs()` is superseded by `inspect_project(input, run_id)$jobs`. It
+#' remains available as a compatibility wrapper and returns a data-frame
+#' subclass with compact printing.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. Use
-#'   `"latest"` for the most recently recorded run.
+#' @param run_id Run ID returned by [run_project()] or listed in
+#'   `inspect_project(input)$runs`. Use `"latest"` for the most recently
+#'   recorded run.
 #' @return The tracking rows for the run.
 #' @examples
 #' \dontrun{
 #' jobs <- get_run_jobs(scfg, run$run_id)
 #' jobs[, c("job_id", "job_name", "status")]
 #' }
-#' @seealso [diagnose_project()] for a failure-focused summary and
+#' @seealso [inspect_project()] for summarized progress, [diagnose_project()] for a failure-focused summary, and
 #'   [find_run_logs()] for log-file locations.
 #' @export
 get_run_jobs <- function(input, run_id = "latest") {
-  scfg <- project_config_from_input(input)
-  run_id <- resolve_run_id(scfg, run_id)
-  jobs <- get_tracked_job_status(sequence_id = run_id, sqlite_db = scfg$metadata$sqlite_db)
-  if (nrow(jobs) > 0L && "job_obj" %in% names(jobs)) jobs$job_obj <- NULL
-  jobs
+  .Deprecated("inspect_project", package = "BrainGnomes")
+  .get_run_jobs_data(input, run_id)
 }
 
 #' Find output and error logs for one run
@@ -1018,8 +981,9 @@ get_run_jobs <- function(input, run_id = "latest") {
 #' opening or changing the logs.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. Use
-#'   `"latest"` for the most recently recorded run.
+#' @param run_id Run ID returned by [run_project()] or listed in
+#'   `inspect_project(input)$runs`. Use `"latest"` for the most recently
+#'   recorded run.
 #' @param failed_only If `TRUE`, include only failed, cancelled, or downstream
 #'   jobs that could not run because an earlier job failed.
 #' @return A data frame mapping jobs to stdout/stderr log files.
@@ -1033,8 +997,12 @@ get_run_jobs <- function(input, run_id = "latest") {
 find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
   checkmate::assert_flag(failed_only)
   scfg <- project_config_from_input(input)
-  jobs <- get_run_jobs(scfg, run_id)
+  jobs <- .get_run_jobs_data(scfg, run_id)
   if (failed_only) jobs <- jobs[jobs$status %in% c("FAILED", "FAILED_BY_EXT", "CANCELLED"), , drop = FALSE]
+  .find_logs_for_jobs(scfg, jobs)
+}
+
+.find_logs_for_jobs <- function(scfg, jobs) {
   files <- if (dir.exists(scfg$metadata$log_directory)) {
     list.files(scfg$metadata$log_directory, recursive = TRUE, full.names = TRUE, pattern = "\\.(out|err)$")
   } else character()
@@ -1057,44 +1025,83 @@ find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
   do.call(rbind, rows)
 }
 
-#' Summarize failures and logs for one run without prompts
+#' Diagnose failed project work
 #'
-#' Use this function in scripts, reports, or an R session when you already know
-#' which run to inspect. It reports all tracked jobs, separates failed,
-#' cancelled, and blocked jobs, and locates their logs. For a guided interactive
-#' browser, continue to use [diagnose_pipeline()].
+#' Reports unresolved failed, cancelled, and blocked work and locates matching
+#' logs. By default, diagnosis follows the current project state assembled by
+#' [inspect_project()] across runs. Select a run for a historical post-mortem.
+#' Set `interactive = TRUE` to open the guided dependency and log browser.
 #'
-#' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. Use
-#'   `"latest"` for the most recently recorded run.
-#' @return A `bg_project_diagnosis` object containing `jobs`, `failures`, and
-#'   matching `logs` for the selected run.
+#' @param input A project configuration object, YAML file, project directory, or
+#'   a `bg_project_inspection` object returned by [inspect_project()].
+#' @param run_id Optional run ID. Use `NULL` for current project failures across
+#'   runs, `"latest"` for the newest run, or an explicit historical run ID.
+#' @param interactive If `TRUE`, open the guided interactive browser. This mode
+#'   retains the behavior formerly provided by [diagnose_pipeline()].
+#' @return A `bg_project_diagnosis` object containing the underlying
+#'   `inspection`, its `jobs`, unresolved `failures`, and matching `logs` for
+#'   the current project state or selected run.
 #' @examples
 #' \dontrun{
-#' diagnosis <- diagnose_project(scfg, run$run_id)
+#' diagnosis <- diagnose_project(scfg)
 #' diagnosis$failures
 #' diagnosis$logs
+#'
+#' old_run <- diagnose_project(scfg, run$run_id)
 #' }
-#' @seealso [diagnose_pipeline()] for interactive investigation and
+#' @seealso [inspect_project()] for routine progress monitoring and
 #'   [retry_project_run()] to preview a new run after correcting a failure.
 #' @export
-diagnose_project <- function(input, run_id = "latest") {
-  scfg <- project_config_from_input(input)
-  resolved <- resolve_run_id(scfg, run_id)
-  jobs <- get_run_jobs(scfg, resolved)
-  failures <- jobs[jobs$status %in% c("FAILED", "FAILED_BY_EXT", "CANCELLED"), , drop = FALSE]
+diagnose_project <- function(input, run_id = NULL, interactive = FALSE) {
+  checkmate::assert_flag(interactive)
+  if (interactive) {
+    if (inherits(input, "bg_project_inspection")) {
+      stop("Interactive diagnosis requires a project configuration, YAML file, or directory.", call. = FALSE)
+    }
+    return(.diagnose_pipeline_interactive(input, run_id = run_id))
+  }
+
+  inspection <- if (inherits(input, "bg_project_inspection")) {
+    if (!is.null(run_id)) {
+      stop("run_id cannot be supplied when input is already a project inspection.", call. = FALSE)
+    }
+    input
+  } else {
+    inspect_project(input, run_id = run_id)
+  }
+  scfg <- if (inherits(input, "bg_project_inspection")) {
+    structure(list(
+      metadata = list(
+        project_directory = input$project_directory,
+        log_directory = input$log_directory
+      )
+    ), class = "bg_project_cfg")
+  } else project_config_from_input(input)
+  jobs <- inspection$jobs
+  current <- if (identical(inspection$scope, "project")) jobs$is_current_attempt else rep(TRUE, nrow(jobs))
+  failures <- as.data.frame(
+    jobs[
+      current & jobs$lifecycle_status %in% c("FAILED", "BLOCKED", "CANCELLED"),
+      , drop = FALSE
+    ]
+  )
+  logs <- .find_logs_for_jobs(scfg, failures)
   structure(list(
-    run_id = resolved,
+    scope = inspection$scope,
+    run_id = inspection$run_id,
+    inspection = inspection,
     jobs = jobs,
     failures = failures,
-    logs = find_run_logs(scfg, resolved, failed_only = TRUE)
+    logs = logs
   ), class = "bg_project_diagnosis")
 }
 
 #' @export
 print.bg_project_diagnosis <- function(x, ...) {
-  cli::cli_h2("Run diagnosis {.val {x$run_id}}")
-  counts <- as.data.frame(table(x$jobs$status), stringsAsFactors = FALSE)
+  if (identical(x$scope, "project")) cli::cli_h2("Current project diagnosis")
+  else cli::cli_h2("Run diagnosis {.val {x$run_id}}")
+  current <- if (identical(x$scope, "project")) x$jobs$is_current_attempt else rep(TRUE, nrow(x$jobs))
+  counts <- as.data.frame(table(x$jobs$lifecycle_status[current]), stringsAsFactors = FALSE)
   names(counts) <- c("status", "n_jobs")
   print(counts, row.names = FALSE)
   if (nrow(x$failures) > 0L) {
@@ -1114,8 +1121,9 @@ print.bg_project_diagnosis <- function(x, ...) {
 #' the configured scheduler, so preview the commands first.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. An
-#'   explicit ID is recommended for cancellation.
+#' @param run_id Run ID returned by [run_project()] or listed in
+#'   `inspect_project(input)$runs`. An explicit ID is recommended for
+#'   cancellation.
 #' @param dry_run If `TRUE`, report the commands without contacting the
 #'   scheduler. If `FALSE`, request cancellation immediately.
 #' @return A data frame describing each cancellation attempt.
@@ -1124,13 +1132,14 @@ print.bg_project_diagnosis <- function(x, ...) {
 #' cancel_project_run(scfg, run$run_id, dry_run = TRUE)
 #' cancel_project_run(scfg, run$run_id, dry_run = FALSE)
 #' }
-#' @seealso [get_run_jobs()] to inspect current job states before cancellation.
+#' @seealso [inspect_project()] to inspect current job states before
+#'   cancellation.
 #' @export
 cancel_project_run <- function(input, run_id = "latest", dry_run = TRUE) {
   checkmate::assert_flag(dry_run)
   scfg <- project_config_from_input(input)
   resolved <- resolve_run_id(scfg, run_id)
-  jobs <- get_run_jobs(scfg, resolved)
+  jobs <- .get_run_jobs_data(scfg, resolved)
   jobs <- jobs[jobs$status %in% c("QUEUED", "STARTED"), , drop = FALSE]
   command <- switch(scfg$compute_environment$scheduler,
     slurm = "scancel", torque = "qdel",
@@ -1212,8 +1221,8 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
 #' immediately and the function returns the new run handle.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Source run ID returned by [run_project()] or
-#'   [get_project_runs()]. An explicit ID is recommended for retry.
+#' @param run_id Source run ID returned by [run_project()] or listed in
+#'   `inspect_project(input)$runs`. An explicit ID is recommended for retry.
 #' @param include_blocked Also include downstream jobs marked `FAILED_BY_EXT`.
 #'   These jobs did not fail themselves; they could not run because an earlier
 #'   required job failed. They are excluded by default.
@@ -1240,7 +1249,7 @@ retry_project_run <- function(input, run_id = "latest", include_blocked = FALSE,
   checkmate::assert_flag(dry_run)
   scfg <- project_config_from_input(input)
   source_run_id <- resolve_run_id(scfg, run_id)
-  jobs <- get_run_jobs(scfg, source_run_id)
+  jobs <- .get_run_jobs_data(scfg, source_run_id)
   request <- retry_request_from_jobs(jobs, include_blocked)
   if (length(request$steps) == 0L) stop("No retryable failed jobs were found in this run.", call. = FALSE)
   if (dry_run) {

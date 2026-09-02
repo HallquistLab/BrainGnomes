@@ -61,16 +61,18 @@ to choose an available tag.
 ## Typical workflow
 
 The established R workflow remains the primary path. Set up a project once,
-then run it directly; use diagnosis only when a run needs investigation.
+run it directly, inspect progress while work is active, and diagnose only when
+a failure needs investigation.
 
 ```r
 library(BrainGnomes)
 
 scfg <- setup_project()
 run <- run_project(scfg)
+status <- inspect_project(scfg)
 
 # Only when a run needs investigation:
-diagnose_pipeline(scfg)
+diagnose_project(scfg)
 ```
 
 For later sessions, reload the saved configuration and run it in the same way:
@@ -86,6 +88,7 @@ The command-line interface preserves the same workflow. The shorter `init` and
 ```bash
 BrainGnomes setup_project my_study /project/my_study
 BrainGnomes run_project /project/my_study
+BrainGnomes status /project/my_study
 
 # Only when a run needs investigation:
 BrainGnomes diagnose /project/my_study --interactive
@@ -133,13 +136,18 @@ take a minute because BrainGnomes reads the complete file to identify the exact
 copy used; later runs reuse the project's saved result while the file is
 unchanged.
 
-Each call to `run_project()` has a run ID, which lets you inspect one submission
-without mixing it up with earlier work. `status`, `logs`, provenance, and
-non-interactive diagnosis all accept that ID. If a run fails, first inspect the
-failed jobs and logs, correct the underlying problem, and then preview the retry:
+`inspect_project(scfg)` reports the current effective project state across
+runs, using the newest attempt for each subject, stage, and stream. Its
+`overview`, `stages`, `subjects`, `subject_stages`, `runs`, `attempts`, and
+`jobs` elements are ordinary data frames. Supply `run_id = "latest"` or an
+explicit ID to restrict inspection to one submission.
+
+If work fails, first inspect the failed jobs and logs, correct the underlying
+problem, and then preview the retry:
 
 ```r
-diagnosis <- diagnose_project(scfg, run$run_id)
+status <- inspect_project(scfg)
+diagnosis <- diagnose_project(status)
 failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
 retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
 

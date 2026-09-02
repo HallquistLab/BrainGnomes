@@ -192,10 +192,10 @@ test_that("tracked run APIs summarize, diagnose, locate logs, and preview cancel
   dir.create(dirname(log_file), recursive = TRUE)
   writeLines("simulated failure", log_file)
 
-  runs <- get_project_runs(fixture$cfg)
+  runs <- suppressWarnings(get_project_runs(fixture$cfg))
   expect_equal(runs$run_id, run_id)
   expect_equal(runs$status, "FAILED")
-  jobs <- get_run_jobs(fixture$cfg, "latest")
+  jobs <- suppressWarnings(get_run_jobs(fixture$cfg, "latest"))
   expect_setequal(jobs$job_id, c("81001", "81002"))
 
   diagnosis <- diagnose_project(fixture$cfg, run_id)
