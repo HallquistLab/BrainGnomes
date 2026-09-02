@@ -1,23 +1,20 @@
-#' Interactively investigate jobs and logs from pipeline runs
+#' Legacy interactive dependency and log browser
 #'
-#' Opens the established guided diagnosis browser. You can start with one
-#' subject across runs or select one run, follow its job relationships, and
-#' inspect output or error logs. Diagnosis does not submit jobs or change the
-#' project. Use [diagnose_project()] instead when a script or report needs a
-#' prompt-free summary.
+#' Internal implementation retained while the guided browser is consolidated
+#' behind [diagnose_project()].
 #'
 #' @param input A project configuration object or project directory.
+#' @param run_id Optional run ID to open directly. If `NULL`, prompt for a
+#'   subject or run.
 #' @return Depending on the selected action, the chosen run's job tree, log
 #'   contents, or invisibly `NULL`.
-#' @seealso [get_project_runs()] to find run IDs, [diagnose_project()] for a
-#'   prompt-free summary, and [retry_project_run()] after correcting a failure.
 #'
 #' @importFrom cli cli_abort cli_warn cli_inform cli_alert no qty
-#' @export
+#' @noRd
 #'
 #' @author Zach Vig & Dan Shallal
 
-diagnose_pipeline <- function(input) {
+.diagnose_pipeline_interactive <- function(input, run_id = NULL) {
   
   if (options()$warn < 1) {
     old_warn <- options()$warn
@@ -100,27 +97,27 @@ diagnose_pipeline <- function(input) {
     )
   }
 
-  cli::cli_inform(
-    c("Would you like to view a summary by subject or examine a specific sequence ID?")
-  )
-  
-  view_options <- c(
-    "subject" = cli::col_cyan("View summary by subject (across all runs)"),
-    "sequence" = cli::col_cyan("Examine a specific sequence ID")
-  )
-  
-  cli::cli_ol(view_options)
-  
-  view_choice <- prompt_input(
-    prompt = "Enter 1 for subject summary or 2 for sequence ID",
-    type = "integer",
-    lower = 1,
-    upper = 2,
-    required = TRUE,
-    len = 1
-  )
-  
-  selected_view <- names(view_options)[view_choice]
+  if (is.null(run_id)) {
+    cli::cli_inform(
+      c("Would you like to view a summary by subject or examine a specific sequence ID?")
+    )
+    view_options <- c(
+      "subject" = cli::col_cyan("View summary by subject (across all runs)"),
+      "sequence" = cli::col_cyan("Examine a specific sequence ID")
+    )
+    cli::cli_ol(view_options)
+    view_choice <- prompt_input(
+      prompt = "Enter 1 for subject summary or 2 for sequence ID",
+      type = "integer",
+      lower = 1,
+      upper = 2,
+      required = TRUE,
+      len = 1
+    )
+    selected_view <- names(view_options)[view_choice]
+  } else {
+    selected_view <- "sequence"
+  }
   
   if (selected_view == "subject") {
     con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
@@ -217,16 +214,30 @@ diagnose_pipeline <- function(input) {
     tracking_df <- get_tracked_job_status(sequence_id = this_sequence_id, sqlite_db = sqlite_db)
     
   } else {
-    ss <- prompt_input(
-      prompt = "Enter which pipeline run to diagnose. The default is the most recent.",
-      default = n_sequences,
-      type = "integer",
-      lower = min(n_sequences, 1),
-      upper = n_sequences,
-      len = 1
-    )
-    
-    this_sequence_id <- sequence_ids[ss]
+    if (is.null(run_id)) {
+      ss <- prompt_input(
+        prompt = "Enter which pipeline run to diagnose. The default is the most recent.",
+        default = n_sequences,
+        type = "integer",
+        lower = min(n_sequences, 1),
+        upper = n_sequences,
+        len = 1
+      )
+      this_sequence_id <- sequence_ids[ss]
+    } else if (identical(run_id, "latest")) {
+      con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+      on.exit(if (DBI::dbIsValid(con)) DBI::dbDisconnect(con), add = TRUE)
+      latest <- DBI::dbGetQuery(con,
+        "SELECT sequence_id FROM job_tracking WHERE sequence_id IS NOT NULL ORDER BY datetime(time_submitted) DESC, id DESC LIMIT 1"
+      )
+      DBI::dbDisconnect(con)
+      this_sequence_id <- latest$sequence_id[[1L]]
+    } else {
+      this_sequence_id <- as.character(run_id)
+      if (!this_sequence_id %in% sequence_ids) {
+        cli::cli_abort("No tracked project run has ID: {.val {this_sequence_id}}")
+      }
+    }
     tracking_df <- get_tracked_job_status(sequence_id = this_sequence_id, sqlite_db = sqlite_db)
   }
   
@@ -535,6 +546,22 @@ diagnose_pipeline <- function(input) {
   }
   
   return(invisible(NULL))
+}
+
+#' Deprecated interactive pipeline diagnosis
+#'
+#' `diagnose_pipeline()` has been superseded by
+#' `diagnose_project(..., interactive = TRUE)`. It remains as a compatibility
+#' wrapper for the established guided dependency and log browser.
+#'
+#' @param input A project configuration object or project directory.
+#' @return The value returned by `diagnose_project(input, interactive = TRUE)`.
+#' @seealso [inspect_project()] for routine progress monitoring and
+#'   [diagnose_project()] for current or historical failure investigation.
+#' @export
+diagnose_pipeline <- function(input) {
+  .Deprecated("diagnose_project", package = "BrainGnomes")
+  diagnose_project(input, run_id = NULL, interactive = TRUE)
 }
 
 #' helper for recursively collecting all nodes from a tree

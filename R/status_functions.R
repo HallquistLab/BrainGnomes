@@ -61,6 +61,10 @@ empty_project_status <- function(scfg) {
 #'   each enabled step. ROI-extraction streams use columns named
 #'   `extract_rois_<stream>_complete` and `extract_rois_<stream>_time`, keeping
 #'   them distinct from postprocessing streams with the same name.
+#' @details This function verifies completion markers on disk. Use
+#'   [inspect_project()] instead to inspect queued, running, failed, blocked,
+#'   and completed jobs recorded in the tracking database.
+#' @seealso [inspect_project()] for scheduler-lifecycle status.
 #' @export
 #' @importFrom checkmate assert_class assert_string
 get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
@@ -139,6 +143,10 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
 #'   present, returns a zero-row `bg_status_df` with the same typed columns,
 #'   including character identifiers, logical completion flags, and POSIXct
 #'   completion times.
+#' @details This function verifies completion markers on disk. Use
+#'   [inspect_project()] instead to inspect queued, running, failed, blocked,
+#'   and completed jobs recorded in the tracking database.
+#' @seealso [inspect_project()] for scheduler-lifecycle status.
 #' @export
 #' @importFrom checkmate assert_class
 get_project_status <- function(scfg) {

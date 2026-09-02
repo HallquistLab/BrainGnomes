@@ -45,8 +45,15 @@ format_output <- function(x, format = "table") {
     ),
     bg_project_run = unclass(x),
     bg_run_provenance = unclass(x),
+    bg_project_inspection = list(
+      overview = x$overview, stages = x$stages, subjects = x$subjects,
+      subject_stages = x$subject_stages, runs = x$runs,
+      attempts = x$attempts, jobs = x$jobs
+    ),
     bg_project_diagnosis = list(
-      run_id = x$run_id, jobs = x$jobs, failures = x$failures, logs = x$logs
+      scope = x$scope, run_id = x$run_id,
+      overview = x$inspection$overview,
+      failures = x$failures, logs = x$logs, jobs = x$jobs
     ),
     x
   )
@@ -57,7 +64,7 @@ format_output <- function(x, format = "table") {
     if (!is.data.frame(payload)) usage_error("CSV output is available only for tabular command results.")
     utils::write.table(payload, stdout(), sep = ",", row.names = FALSE, col.names = TRUE, quote = TRUE, na = "")
   } else {
-    if (inherits(x, c("bg_project_validation", "bg_project_doctor", "bg_project_plan", "bg_project_run", "bg_run_provenance", "bg_project_diagnosis"))) {
+    if (inherits(x, c("bg_project_validation", "bg_project_doctor", "bg_project_plan", "bg_project_run", "bg_run_provenance", "bg_project_inspection", "bg_project_diagnosis"))) {
       print(x)
     } else {
       print(payload, row.names = FALSE)
@@ -72,6 +79,7 @@ print_global_help <- function(status = 0L) {
     "Typical workflow:\n",
     "  setup_project <project_name> <project_directory> [--non-interactive]\n",
     "  run_project <project_directory|config.yaml> [run options]\n",
+    "  status <project_directory|config.yaml> [--run=<id|latest>] [--watch]\n",
     "  diagnose <project_directory|config.yaml> [--interactive]\n\n",
     "Optional inspection and automation:\n",
     "  config validate <project_directory|config.yaml> [--format=table|json]\n",
@@ -80,7 +88,6 @@ print_global_help <- function(status = 0L) {
     "  doctor <project_directory|config.yaml> [--steps=<steps>] [--deep]\n",
     "  plan <project_directory|config.yaml> [run options] [--output=<plan.yaml>]\n\n",
     "Run operations:\n",
-    "  status <project_directory|config.yaml> [--run=<id|latest>|--runs] [--watch]\n",
     "  provenance <project_directory|config.yaml> [--run=<id|latest>] [--format=table|json]\n",
     "  logs <project_directory|config.yaml> [--run=<id|latest>] [--failed-only]\n",
     "  retry <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes\n",
@@ -166,13 +173,16 @@ print_command_help <- function(command, status = 0L) {
     ),
     status = paste0(
       "Usage: BrainGnomes status <project_directory|config.yaml> [options]\n\n",
+      "Inspect current tracked project progress across runs by default.\n\n",
       "Options:\n",
-      "  --sub-id=<id>                  Limit completion status to one subject.\n",
+      "  --sub-id=<id>                  Limit subject, subject-stage, or job rows.\n",
       "  --ses-id=<id>                  Optional session ID; requires --sub-id.\n",
-      "  --summary                      Summarize completion counts.\n",
-      "  --runs                         List tracked runs.\n",
-      "  --run=<id|latest>              Show jobs for one tracked run.\n",
-      "  --watch                        Refresh run jobs until none are queued/running.\n",
+      "  --summary                      Alias for --view=overview.\n",
+      "  --runs                         Alias for --view=runs.\n",
+      "  --run=<id|latest>              Limit inspection to one tracked run.\n",
+      "  --view=<view>                  overview, stages, subjects, subject-stages,\n",
+      "                                 runs, attempts, jobs, or dashboard.\n",
+      "  --watch                        Refresh until no tracked jobs are queued/running.\n",
       "  --interval=<seconds>           Watch refresh interval (default 30).\n",
       "  --format=table|json|csv        Output format.\n"
     ),
@@ -193,10 +203,11 @@ print_command_help <- function(command, status = 0L) {
     ),
     diagnose = paste0(
       "Usage: BrainGnomes diagnose <project_directory|config.yaml> [options]\n\n",
-      "Summarize failed, blocked, or cancelled jobs and locate their logs.\n\n",
+      "Summarize current failed, blocked, or cancelled work and locate its logs.\n",
+      "Without --run, the diagnosis uses the newest attempt for each work unit across runs.\n\n",
       "Options:\n",
-      "  --run=<id|latest>              Select a run for the prompt-free summary.\n",
-      "  --interactive                  Open the guided browser, which asks what to inspect.\n",
+      "  --run=<id|latest>              Diagnose one selected run.\n",
+      "  --interactive                  Open the guided dependency and log browser.\n",
       "  --format=table|json            Output format.\n"
     ),
     retry = paste0(
@@ -339,32 +350,54 @@ command_validate_bids <- function(values) {
 command_status <- function(values) {
   input <- require_input(values, "status")
   opts <- normalize_options(values[-1L], c(
-    "sub_id", "ses_id", "summary", "runs", "run", "watch", "interval", "format"
+    "sub_id", "ses_id", "summary", "runs", "run", "view", "watch", "interval", "format"
   ))
   format <- or_else(opts$format, "table")
   if (!is.null(opts$ses_id) && is.null(opts$sub_id)) usage_error("--ses-id requires --sub-id.")
   if (is_flag(opts$runs) && !is.null(opts$run)) usage_error("Use either --runs or --run, not both.")
-  if (is_flag(opts$watch) && is.null(opts$run)) usage_error("--watch requires --run=<id|latest>.")
-  if (is_flag(opts$runs)) {
-    format_output(BrainGnomes::get_project_runs(input), format)
-    return(0L)
-  }
-  if (!is.null(opts$run)) {
-    interval <- as.numeric(or_else(opts$interval, 30))
-    repeat {
-      jobs <- BrainGnomes::get_run_jobs(input, opts$run)
-      format_output(jobs, format)
-      if (!is_flag(opts$watch) || !any(jobs$status %in% c("QUEUED", "STARTED"))) break
-      Sys.sleep(interval)
+  if (is_flag(opts$runs) && !is.null(opts$view)) usage_error("Use either --runs or --view, not both.")
+  if (is_flag(opts$summary) && !is.null(opts$view)) usage_error("Use either --summary or --view, not both.")
+
+  view <- if (is_flag(opts$runs)) "runs" else if (is_flag(opts$summary)) "overview" else or_else(opts$view, "dashboard")
+  view <- gsub("-", "_", tolower(view), fixed = TRUE)
+  allowed_views <- c("dashboard", "overview", "stages", "subjects", "subject_stages", "runs", "attempts", "jobs")
+  if (!view %in% allowed_views) usage_error(paste0("Unknown status view: ", view))
+  if (view == "dashboard" && format != "table") view <- "overview"
+
+  interval <- suppressWarnings(as.numeric(or_else(opts$interval, 30)))
+  if (!is.finite(interval) || interval <= 0) usage_error("--interval must be a positive number of seconds.")
+  sub_id <- if (is.null(opts$sub_id)) NULL else sub("^sub-", "", as.character(opts$sub_id))
+  ses_id <- if (is.null(opts$ses_id)) NULL else sub("^ses-", "", as.character(opts$ses_id))
+
+  repeat {
+    inspection <- BrainGnomes::inspect_project(input, run_id = opts$run)
+    payload <- switch(view,
+      dashboard = inspection,
+      overview = inspection$overview,
+      stages = inspection$stages,
+      subjects = inspection$subjects,
+      subject_stages = inspection$subject_stages,
+      runs = inspection$runs,
+      attempts = inspection$attempts,
+      jobs = inspection$jobs
+    )
+    if (!is.null(sub_id)) {
+      if (view == "dashboard") {
+        payload <- inspection$subject_stages
+      }
+      if (!is.data.frame(payload) || !"sub_id" %in% names(payload)) {
+        usage_error("--sub-id requires --view=subjects, --view=subject-stages, or --view=jobs.")
+      }
+      payload <- payload[!is.na(payload$sub_id) & payload$sub_id == sub_id, , drop = FALSE]
+      if (!is.null(ses_id) && "ses_id" %in% names(payload)) {
+        payload <- payload[!is.na(payload$ses_id) & payload$ses_id == ses_id, , drop = FALSE]
+      }
     }
-    return(0L)
+    format_output(payload, format)
+    active <- inspection$overview$n_jobs_running + inspection$overview$n_jobs_queued
+    if (!is_flag(opts$watch) || active == 0L) break
+    Sys.sleep(interval)
   }
-  cfg <- BrainGnomes::load_project(input)
-  status <- if (is.null(opts$sub_id)) BrainGnomes::get_project_status(cfg) else {
-    BrainGnomes::get_subject_status(cfg, as.character(opts$sub_id), if (is.null(opts$ses_id)) NULL else as.character(opts$ses_id))
-  }
-  if (is_flag(opts$summary)) status <- summary(status)
-  format_output(status, format)
   0L
 }
 
@@ -401,9 +434,9 @@ command_diagnose <- function(values) {
   input <- require_input(values, "diagnose")
   opts <- normalize_options(values[-1L], c("run", "interactive", "format"))
   if (is_flag(opts$interactive)) {
-    BrainGnomes::diagnose_pipeline(input)
+    BrainGnomes::diagnose_project(input, run_id = opts$run, interactive = TRUE)
   } else {
-    result <- BrainGnomes::diagnose_project(input, or_else(opts$run, "latest"))
+    result <- BrainGnomes::diagnose_project(input, run_id = opts$run)
     format_output(result, or_else(opts$format, "table"))
   }
   0L

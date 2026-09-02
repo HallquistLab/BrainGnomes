@@ -9,17 +9,17 @@ get_run_jobs(input, run_id = "latest")
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or \code{\link[=get_project_runs]{get_project_runs()}}. Use
-\code{"latest"} for the most recently recorded run.}
+\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or listed in
+\code{inspect_project(input)$runs}. Use \code{"latest"} for the most recently
+recorded run.}
 }
 \value{
 The tracking rows for the run.
 }
 \description{
-Returns the job-tracking rows for one run. This is useful for checking which
-processing step and subject each scheduler job belongs to and whether it is
-queued, running, completed, failed, cancelled, or blocked by an earlier
-failure.
+\code{get_run_jobs()} is superseded by \code{inspect_project(input, run_id)$jobs}. It
+remains available as a compatibility wrapper and returns a data-frame
+subclass with compact printing.
 }
 \examples{
 \dontrun{
@@ -28,6 +28,6 @@ jobs[, c("job_id", "job_name", "status")]
 }
 }
 \seealso{
-\code{\link[=diagnose_project]{diagnose_project()}} for a failure-focused summary and
+\code{\link[=inspect_project]{inspect_project()}} for summarized progress, \code{\link[=diagnose_project]{diagnose_project()}} for a failure-focused summary, and
 \code{\link[=find_run_logs]{find_run_logs()}} for log-file locations.
 }

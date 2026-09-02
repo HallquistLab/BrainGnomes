@@ -9,8 +9,9 @@ find_run_logs(input, run_id = "latest", failed_only = FALSE)
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or \code{\link[=get_project_runs]{get_project_runs()}}. Use
-\code{"latest"} for the most recently recorded run.}
+\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or listed in
+\code{inspect_project(input)$runs}. Use \code{"latest"} for the most recently
+recorded run.}
 
 \item{failed_only}{If \code{TRUE}, include only failed, cancelled, or downstream
 jobs that could not run because an earlier job failed.}

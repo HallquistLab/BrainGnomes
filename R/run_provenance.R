@@ -607,8 +607,9 @@ latest_run_provenance_id <- function(scfg) {
 #' to compare an original run with a later retry.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
-#' @param run_id Run ID returned by [run_project()] or [get_project_runs()]. Use
-#'   `"latest"` for the most recently recorded run.
+#' @param run_id Run ID returned by [run_project()] or listed in
+#'   `inspect_project(input)$runs`. Use `"latest"` for the most recently
+#'   recorded run.
 #' @return A `bg_run_provenance` object.
 #' @examples
 #' \dontrun{

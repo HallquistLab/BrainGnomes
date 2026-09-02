@@ -14,10 +14,8 @@ A data frame with one row per run, including its ID, submission and
 end times, number of tracked jobs, and overall status.
 }
 \description{
-A run is one submission from \code{\link[=run_project]{run_project()}} or \code{\link[=retry_project_run]{retry_project_run()}}. Use
-this function to find the run ID needed by the status, log, diagnosis,
-provenance, retry, and cancellation functions. The newest run is listed
-first.
+\code{get_project_runs()} is superseded by \code{inspect_project()$runs}. It remains
+available as a compatibility wrapper for code that needs only the run table.
 }
 \examples{
 \dontrun{
@@ -26,5 +24,5 @@ run_id <- runs$run_id[[1L]]
 }
 }
 \seealso{
-\code{\link[=get_run_jobs]{get_run_jobs()}} to inspect the jobs in one run.
+\code{\link[=inspect_project]{inspect_project()}} for project and run-level progress.
 }

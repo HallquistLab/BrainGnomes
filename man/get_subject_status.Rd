@@ -23,3 +23,11 @@ them distinct from postprocessing streams with the same name.
 \description{
 Get processing status for a single subject
 }
+\details{
+This function verifies completion markers on disk. Use
+\code{\link[=inspect_project]{inspect_project()}} instead to inspect queued, running, failed, blocked,
+and completed jobs recorded in the tracking database.
+}
+\seealso{
+\code{\link[=inspect_project]{inspect_project()}} for scheduler-lifecycle status.
+}

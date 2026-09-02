@@ -14,8 +14,8 @@ retry_project_run(
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Source run ID returned by \code{\link[=run_project]{run_project()}} or
-\code{\link[=get_project_runs]{get_project_runs()}}. An explicit ID is recommended for retry.}
+\item{run_id}{Source run ID returned by \code{\link[=run_project]{run_project()}} or listed in
+\code{inspect_project(input)$runs}. An explicit ID is recommended for retry.}
 
 \item{include_blocked}{Also include downstream jobs marked \code{FAILED_BY_EXT}.
 These jobs did not fail themselves; they could not run because an earlier

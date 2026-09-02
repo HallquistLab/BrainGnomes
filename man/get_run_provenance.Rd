@@ -9,8 +9,9 @@ get_run_provenance(input, run_id = "latest")
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.}
 
-\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or \code{\link[=get_project_runs]{get_project_runs()}}. Use
-\code{"latest"} for the most recently recorded run.}
+\item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or listed in
+\code{inspect_project(input)$runs}. Use \code{"latest"} for the most recently
+recorded run.}
 }
 \value{
 A \code{bg_run_provenance} object.
