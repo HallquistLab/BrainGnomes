@@ -12,8 +12,7 @@ get_subject_dirs(
   sub_id_match = "([0-9]+)",
   ses_regex = NULL,
   ses_id_match = "([0-9]+)",
-  full.names = FALSE,
-  subject_filter = NULL
+  full.names = FALSE
 )
 ```
 
@@ -46,12 +45,6 @@ get_subject_dirs(
 
   If `TRUE`, return absolute paths to the folders; if `FALSE`, return
   paths relative to `root`. Default: `FALSE`.
-
-- subject_filter:
-
-  Optional character vector of subject IDs to retain. Filtering occurs
-  before session folders are inspected, which avoids walking unrequested
-  subject directories in large projects.
 
 ## Value
 
