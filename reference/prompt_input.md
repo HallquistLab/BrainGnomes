@@ -9,6 +9,7 @@ prompt_input(
   prompt = "",
   prompt_eol = ">",
   instruct = NULL,
+  heading = NULL,
   type = "character",
   lower = -Inf,
   upper = Inf,
@@ -39,6 +40,11 @@ prompt_input(
 
   Instructions to display above the prompt (character string, or `NULL`
   for none).
+
+- heading:
+
+  Optional section heading printed above `instruct` with a
+  terminal-width horizontal rule.
 
 - type:
 
@@ -113,5 +119,6 @@ accepting the default.
 
 ## Note
 
-This function is intended for interactive use and may not work as
-expected in non-interactive environments (e.g., batch scripts).
+This function works in an interactive R session or in `Rscript` when
+standard input is attached to a TTY. It intentionally rejects headless
+input; use the argument-driven BrainGnomes CLI for that case.

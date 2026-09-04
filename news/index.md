@@ -101,6 +101,13 @@ Released 2026-09-02
   lifecycle tooling after the user confirms replacement of an existing
   file.
 
+- Make guided project setup easier to scan with terminal-width section
+  rules, wrapped instruction paragraphs, consistently indented lists,
+  and prompts on their own lines. The shared prompt renderer retains the
+  TTY-safe input path used by `Rscript`. Headless setup through
+  `BrainGnomes setup_project --non-interactive` remains fully
+  argument-driven.
+
 - Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
   distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask
   conditions. Validation now enforces the selected detrending-plus-MAD

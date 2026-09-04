@@ -54,6 +54,7 @@
 <span>  prompt <span class="op">=</span> <span class="st">""</span>,</span>
 <span>  prompt_eol <span class="op">=</span> <span class="st">"&gt;"</span>,</span>
 <span>  instruct <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  heading <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  type <span class="op">=</span> <span class="st">"character"</span>,</span>
 <span>  lower <span class="op">=</span> <span class="op">-</span><span class="cn">Inf</span>,</span>
 <span>  upper <span class="op">=</span> <span class="cn">Inf</span>,</span>
@@ -83,6 +84,11 @@
 
 <dt id="arg-instruct">instruct<a class="anchor" aria-label="anchor" href="#arg-instruct"></a></dt>
 <dd><p>Instructions to display above the prompt (character string, or <code>NULL</code> for none).</p></dd>
+
+
+<dt id="arg-heading">heading<a class="anchor" aria-label="anchor" href="#arg-heading"></a></dt>
+<dd><p>Optional section heading printed above <code>instruct</code> with a
+terminal-width horizontal rule.</p></dd>
 
 
 <dt id="arg-type">type<a class="anchor" aria-label="anchor" href="#arg-type"></a></dt>
@@ -145,7 +151,9 @@ When <code>empty_keyword</code> is supplied and <code>default</code> is non-<cod
     </div>
     <div class="section level2">
     <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
-    <p>This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).</p>
+    <p>This function works in an interactive R session or in <code>Rscript</code> when
+standard input is attached to a TTY. It intentionally rejects headless
+input; use the argument-driven BrainGnomes CLI for that case.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
