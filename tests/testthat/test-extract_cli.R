@@ -551,6 +551,8 @@ test_that("submit_extract_rois preserves nested methods and save_ts in scheduled
       correlation = list(method = c("spearman", "kendall")),
       save_ts = FALSE,
       save_diagnostics = TRUE,
+      allow_atlas_resampling = TRUE,
+      atlas_space = "MNI152NLin2009cAsym",
       roi_reduce = "mean",
       min_vox_per_roi = 1L,
       rtoz = FALSE
@@ -579,6 +581,8 @@ test_that("submit_extract_rois preserves nested methods and save_ts in scheduled
   expect_identical(parsed$correlation$method, c("spearman", "kendall"))
   expect_false(parsed$save_ts)
   expect_true(parsed$save_diagnostics)
+  expect_true(parsed$allow_atlas_resampling)
+  expect_identical(parsed$atlas_space, "MNI152NLin2009cAsym")
   expect_identical(parsed$mask_file, scfg$extract_rois$default$mask_file)
 
   scfg$extract_rois$default$correlation$method <- "none"

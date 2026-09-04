@@ -2,6 +2,13 @@
 
 Released 2026-09-02
 
+* Add opt-in nearest-neighbour atlas resampling to ROI extraction. Setting
+  `allow_atlas_resampling: true` with an explicit `atlas_space` lets an atlas
+  already in the BOLD coordinate space be placed onto a differing BOLD voxel
+  grid. Exact grid matches remain untouched; differing coordinate-space labels
+  are rejected; resampled atlases must preserve every positive label and are
+  cached by atlas content and target geometry for reuse across jobs.
+
 * Extend `inspect_project()` with subject-wide focus and an active-job view.
   `subject_id` now restricts every structured resolution, while `$active`
   reports queue/runtime age, requested wall time, and noteworthy health states.

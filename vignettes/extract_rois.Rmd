@@ -1,7 +1,7 @@
 ---
 title: "Extracting ROI Timeseries and Connectivity"
 author: "Michael Hallquist"
-date: "31 Aug 2026"
+date: "04 Sep 2026"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Extracting ROIs}
@@ -63,8 +63,31 @@ specifications; all other length mismatches are errors.
 
 Also, multiple atlases/ROI masks can be included in a single extraction stream. As detailed below,
 the output files are named according to the mask name. All atlas/ROI mask files should be integer-valued
-NIfTI files having the same stereotaxic space and spatial resolution as the postprocessed data.
-BrainGnomes performs simple checks on these files, but please check these yourself, too!
+NIfTI files in the same coordinate space as the postprocessed data. By default,
+their complete spatial grids must also match exactly.
+
+If an atlas is in the correct coordinate space but has a different resolution,
+field of view, or grid origin, an extraction stream can opt into
+nearest-neighbour resampling:
+
+```yaml
+extract_rois:
+  connectivity:
+    input_streams: [rest_clean]
+    atlases: [/path/to/Schaefer_444_1mm.nii.gz]
+    allow_atlas_resampling: true
+    atlas_space: MNI152NLin2009cAsym
+```
+
+BrainGnomes compares the full NIfTI grid, including dimensions, voxel sizes,
+spatial units, and qform/sform transforms and codes. If the atlas already
+matches, it is used directly even when `allow_atlas_resampling` is `true`. If
+the grid differs, `atlas_space` must exactly match the BOLD filename's
+`space-<label>` entity. This is resampling within a coordinate space, not
+registration between spaces. The resampled atlas must retain every positive
+label; otherwise extraction stops rather than silently changing the ROI set.
+Validated resampled atlases are cached under `data_rois/.atlas_cache` by atlas
+content and target grid, so subjects sharing a grid reuse the same image.
 
 # ROI reduction methods
 

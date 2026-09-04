@@ -936,6 +936,29 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
     }
   }
 
+  if (is.null(ecfg$allow_atlas_resampling)) {
+    ecfg$allow_atlas_resampling <- FALSE
+  } else if (!checkmate::test_flag(ecfg$allow_atlas_resampling)) {
+    if (!quiet) message(glue("Invalid allow_atlas_resampling in $extract_rois${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "extract_rois/allow_atlas_resampling")
+    ecfg$allow_atlas_resampling <- NULL
+  }
+
+  if (!is.null(ecfg$atlas_space)) {
+    ecfg$atlas_space <- validate_char(ecfg$atlas_space, empty_value = NULL)
+  }
+  if (isTRUE(ecfg$allow_atlas_resampling) &&
+      !checkmate::test_string(ecfg$atlas_space, min.chars = 1L)) {
+    if (!quiet) message(glue("atlas_space is required when allow_atlas_resampling is enabled in $extract_rois${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "extract_rois/atlas_space")
+    ecfg$atlas_space <- NULL
+  } else if (!is.null(ecfg$atlas_space) &&
+             !checkmate::test_string(ecfg$atlas_space, min.chars = 1L)) {
+    if (!quiet) message(glue("Invalid atlas_space in $extract_rois${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "extract_rois/atlas_space")
+    ecfg$atlas_space <- NULL
+  }
+
   if (!"roi_reduce" %in% names(ecfg)) {
     gaps <- c(gaps, "extract_rois/roi_reduce")
   } else if (!checkmate::test_string(ecfg$roi_reduce) ||
