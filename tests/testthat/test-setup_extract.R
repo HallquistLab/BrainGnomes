@@ -151,6 +151,34 @@ test_that("interactive extraction setup records atlas resampling and space", {
   expect_identical(response_index, 2L)
 })
 
+test_that("interactive extraction setup does not request an inferable atlas space", {
+  response_count <- 0L
+  local_mocked_bindings(
+    setup_job = function(cfg, ...) cfg,
+    prompt_input = function(...) {
+      response_count <<- response_count + 1L
+      if (response_count > 1L) stop("atlas_space should be inferred")
+      TRUE
+    },
+    .package = "BrainGnomes"
+  )
+
+  cfg <- structure(list(
+    extract_rois = list(enable = TRUE, demo = list(
+      atlases = "space-MNI152NLin2009cAsym_atlas-Demo_dseg.nii.gz"
+    ))
+  ), class = "bg_project_cfg")
+  updated <- setup_extract_stream(
+    cfg,
+    fields = "extract_rois/demo/allow_atlas_resampling",
+    stream_name = "demo"
+  )
+
+  expect_true(updated$extract_rois$demo$allow_atlas_resampling)
+  expect_null(updated$extract_rois$demo$atlas_space)
+  expect_identical(response_count, 1L)
+})
+
 test_that("extraction validation defaults and checks atlas resampling", {
   tmp <- tempfile("validate-atlas-resampling-")
   dir.create(tmp)
@@ -178,6 +206,24 @@ test_that("extraction validation defaults and checks atlas resampling", {
   expect_true(valid$extract_rois$allow_atlas_resampling)
   expect_identical(valid$extract_rois$atlas_space, config$atlas_space)
   expect_false("extract_rois/atlas_space" %in% valid$gaps)
+
+  bids_atlas <- file.path(
+    tmp,
+    "space-MNI152NLin2009cAsym_atlas-Demo_dseg.nii.gz"
+  )
+  file.create(bids_atlas)
+  inferred_config <- config
+  inferred_config$atlases <- bids_atlas
+  inferred_config$atlas_space <- NULL
+  inferred <- validate_extract_config_single(inferred_config, quiet = TRUE)
+  expect_true(inferred$extract_rois$allow_atlas_resampling)
+  expect_null(inferred$extract_rois$atlas_space)
+  expect_false("extract_rois/atlas_space" %in% inferred$gaps)
+
+  inferred_config$atlas_space <- "MNI152NLin6Asym"
+  conflict <- validate_extract_config_single(inferred_config, quiet = TRUE)
+  expect_null(conflict$extract_rois$atlas_space)
+  expect_true("extract_rois/atlas_space" %in% conflict$gaps)
 
   config$allow_atlas_resampling <- "yes"
   invalid_flag <- validate_extract_config_single(config, quiet = TRUE)

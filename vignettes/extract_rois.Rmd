@@ -68,7 +68,19 @@ their complete spatial grids must also match exactly.
 
 If an atlas is in the correct coordinate space but has a different resolution,
 field of view, or grid origin, an extraction stream can opt into
-nearest-neighbour resampling:
+nearest-neighbour resampling. For a BIDS-named atlas, BrainGnomes infers its
+coordinate space from the formal `space-<label>` entity:
+
+```yaml
+extract_rois:
+  connectivity:
+    input_streams: [rest_clean]
+    atlases: [/path/to/space-MNI152NLin2009cAsym_atlas-Schaefer444_dseg.nii.gz]
+    allow_atlas_resampling: true
+```
+
+For a legacy atlas filename without that entity, provide `atlas_space` as a
+fallback:
 
 ```yaml
 extract_rois:
@@ -82,12 +94,15 @@ extract_rois:
 BrainGnomes compares the full NIfTI grid, including dimensions, voxel sizes,
 spatial units, and qform/sform transforms and codes. If the atlas already
 matches, it is used directly even when `allow_atlas_resampling` is `true`. If
-the grid differs, `atlas_space` must exactly match the BOLD filename's
-`space-<label>` entity. This is resampling within a coordinate space, not
-registration between spaces. The resampled atlas must retain every positive
-label; otherwise extraction stops rather than silently changing the ROI set.
-Validated resampled atlases are cached under `data_rois/.atlas_cache` by atlas
-content and target grid, so subjects sharing a grid reuse the same image.
+the grid differs, a filename-derived or configured atlas space must exactly
+match the BOLD filename's `space-<label>` entity. If both the atlas filename and
+`atlas_space` declare a space, they must agree. BrainGnomes does not guess from
+informal fragments such as `2009c` embedded in a legacy filename. This is
+resampling within a coordinate space, not registration between spaces. The
+resampled atlas must retain every positive label; otherwise extraction stops
+rather than silently changing the ROI set. Validated resampled atlases are
+cached under `data_rois/.atlas_cache` by atlas content and target grid, so
+subjects sharing a grid reuse the same image.
 
 # ROI reduction methods
 

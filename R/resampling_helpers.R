@@ -291,8 +291,9 @@ validate_resampled_atlas_labels <- function(source_file, resampled_file) {
 #' Resolve the atlas image to use for ROI extraction
 #'
 #' Matching atlas/BOLD grids always use the configured atlas directly. A grid
-#' mismatch can be resampled only when the caller explicitly opts in and
-#' declares the atlas coordinate space to match the BOLD `space` entity.
+#' mismatch can be resampled only when the caller explicitly opts in and the
+#' atlas coordinate space matches the BOLD `space` entity. The atlas filename's
+#' formal BIDS `space` entity takes precedence over the configured fallback.
 #'
 #' @keywords internal
 #' @noRd
@@ -324,9 +325,10 @@ prepare_atlas_for_extraction <- function(atlas_file, bold_file,
     to_log(
       lg, "fatal",
       paste0(
-        "{grid$message} Set allow_atlas_resampling = TRUE and provide ",
-        "atlas_space only when the atlas is already in the BOLD coordinate ",
-        "space and nearest-neighbour resampling is appropriate."
+        "{grid$message} Set allow_atlas_resampling = TRUE only when the atlas ",
+        "is already in the BOLD coordinate space and nearest-neighbour ",
+        "resampling is appropriate. Declare that space with a formal atlas ",
+        "filename space-<label> entity or the atlas_space fallback."
       )
     )
   }
@@ -343,22 +345,39 @@ prepare_atlas_for_extraction <- function(atlas_file, bold_file,
       )
     )
   }
-  if (is.null(atlas_space)) {
+  filename_space <- bids_space_from_filename(atlas_file)[[1L]]
+  has_filename_space <- !is.na(filename_space) && nzchar(filename_space)
+  has_configured_space <- !is.null(atlas_space)
+  if (has_filename_space && has_configured_space &&
+      !identical(filename_space, atlas_space)) {
     to_log(
       lg, "fatal",
       paste0(
-        "atlas_space is required when allow_atlas_resampling = TRUE and the ",
-        "atlas grid does not match. The BOLD image declares space-{bold_space}."
+        "Atlas filename space-{filename_space} conflicts with configured ",
+        "atlas_space '{atlas_space}' for {atlas_file}. Remove the YAML ",
+        "fallback or make the two declarations agree."
       )
     )
   }
-  if (!identical(atlas_space, bold_space)) {
+  resolved_atlas_space <- if (has_filename_space) filename_space else atlas_space
+  if (is.null(resolved_atlas_space)) {
+    to_log(
+      lg, "fatal",
+      paste0(
+        "The atlas filename has no formal space-<label> entity, so atlas_space ",
+        "is required when allow_atlas_resampling = TRUE and the atlas grid ",
+        "does not match. The BOLD image declares space-{bold_space}."
+      )
+    )
+  }
+  if (!identical(resolved_atlas_space, bold_space)) {
     to_log(
       lg, "fatal",
       paste0(
         "Atlas resampling requires matching coordinate spaces, but ",
-        "atlas_space is '{atlas_space}' and the BOLD image declares ",
-        "space-{bold_space}. Registration between spaces is not performed."
+        "the atlas declares space-{resolved_atlas_space} and the BOLD image ",
+        "declares space-{bold_space}. Registration between spaces is not ",
+        "performed."
       )
     )
   }
@@ -366,9 +385,10 @@ prepare_atlas_for_extraction <- function(atlas_file, bold_file,
   to_log(
     lg, "info",
     paste0(
-      "Atlas {atlas_file} is declared in space-{atlas_space} but does not ",
-      "match the BOLD voxel grid. Resampling it with nearest-neighbour ",
-      "interpolation."
+      "Atlas {atlas_file} is declared in space-{resolved_atlas_space} ",
+      "{if (has_filename_space) 'by its filename' else 'by atlas_space'} but ",
+      "does not match the BOLD voxel grid. Resampling it with ",
+      "nearest-neighbour interpolation."
     )
   )
   resample_atlas_to_bold(atlas_file, bold_file, cache_dir, lg = lg)

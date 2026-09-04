@@ -142,6 +142,7 @@ get_extract_stream_names <- function(scfg) {
 
 setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   checkmate::assert_string(stream_name, null.ok = TRUE)
+  fields_supplied <- !is.null(fields)
 
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     stop("scfg input must be a bg_project_cfg object produced by setup_project")
@@ -241,19 +242,33 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
     )
   }
 
+  atlas_filename_spaces <- if (checkmate::test_character(
+    excfg$atlases, min.len = 1L, any.missing = FALSE
+  )) {
+    bids_space_from_filename(excfg$atlases)
+  } else {
+    NA_character_
+  }
+  needs_space_fallback <- any(is.na(atlas_filename_spaces))
+  has_space_fallback <- checkmate::test_string(
+    excfg$atlas_space, min.chars = 1L
+  )
   needs_atlas_space <- isTRUE(excfg$allow_atlas_resampling) &&
-    (is.null(excfg$atlas_space) || !nzchar(trimws(excfg$atlas_space)))
+    needs_space_fallback && !has_space_fallback
+  atlas_space_requested <- fields_supplied &&
+    "extract_rois/atlas_space" %in% fields
   if (isTRUE(excfg$allow_atlas_resampling) &&
-      ("extract_rois/atlas_space" %in% fields || needs_atlas_space)) {
+      (atlas_space_requested || needs_atlas_space)) {
     excfg$atlas_space <- validate_char(prompt_input(
       instruct = glue("\n
-        Enter the atlas coordinate-space label exactly as it appears in the
-        postprocessed BOLD space-<label> entity (for example,
-        MNI152NLin2009cAsym). BrainGnomes will refuse to resample if these labels
-        differ."),
-      prompt = "Atlas coordinate space",
+        BrainGnomes reads a formal space-<label> entity from each atlas filename.
+        For atlas filenames without that entity, enter a fallback coordinate-space
+        label exactly as it appears in the postprocessed BOLD filename (for
+        example, MNI152NLin2009cAsym). A configured fallback must also agree with
+        any atlas filename entities that are present."),
+      prompt = "Fallback atlas coordinate space",
       type = "character",
-      required = isTRUE(excfg$allow_atlas_resampling),
+      required = needs_space_fallback,
       default = excfg$atlas_space
     ), empty_value = NULL)
   }

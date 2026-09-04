@@ -59,6 +59,23 @@ test_that("matching atlas grids are never resampled", {
   expect_false(dir.exists(cache_dir))
 })
 
+test_that("atlas spaces are inferred only from formal BIDS entities", {
+  observed <- bids_space_from_filename(c(
+    "space-MNI152NLin2009cAsym_atlas-Schaefer444_dseg.nii.gz",
+    "sub-01_space-MNI152NLin6Asym_atlas-Demo_dseg.nii.gz",
+    "Schaefer_444_final_2009c_1.0mm.nii.gz",
+    "notspace-MNI152NLin6Asym_atlas-Demo_dseg.nii.gz",
+    "notspace-Wrong_space-MNI152NLin2009cAsym_atlas-Demo_dseg.nii.gz"
+  ))
+  expect_identical(
+    observed,
+    c(
+      "MNI152NLin2009cAsym", "MNI152NLin6Asym", NA, NA,
+      "MNI152NLin2009cAsym"
+    )
+  )
+})
+
 test_that("atlas resampling is opt-in and restricted to a declared matching space", {
   skip_if_not_installed("RNifti")
 
@@ -87,7 +104,7 @@ test_that("atlas resampling is opt-in and restricted to a declared matching spac
       allow_atlas_resampling = FALSE,
       cache_dir = file.path(root, "cache")
     ),
-    "spatial NIfTI grid mismatch.*allow_atlas_resampling = TRUE"
+    "spatial NIfTI grid mismatch.*allow_atlas_resampling = TRUE.*space-<label>"
   )
   expect_error(
     prepare_atlas_for_extraction(
@@ -123,6 +140,77 @@ test_that("atlas resampling is opt-in and restricted to a declared matching spac
     cache_dir = file.path(root, "cache")
   )
   expect_identical(observed, atlas_file)
+  expect_identical(calls, 1L)
+})
+
+test_that("atlas filename space takes precedence over the YAML fallback", {
+  skip_if_not_installed("RNifti")
+
+  root <- tempfile("atlas-filename-space-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+  bold_file <- file.path(
+    root,
+    "sub-01_task-rest_space-MNI152NLin2009cAsym_desc-clean_bold.nii.gz"
+  )
+  atlas_file <- file.path(
+    root,
+    "space-MNI152NLin2009cAsym_atlas-Demo_dseg.nii.gz"
+  )
+  wrong_atlas_file <- file.path(
+    root,
+    "space-MNI152NLin6Asym_atlas-Demo_dseg.nii.gz"
+  )
+  write_atlas_resampling_nifti(
+    array(rnorm(2L * 2L * 2L * 5L), c(2L, 2L, 2L, 5L)),
+    bold_file,
+    offset = c(-6, -8, -10)
+  )
+  atlas_values <- array(rep(1:2, each = 4L), c(2L, 2L, 2L))
+  write_atlas_resampling_nifti(
+    atlas_values, atlas_file, offset = c(-4, -8, -10)
+  )
+  write_atlas_resampling_nifti(
+    atlas_values, wrong_atlas_file, offset = c(-4, -8, -10)
+  )
+
+  calls <- 0L
+  local_mocked_bindings(
+    resample_atlas_to_bold = function(atlas_file, bold_file, cache_dir,
+                                      lg = NULL) {
+      calls <<- calls + 1L
+      atlas_file
+    },
+    .package = "BrainGnomes"
+  )
+
+  inferred <- prepare_atlas_for_extraction(
+    atlas_file, bold_file,
+    allow_atlas_resampling = TRUE,
+    atlas_space = NULL,
+    cache_dir = file.path(root, "cache")
+  )
+  expect_identical(inferred, atlas_file)
+  expect_identical(calls, 1L)
+
+  expect_error(
+    prepare_atlas_for_extraction(
+      atlas_file, bold_file,
+      allow_atlas_resampling = TRUE,
+      atlas_space = "MNI152NLin6Asym",
+      cache_dir = file.path(root, "cache")
+    ),
+    "filename space-MNI152NLin2009cAsym conflicts.*atlas_space"
+  )
+  expect_error(
+    prepare_atlas_for_extraction(
+      wrong_atlas_file, bold_file,
+      allow_atlas_resampling = TRUE,
+      atlas_space = NULL,
+      cache_dir = file.path(root, "cache")
+    ),
+    "atlas declares space-MNI152NLin6Asym.*BOLD image declares space-MNI152NLin2009cAsym"
+  )
   expect_identical(calls, 1L)
 })
 

@@ -947,9 +947,28 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
   if (!is.null(ecfg$atlas_space)) {
     ecfg$atlas_space <- validate_char(ecfg$atlas_space, empty_value = NULL)
   }
-  if (isTRUE(ecfg$allow_atlas_resampling) &&
-      !checkmate::test_string(ecfg$atlas_space, min.chars = 1L)) {
-    if (!quiet) message(glue("atlas_space is required when allow_atlas_resampling is enabled in $extract_rois${cfg_name}. You will be asked for this."))
+  atlas_filename_spaces <- if (checkmate::test_character(
+    ecfg$atlases, min.len = 1L, any.missing = FALSE
+  )) {
+    bids_space_from_filename(ecfg$atlases)
+  } else {
+    NA_character_
+  }
+  needs_space_fallback <- any(is.na(atlas_filename_spaces))
+  has_space_fallback <- checkmate::test_string(
+    ecfg$atlas_space, min.chars = 1L
+  )
+  filename_space_conflict <- has_space_fallback && any(
+    !is.na(atlas_filename_spaces) &
+      atlas_filename_spaces != ecfg$atlas_space
+  )
+  if (isTRUE(ecfg$allow_atlas_resampling) && filename_space_conflict) {
+    if (!quiet) message(glue("atlas_space conflicts with an atlas filename space entity in $extract_rois${cfg_name}. You will be asked to correct or remove the fallback."))
+    gaps <- c(gaps, "extract_rois/atlas_space")
+    ecfg$atlas_space <- NULL
+  } else if (isTRUE(ecfg$allow_atlas_resampling) &&
+             needs_space_fallback && !has_space_fallback) {
+    if (!quiet) message(glue("atlas_space is required for atlas filenames without a space entity when allow_atlas_resampling is enabled in $extract_rois${cfg_name}. You will be asked for this."))
     gaps <- c(gaps, "extract_rois/atlas_space")
     ecfg$atlas_space <- NULL
   } else if (!is.null(ecfg$atlas_space) &&

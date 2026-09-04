@@ -45,12 +45,14 @@
 #' @param allow_atlas_resampling If `TRUE`, an atlas whose spatial grid differs
 #'   from the BOLD image may be resampled onto the BOLD grid using
 #'   nearest-neighbour interpolation. Resampling occurs only for a verified grid
-#'   mismatch, and requires `atlas_space` to match the BOLD filename's `space`
-#'   entity. Default: `FALSE`.
-#' @param atlas_space Coordinate-space label for `atlas_files`, such as
-#'   `"MNI152NLin2009cAsym"`. This is required only when atlas resampling is
-#'   enabled and a grid mismatch is encountered. BrainGnomes does not register
-#'   images between coordinate spaces.
+#'   mismatch, and requires the atlas coordinate space to match the BOLD
+#'   filename's `space` entity. Default: `FALSE`.
+#' @param atlas_space Optional fallback coordinate-space label for atlas files
+#'   that do not contain a formal BIDS `space-<label>` filename entity, such as
+#'   `"MNI152NLin2009cAsym"`. A filename entity is used when present; a
+#'   conflicting fallback is an error. A space declaration is required only
+#'   when atlas resampling is enabled and a grid mismatch is encountered.
+#'   BrainGnomes does not register images between coordinate spaces.
 #' 
 #' @return A named list. Each element corresponds to an atlas and contains
 #'   paths to the written timeseries (\code{timeseries}) and correlation

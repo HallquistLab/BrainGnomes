@@ -110,6 +110,34 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
   return(df)
 }
 
+#' Extract a formally delimited BIDS space entity from filenames
+#'
+#' Unlike the general-purpose entity parser, this helper requires `space-` to
+#' begin the basename or follow an underscore, and requires the value to end at
+#' an underscore or file extension. This prevents incidental substrings in
+#' non-BIDS filenames from being treated as coordinate-space declarations.
+#'
+#' @keywords internal
+#' @noRd
+bids_space_from_filename <- function(filenames) {
+  checkmate::assert_character(filenames, any.missing = FALSE)
+  if (length(filenames) == 0L) return(character())
+
+  basenames <- basename(filenames)
+  matches <- regmatches(
+    basenames,
+    regexec(
+      "(?:^|_)space-([A-Za-z0-9]+)(?:_|\\.)",
+      basenames,
+      perl = TRUE
+    )
+  )
+  vapply(matches, function(match) {
+    if (length(match) < 2L || !nzchar(match[[2L]])) return(NA_character_)
+    match[[2L]]
+  }, character(1))
+}
+
 
 
 
