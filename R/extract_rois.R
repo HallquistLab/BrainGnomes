@@ -42,6 +42,17 @@
 #'   of `1` to `Inf`, so transformed output matrices use `NA` on the diagonal.
 #' @param overwrite If `TRUE`, overwrite existing time-series, connectivity,
 #'   or ROI-diagnostics TSV files.
+#' @param allow_atlas_resampling If `TRUE`, an atlas whose spatial grid differs
+#'   from the BOLD image may be resampled onto the BOLD grid using
+#'   nearest-neighbour interpolation. Resampling occurs only for a verified grid
+#'   mismatch, and requires the atlas coordinate space to match the BOLD
+#'   filename's `space` entity. Default: `FALSE`.
+#' @param atlas_space Optional fallback coordinate-space label for atlas files
+#'   that do not contain a formal BIDS `space-<label>` filename entity, such as
+#'   `"MNI152NLin2009cAsym"`. A filename entity is used when present; a
+#'   conflicting fallback is an error. A space declaration is required only
+#'   when atlas resampling is enabled and a grid mismatch is encountered.
+#'   BrainGnomes does not register images between coordinate spaces.
 #' 
 #' @return A named list. Each element corresponds to an atlas and contains
 #'   paths to the written timeseries (\code{timeseries}) and correlation
@@ -55,7 +66,9 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
                          cor_method = c("pearson", "spearman", "kendall", "cor.shrink"),
                          roi_reduce = c("mean", "median", "pca", "huber"),
                          mask_file = NULL, min_vox_per_roi = 5, save_ts = TRUE,
-                         save_diagnostics = FALSE, rtoz = FALSE, overwrite = FALSE) {
+                         save_diagnostics = FALSE, rtoz = FALSE,
+                         overwrite = FALSE, allow_atlas_resampling = FALSE,
+                         atlas_space = NULL) {
   checkmate::assert_file_exists(bold_file)
   checkmate::assert_character(atlas_files, any.missing = FALSE, min.len = 1)
   checkmate::assert_directory_exists(out_dir, access = "w")
@@ -79,6 +92,8 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
   }
   checkmate::assert_flag(rtoz)
   checkmate::assert_flag(overwrite)
+  checkmate::assert_flag(allow_atlas_resampling)
+  checkmate::assert_string(atlas_space, null.ok = TRUE, min.chars = 1L)
 
   lg <- lgr::get_logger_glue("extract_rois")
   lg$config(NULL) # reset logger object to clear any appender files
@@ -142,6 +157,14 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
 
     atlas_result <- run_logged(
       function(atlas_path, atlas_label) {
+        atlas_path <- prepare_atlas_for_extraction(
+          atlas_file = atlas_path,
+          bold_file = bold_file,
+          allow_atlas_resampling = allow_atlas_resampling,
+          atlas_space = atlas_space,
+          cache_dir = file.path(out_dir, ".atlas_cache"),
+          lg = lg
+        )
         atlas_img <- RNifti::readNifti(atlas_path)
         out_dir_atlas <- file.path(out_dir, atlas_label)
         if (!dir.exists(out_dir_atlas)) dir.create(out_dir_atlas, recursive = TRUE)
@@ -174,10 +197,6 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
             stop("Correlation methods must produce unique output paths.", call. = FALSE)
           }
           names(cor_paths) <- cor_method
-        }
-
-        if (!identical(dim(atlas_img)[1:3], dim_img[1:3])) {
-          to_log(lg, "fatal", "Atlas '{atlas_path}' spatial dimensions {paste(dim(atlas_img)[1:3], collapse = 'x')}\n           do not match BOLD grid {paste(dim_img[1:3], collapse = 'x')}.\n           Resample atlas or BOLD to a common grid.")
         }
 
         atlas_vec <- as.vector(atlas_img)

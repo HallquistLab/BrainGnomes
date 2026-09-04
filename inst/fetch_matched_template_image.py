@@ -1,6 +1,5 @@
 import nibabel as nib
 import re
-from templateflow import api
 from nilearn.image import resample_to_img
 
 def parse_entity_from_filename(filename, entity):
@@ -30,6 +29,8 @@ def parse_space_from_filename(filename):
 
 # Fetch the template image from TemplateFlow
 def fetch_template_image(template, resolution, suffix, desc=None, extension=".nii.gz", cohort=None):
+    from templateflow import api
+
     cohort = normalize_templateflow_value(cohort)
     print(
         f"Fetching from TemplateFlow: template={template}, cohort={cohort}, "
@@ -45,6 +46,30 @@ def fetch_template_image(template, resolution, suffix, desc=None, extension=".ni
     if cohort is not None:
         query["cohort"] = cohort
     return api.get(**query)
+
+def resample_image_to_reference(source_file, reference_file, output, interpolation="nearest"):
+    source_img = nib.load(source_file)
+    reference_img = nib.load(reference_file)
+
+    # https://nilearn.github.io/stable/auto_examples/06_manipulating_images/plot_resample_to_template.html
+    resampled_img = resample_to_img(
+        source_img=source_img,
+        target_img=reference_img,
+        interpolation=interpolation,
+        force_resample=True,
+        copy_header=True
+    )
+
+    # nilearn copies the target geometry, but nibabel may normalize the xform
+    # codes while constructing the resampled image. The output is explicitly
+    # on the reference grid, so retain both transforms and codes exactly.
+    reference_qform, reference_qform_code = reference_img.get_qform(coded=True)
+    reference_sform, reference_sform_code = reference_img.get_sform(coded=True)
+    resampled_img.set_qform(reference_qform, code=int(reference_qform_code))
+    resampled_img.set_sform(reference_sform, code=int(reference_sform_code))
+
+    nib.save(resampled_img, output)
+    return output
 
 def resample_template_to_bold(in_file, output, template_resolution=1, template_space=None,
     template_cohort=None, suffix="mask", desc="brain", extension=".nii.gz", interpolation="nearest"):
@@ -79,22 +104,9 @@ def resample_template_to_bold(in_file, output, template_resolution=1, template_s
                 f"cohort={template_cohort}, desc={desc}, resolution={template_resolution}"
             )
 
-    template_img = nib.load(image_path)
-    # https://nilearn.github.io/stable/auto_examples/06_manipulating_images/plot_resample_to_template.html
-    resampled_mask = resample_to_img(
-        source_img = template_img, target_img = bold_img, interpolation = interpolation, 
-        force_resample = True, copy_header = True)
-
-    # nilearn copies the target geometry, but nibabel may normalize the xform
-    # codes while constructing the resampled image (for example, qform/sform
-    # 4/4 can become 0/2 even when both affine matrices are unchanged). The
-    # mask is explicitly on the BOLD grid, so retain the reference transforms
-    # and their coordinate-system codes exactly. Postprocessing operations are
-    # expected to preserve this metadata, and the grid validator checks it.
-    bold_qform, bold_qform_code = bold_img.get_qform(coded=True)
-    bold_sform, bold_sform_code = bold_img.get_sform(coded=True)
-    resampled_mask.set_qform(bold_qform, code=int(bold_qform_code))
-    resampled_mask.set_sform(bold_sform, code=int(bold_sform_code))
-
-    nib.save(resampled_mask, output)
-    return output
+    return resample_image_to_reference(
+        source_file=image_path,
+        reference_file=in_file,
+        output=output,
+        interpolation=interpolation
+    )

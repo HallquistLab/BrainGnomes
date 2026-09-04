@@ -1740,9 +1740,6 @@ resample_template_to_img <- function(
   checkmate::assert_flag(install_dependencies)
   checkmate::assert_flag(overwrite)
 
-  install_dependencies <- isTRUE(getOption("BrainGnomes.install_py_deps", install_dependencies))
-  force_managed_env <- isTRUE(getOption("BrainGnomes.py_force_managed_env", FALSE))
-
   f_info <- as.list(extract_bids_info(in_file))
   normalize_templateflow_entity <- function(value) {
     if (length(value) == 0L || is.null(value) || is.na(value) || !nzchar(value)) return(NULL)
@@ -1831,144 +1828,12 @@ resample_template_to_img <- function(
     overwrite <- TRUE
   }
 
-  # based on postprocess log, determine log root for parking lock file
-  logger_logs_dir <- function(logger) {
-    log_dir <- path.expand("~") # this is the fallback if the logger doesn't match expectations
-    if (!checkmate::test_class(logger, "Logger")) return(log_dir)
-    primary_dest <- tryCatch(logger$appenders$postprocess_log$destination, error = function(...) NULL)
-    if (!is.null(primary_dest) && nzchar(primary_dest)) {
-      return(tryCatch(
-        suppressWarnings(normalizePath(dirname(primary_dest), winslash = "/", mustWork = FALSE)),
-        error = function(...) {
-          to_log(lg, "warn", "Cannot find log root for lock file based on {primary_dest}")
-          log_dir
-        }
-      ))
-    } else {
-      # fall back to user home directory
-      return(log_dir)
-    }
-  }
-
-  required_modules <- c("nibabel", "nilearn", "templateflow")
-  py_initialized <- reticulate::py_available(initialize = FALSE)
-
-  python_env_root <- function() {
-    reticulate_python <- Sys.getenv("RETICULATE_PYTHON", "")
-    if (nzchar(reticulate_python) && file.exists(reticulate_python)) {
-      return(dirname(dirname(reticulate_python)))
-    }
-    virtual_env <- Sys.getenv("VIRTUAL_ENV", "")
-    if (nzchar(virtual_env)) return(virtual_env)
-    conda_prefix <- Sys.getenv("CONDA_PREFIX", "")
-    if (nzchar(conda_prefix)) return(conda_prefix)
-    ""
-  }
-
-  env_is_writable <- function(path) {
-    nzchar(path) && dir.exists(path) && file.access(path, 2) == 0
-  }
-
-  with_unset_env <- function(vars, expr) {
-    old_env <- Sys.getenv(vars, unset = NA)
-    on.exit({
-      for (nm in names(old_env)) {
-        val <- old_env[[nm]]
-        if (is.na(val)) {
-          Sys.unsetenv(nm)
-        } else {
-          do.call(Sys.setenv, setNames(list(val), nm))
-        }
-      }
-    }, add = TRUE)
-    Sys.unsetenv(vars)
-    force(expr)
-  }
-
-  use_managed_env <- force_managed_env && !py_initialized
-  if (force_managed_env && py_initialized) {
-    to_log(lg, "warn", "BrainGnomes.py_force_managed_env is TRUE, but Python is already initialized; using the active Python environment.")
-  }
-
-  if (!use_managed_env && install_dependencies && !py_initialized) {
-    env_root <- python_env_root()
-    if (nzchar(env_root) && !env_is_writable(env_root)) {
-      use_managed_env <- TRUE
-      to_log(lg, "warn", "Active Python environment '{env_root}' is not writable. Falling back to a managed reticulate environment.")
-    }
-  }
-
-  missing <- character()
-  if (install_dependencies) {
-    project_logs_dir <- logger_logs_dir(lg)
-    if (!dir.exists(project_logs_dir)) dir.create(project_logs_dir, recursive = TRUE, showWarnings = FALSE)
-
-    lock_file <- file.path(project_logs_dir, "resample_template_to_img.lock")
-    lock_handle <- NULL
-    release_lock <- function() {
-      if (!is.null(lock_handle)) {
-        filelock::unlock(lock_handle)
-        lock_handle <<- NULL
-      }
-    }
-    lock_timeout <- getOption("BrainGnomes.py_install_lock_timeout", 600)
-    lock_handle <- tryCatch(
-      filelock::lock(lock_file, timeout = lock_timeout),
-      error = function(e) {
-        err_msg <- glue(
-          "Unable to acquire dependency installation lock at {lock_file}. ",
-          "Another process may still be installing Python packages. ",
-          "Increase option 'BrainGnomes.py_install_lock_timeout' to wait longer if needed. ",
-          "Original error: {conditionMessage(e)}"
-        )
-        to_log(lg, "error", err_msg)
-      }
-    )
-    on.exit(release_lock(), add = TRUE)
-
-    if (use_managed_env && !py_initialized) {
-      managed_env_vars <- c("RETICULATE_PYTHON", "RETICULATE_PYTHON_ENV", "VIRTUAL_ENV", "CONDA_PREFIX")
-      missing <- with_unset_env(managed_env_vars, {
-        reticulate::py_require(required_modules)
-        required_modules[!vapply(required_modules, reticulate::py_module_available, logical(1))]
-      })
-    } else {
-      missing <- required_modules[!vapply(required_modules, reticulate::py_module_available, logical(1))]
-      if (length(missing) > 0) {
-        message("Installing missing Python packages into the active environment...")
-        install_error <- NULL
-        tryCatch(
-          reticulate::py_install(missing),
-          error = function(e) install_error <<- e
-        )
-        if (!is.null(install_error)) {
-          err_msg <- conditionMessage(install_error)
-          hint <- "If the active Python environment is not writable, set options(BrainGnomes.py_force_managed_env = TRUE) or point RETICULATE_PYTHON to a user-writable environment."
-          to_log(lg, "error", glue("Python package installation failed: {err_msg}. {hint}"))
-          stop(glue("Python package installation failed. {hint}"))
-        }
-        missing <- required_modules[!vapply(required_modules, reticulate::py_module_available, logical(1))]
-      }
-    }
-    release_lock()
-  } else {
-    missing <- required_modules[!vapply(required_modules, reticulate::py_module_available, logical(1))]
-  }
-
-  if (length(missing) > 0) {
-    to_log(lg, "error",
-      glue("The following required Python modules are missing: {paste(missing, collapse = ', ')}. ",
-      "Please install them in your Python environment (e.g., with pip or reticulate::virtualenv_install), ",
-      "or set options(BrainGnomes.py_force_managed_env = TRUE) to use a managed environment.")
-    )
-  }
-
-  # Load Python module from script
-  script_path <- system.file("fetch_matched_template_image.py", package = "BrainGnomes")
-  if (!file.exists(script_path)) stop("Required python script not found: ", script_path)
-  reticulate::source_python(script_path)
-
-  img <- resample_template_to_bold(
+  backend <- load_image_resampling_backend(
+    required_modules = c("nibabel", "nilearn", "templateflow"),
+    install_dependencies = install_dependencies,
+    lg = lg
+  )
+  img <- backend$resample_template_to_bold(
     in_file = in_file,
     output = output,
     template_resolution = template_resolution,

@@ -112,6 +112,8 @@ arg_list <- list(
   min_vox_per_roi = cfg$min_vox_per_roi,
   save_ts = if (is.null(cfg$save_ts)) TRUE else cfg$save_ts,
   save_diagnostics = if (is.null(cfg$save_diagnostics)) FALSE else cfg$save_diagnostics,
+  allow_atlas_resampling = if (is.null(cfg$allow_atlas_resampling)) FALSE else cfg$allow_atlas_resampling,
+  atlas_space = cfg$atlas_space,
   rtoz = cfg$rtoz,
   log_file = log_file,
   overwrite = isTRUE(cfg$overwrite)
