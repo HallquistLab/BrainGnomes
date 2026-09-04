@@ -68,7 +68,9 @@ optionally computes ROI-to-ROI correlation matrices.</p>
 <span>  save_ts <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  save_diagnostics <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  rtoz <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  allow_atlas_resampling <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  atlas_space <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -144,6 +146,23 @@ of <code>1</code> to <code>Inf</code>, so transformed output matrices use <code>
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
 <dd><p>If <code>TRUE</code>, overwrite existing time-series, connectivity,
 or ROI-diagnostics TSV files.</p></dd>
+
+
+<dt id="arg-allow-atlas-resampling">allow_atlas_resampling<a class="anchor" aria-label="anchor" href="#arg-allow-atlas-resampling"></a></dt>
+<dd><p>If <code>TRUE</code>, an atlas whose spatial grid differs
+from the BOLD image may be resampled onto the BOLD grid using
+nearest-neighbour interpolation. Resampling occurs only for a verified grid
+mismatch, and requires the atlas coordinate space to match the BOLD
+filename's <code>space</code> entity. Default: <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-atlas-space">atlas_space<a class="anchor" aria-label="anchor" href="#arg-atlas-space"></a></dt>
+<dd><p>Optional fallback coordinate-space label for atlas files
+that do not contain a formal BIDS <code>space-&lt;label&gt;</code> filename entity, such as
+<code>"MNI152NLin2009cAsym"</code>. A filename entity is used when present; a
+conflicting fallback is an error. A space declaration is required only
+when atlas resampling is enabled and a grid mismatch is encountered.
+BrainGnomes does not register images between coordinate spaces.</p></dd>
 
 </dl></div>
     <div class="section level2">

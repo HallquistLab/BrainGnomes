@@ -67,7 +67,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">31 Aug 2026</h4>
+            <h4 data-toc-skip class="date">04 Sep 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/extract_rois.Rmd" class="external-link"><code>vignettes/extract_rois.Rmd</code></a></small>
       <div class="d-none name"><code>extract_rois.Rmd</code></div>
@@ -134,9 +134,42 @@ are errors.</p>
 <p>Also, multiple atlases/ROI masks can be included in a single
 extraction stream. As detailed below, the output files are named
 according to the mask name. All atlas/ROI mask files should be
-integer-valued NIfTI files having the same stereotaxic space and spatial
-resolution as the postprocessed data. BrainGnomes performs simple checks
-on these files, but please check these yourself, too!</p>
+integer-valued NIfTI files in the same coordinate space as the
+postprocessed data. By default, their complete spatial grids must also
+match exactly.</p>
+<p>If an atlas is in the correct coordinate space but has a different
+resolution, field of view, or grid origin, an extraction stream can opt
+into nearest-neighbour resampling. For a BIDS-named atlas, BrainGnomes
+infers its coordinate space from the formal
+<code>space-&lt;label&gt;</code> entity:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">extract_rois</span><span class="kw">:</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="at">  </span><span class="fu">connectivity</span><span class="kw">:</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="at">    </span><span class="fu">input_streams</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">rest_clean</span><span class="kw">]</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="at">    </span><span class="fu">atlases</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">/path/to/space-MNI152NLin2009cAsym_atlas-Schaefer444_dseg.nii.gz</span><span class="kw">]</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="at">    </span><span class="fu">allow_atlas_resampling</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
+<p>For a legacy atlas filename without that entity, provide
+<code>atlas_space</code> as a fallback:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">extract_rois</span><span class="kw">:</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="at">  </span><span class="fu">connectivity</span><span class="kw">:</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="at">    </span><span class="fu">input_streams</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">rest_clean</span><span class="kw">]</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">    </span><span class="fu">atlases</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">/path/to/Schaefer_444_1mm.nii.gz</span><span class="kw">]</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">    </span><span class="fu">allow_atlas_resampling</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="at">    </span><span class="fu">atlas_space</span><span class="kw">:</span><span class="at"> MNI152NLin2009cAsym</span></span></code></pre></div>
+<p>BrainGnomes compares the full NIfTI grid, including dimensions, voxel
+sizes, spatial units, and qform/sform transforms and codes. If the atlas
+already matches, it is used directly even when
+<code>allow_atlas_resampling</code> is <code>true</code>. If the grid
+differs, a filename-derived or configured atlas space must exactly match
+the BOLD filename’s <code>space-&lt;label&gt;</code> entity. If both the
+atlas filename and <code>atlas_space</code> declare a space, they must
+agree. BrainGnomes does not guess from informal fragments such as
+<code>2009c</code> embedded in a legacy filename. This is resampling
+within a coordinate space, not registration between spaces. The
+resampled atlas must retain every positive label; otherwise extraction
+stops rather than silently changing the ROI set. Validated resampled
+atlases are cached under <code>data_rois/.atlas_cache</code> by atlas
+content and target grid, so subjects sharing a grid reuse the same
+image.</p>
 </div>
 <div class="section level2">
 <h2 id="roi-reduction-methods">ROI reduction methods<a class="anchor" aria-label="anchor" href="#roi-reduction-methods"></a>
@@ -316,7 +349,7 @@ ROI analyses to the needs of your study.</p>
 directly, but this is recommended only for testing because it runs the
 compute directly within the R session, rather than scheduling jobs on
 the HPC.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/extract_rois.html">extract_rois</a></span><span class="op">(</span></span>
 <span>  bold_file <span class="op">=</span> <span class="st">"sub-01_task-rest_desc-clean_bold.nii.gz"</span>,</span>
