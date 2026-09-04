@@ -467,6 +467,7 @@
 #' inspect only one submission.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param run_id Optional run ID. Use `"latest"` for the most recently recorded
 #'   run, an explicit run ID for an older submission, or `NULL` (the default)
 #'   for current project status across all runs.
@@ -495,7 +496,7 @@
 #' }
 #' @seealso [diagnose_project()] for failure and log investigation.
 #' @export
-inspect_project <- function(input, run_id = NULL) {
+inspect_project <- function(input = getwd(), run_id = NULL) {
   scfg <- project_config_from_input(input)
   all_jobs <- .read_project_tracking_jobs(scfg)
   all_jobs <- .annotate_tracked_jobs(all_jobs)

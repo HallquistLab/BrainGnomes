@@ -198,7 +198,7 @@ test_that("tracked run APIs summarize, diagnose, locate logs, and preview cancel
   jobs <- suppressWarnings(get_run_jobs(fixture$cfg, "latest"))
   expect_setequal(jobs$job_id, c("81001", "81002"))
 
-  diagnosis <- diagnose_project(fixture$cfg, run_id)
+  diagnosis <- diagnose_project(fixture$cfg, run_id, interactive = FALSE)
   expect_s3_class(diagnosis, "bg_project_diagnosis")
   expect_equal(diagnosis$failures$job_id, "81001")
   expect_equal(diagnosis$logs$path, log_file)

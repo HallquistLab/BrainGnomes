@@ -4,36 +4,60 @@
 \alias{diagnose_project}
 \title{Diagnose failed project work}
 \usage{
-diagnose_project(input, run_id = NULL, interactive = FALSE)
+diagnose_project(
+  input = getwd(),
+  run_id = NULL,
+  interactive = base::interactive(),
+  subject_id = NULL,
+  job_id = NULL
+)
 }
 \arguments{
 \item{input}{A project configuration object, YAML file, project directory, or
-a \code{bg_project_inspection} object returned by \code{\link[=inspect_project]{inspect_project()}}.}
+a \code{bg_project_inspection} object returned by \code{\link[=inspect_project]{inspect_project()}}. Defaults
+to the current working directory.}
 
 \item{run_id}{Optional run ID. Use \code{NULL} for current project failures across
 runs, \code{"latest"} for the newest run, or an explicit historical run ID.}
 
-\item{interactive}{If \code{TRUE}, open the guided interactive browser. This mode
-retains the behavior formerly provided by \code{\link[=diagnose_pipeline]{diagnose_pipeline()}}.}
+\item{interactive}{If \code{TRUE}, open the guided interactive browser. If
+\code{FALSE}, return a structured diagnosis. The default is
+\code{base::interactive()}, so console users get the guided browser while
+scripts, tests, and reports get structured output. Interactive mode retains
+the behavior formerly provided by \code{\link[=diagnose_pipeline]{diagnose_pipeline()}}.}
+
+\item{subject_id}{Optional subject identifier, with or without the \verb{sub-}
+prefix. Restricts both structured and interactive diagnosis to that
+subject while preserving the selected run scope.}
+
+\item{job_id}{Optional scheduler job identifier. Opens or returns that exact
+tracked job; this can select a historical job when \code{run_id} is \code{NULL}.}
 }
 \value{
-A \code{bg_project_diagnosis} object containing the underlying
-\code{inspection}, its \code{jobs}, unresolved \code{failures}, and matching \code{logs} for
-the current project state or selected run.
+When \code{interactive = FALSE}, a \code{bg_project_diagnosis} object containing
+the underlying \code{inspection}, its \code{jobs}, unresolved \code{failures}, and matching
+\code{logs} for the current project state or selected run. Interactive mode
+returns the selected result from the guided browser, usually invisibly.
 }
 \description{
 Reports unresolved failed, cancelled, and blocked work and locates matching
-logs. By default, diagnosis follows the current project state assembled by
-\code{\link[=inspect_project]{inspect_project()}} across runs. Select a run for a historical post-mortem.
-Set \code{interactive = TRUE} to open the guided dependency and log browser.
+logs. In an interactive R session, the default opens the guided dependency
+and log browser. In a non-interactive session, the default returns a
+structured diagnosis of the current project state assembled by
+\code{\link[=inspect_project]{inspect_project()}} across runs. Select a run for a historical post-mortem or
+set \code{interactive} explicitly when behavior must not depend on the session.
 }
 \examples{
 \dontrun{
-diagnosis <- diagnose_project(scfg)
+diagnose_project(scfg) # guided browser in an interactive R session
+
+diagnosis <- diagnose_project(scfg, subject_id = "014", interactive = FALSE)
 diagnosis$failures
 diagnosis$logs
 
-old_run <- diagnose_project(scfg, run$run_id)
+diagnose_project(scfg, job_id = "66273010")
+
+old_run <- diagnose_project(scfg, run$run_id, interactive = FALSE)
 }
 }
 \seealso{

@@ -4,10 +4,11 @@
 \alias{inspect_project}
 \title{Inspect current project progress}
 \usage{
-inspect_project(input, run_id = NULL)
+inspect_project(input = getwd(), run_id = NULL)
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{run_id}{Optional run ID. Use \code{"latest"} for the most recently recorded
 run, an explicit run ID for an older submission, or \code{NULL} (the default)

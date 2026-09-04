@@ -47,6 +47,7 @@ Imports:
     yaml
 Suggests: 
     testthat (>= 3.0.0),
+    withr,
     knitr,
     rmarkdown,
     MASS

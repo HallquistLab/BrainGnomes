@@ -4,10 +4,22 @@
 \alias{diagnose_pipeline}
 \title{Deprecated interactive pipeline diagnosis}
 \usage{
-diagnose_pipeline(input)
+diagnose_pipeline(
+  input = getwd(),
+  run_id = NULL,
+  subject_id = NULL,
+  job_id = NULL
+)
 }
 \arguments{
-\item{input}{A project configuration object or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
+
+\item{run_id}{Optional run ID to diagnose.}
+
+\item{subject_id}{Optional subject identifier to focus.}
+
+\item{job_id}{Optional exact scheduler job identifier to open.}
 }
 \value{
 The value returned by \code{diagnose_project(input, interactive = TRUE)}.
