@@ -164,6 +164,16 @@ retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
 retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)
 ```
 
+In an interactive session, `diagnose_project(scfg)` starts with current
+unresolved problems and carries each stage, subject, or run selection forward
+until a specific job and its logs are reached. Skip directly to a known subject
+or scheduler job when useful:
+
+```r
+diagnose_project(scfg, subject_id = "540294")
+diagnose_project(scfg, job_id = "66273010")
+```
+
 By default, retry includes jobs that failed or were cancelled. Set
 `include_blocked = TRUE` only when the new run should also include downstream
 jobs that could not start because an earlier job failed. The new run records the

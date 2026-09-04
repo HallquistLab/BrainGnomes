@@ -129,6 +129,8 @@ test_that("BrainGnomes diagnose help distinguishes guided and prompt-free use", 
   expect_equal(res$status, 0L)
   expect_true(any(grepl("newest attempt for each work unit", res$output, fixed = TRUE)))
   expect_true(any(grepl("guided dependency and log browser", res$output, fixed = TRUE)))
+  expect_true(any(grepl("--subject-id=<id>", res$output, fixed = TRUE)))
+  expect_true(any(grepl("--job-id=<id>", res$output, fixed = TRUE)))
 })
 
 test_that("inspection command help makes optional use cases explicit", {

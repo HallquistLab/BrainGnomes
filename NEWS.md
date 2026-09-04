@@ -9,7 +9,11 @@ Released 2026-09-02
   `inspect_project()`, `diagnose_project()`, and the deprecated
   `diagnose_pipeline()` now accept an explicit project directory or YAML path
   and default to the project in the current working directory when input is
-  omitted.
+  omitted. Guided diagnosis now starts with current unresolved problems,
+  groups repeated stage/stream failures, and preserves every subject, run, and
+  job selection while drilling down. Exact `subject_id` and `job_id` shortcuts
+  are available in R and the CLI, and full run-wide job lists appear only when
+  explicitly requested.
 
 * Add `inspect_project()` as the single front door for database-backed project
   and run monitoring. Its compact dashboard integrates the newest attempt for

@@ -1015,10 +1015,10 @@ find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
   scfg <- project_config_from_input(input)
   jobs <- .get_run_jobs_data(scfg, run_id)
   if (failed_only) jobs <- jobs[jobs$status %in% c("FAILED", "FAILED_BY_EXT", "CANCELLED"), , drop = FALSE]
-  .find_logs_for_jobs(scfg, jobs)
+  find_logs_for_jobs(scfg, jobs)
 }
 
-.find_logs_for_jobs <- function(scfg, jobs) {
+find_logs_for_jobs <- function(scfg, jobs) {
   files <- if (dir.exists(scfg$metadata$log_directory)) {
     list.files(scfg$metadata$log_directory, recursive = TRUE, full.names = TRUE, pattern = "\\.(out|err)$")
   } else character()
@@ -1041,54 +1041,10 @@ find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
   do.call(rbind, rows)
 }
 
-#' Diagnose failed project work
-#'
-#' Reports unresolved failed, cancelled, and blocked work and locates matching
-#' logs. In an interactive R session, the default opens the guided dependency
-#' and log browser. In a non-interactive session, the default returns a
-#' structured diagnosis of the current project state assembled by
-#' [inspect_project()] across runs. Select a run for a historical post-mortem or
-#' set `interactive` explicitly when behavior must not depend on the session.
-#'
-#' @param input A project configuration object, YAML file, project directory, or
-#'   a `bg_project_inspection` object returned by [inspect_project()]. Defaults
-#'   to the current working directory.
-#' @param run_id Optional run ID. Use `NULL` for current project failures across
-#'   runs, `"latest"` for the newest run, or an explicit historical run ID.
-#' @param interactive If `TRUE`, open the guided interactive browser. If
-#'   `FALSE`, return a structured diagnosis. The default is
-#'   `base::interactive()`, so console users get the guided browser while
-#'   scripts, tests, and reports get structured output. Interactive mode retains
-#'   the behavior formerly provided by [diagnose_pipeline()].
-#' @return When `interactive = FALSE`, a `bg_project_diagnosis` object containing
-#'   the underlying `inspection`, its `jobs`, unresolved `failures`, and matching
-#'   `logs` for the current project state or selected run. Interactive mode
-#'   returns the selected result from the guided browser, usually invisibly.
-#' @examples
-#' \dontrun{
-#' diagnose_project(scfg) # guided browser in an interactive R session
-#'
-#' diagnosis <- diagnose_project(scfg, interactive = FALSE)
-#' diagnosis$failures
-#' diagnosis$logs
-#'
-#' old_run <- diagnose_project(scfg, run$run_id, interactive = FALSE)
-#' }
-#' @seealso [inspect_project()] for routine progress monitoring and
-#'   [retry_project_run()] to preview a new run after correcting a failure.
-#' @export
-diagnose_project <- function(input = getwd(), run_id = NULL,
-                             interactive = base::interactive()) {
-  checkmate::assert_flag(interactive)
-  if (interactive) {
-    if (inherits(input, "bg_project_inspection")) {
-      stop("Interactive diagnosis requires a project configuration, YAML file, or directory.", call. = FALSE)
-    }
-    return(.diagnose_pipeline_interactive(
-      project_config_from_input(input), run_id = run_id
-    ))
-  }
-
+build_project_diagnosis <- function(input, run_id = NULL,
+                                     subject_id = NULL, job_id = NULL) {
+  subject_id <- diagnosis_subject_id(subject_id)
+  job_id <- diagnosis_job_id(job_id)
   inspection <- if (inherits(input, "bg_project_inspection")) {
     if (!is.null(run_id)) {
       stop("run_id cannot be supplied when input is already a project inspection.", call. = FALSE)
@@ -1104,19 +1060,47 @@ diagnose_project <- function(input = getwd(), run_id = NULL,
         log_directory = input$log_directory
       )
     ), class = "bg_project_cfg")
-  } else project_config_from_input(input)
+  } else {
+    project_config_from_input(input)
+  }
+
   jobs <- inspection$jobs
-  current <- if (identical(inspection$scope, "project")) jobs$is_current_attempt else rep(TRUE, nrow(jobs))
+  if (!is.null(job_id)) {
+    keep <- !is.na(jobs$job_id) & as.character(jobs$job_id) == job_id
+    if (!any(keep)) {
+      run_text <- if (is.null(run_id)) "" else paste0(" in run ", inspection$run_id)
+      stop("No tracked job has ID ", job_id, run_text, ".", call. = FALSE)
+    }
+    jobs <- jobs[keep, , drop = FALSE]
+  }
+  if (!is.null(subject_id)) {
+    keep <- !is.na(jobs$sub_id) & jobs$sub_id == subject_id
+    if (!any(keep)) {
+      focus_text <- if (is.null(job_id)) "" else paste0(" for job ", job_id)
+      stop("No tracked jobs were found for sub-", subject_id, focus_text, ".", call. = FALSE)
+    }
+    jobs <- jobs[keep, , drop = FALSE]
+  }
+
+  current <- if (!is.null(job_id)) {
+    rep(TRUE, nrow(jobs))
+  } else if (identical(inspection$scope, "project")) {
+    !is.na(jobs$is_current_attempt) & jobs$is_current_attempt
+  } else {
+    rep(TRUE, nrow(jobs))
+  }
   failures <- as.data.frame(
     jobs[
-      current & jobs$lifecycle_status %in% c("FAILED", "BLOCKED", "CANCELLED"),
+      current & jobs$lifecycle_status %in% diagnosis_problem_statuses,
       , drop = FALSE
     ]
   )
-  logs <- .find_logs_for_jobs(scfg, failures)
+  log_jobs <- if (is.null(job_id)) failures else jobs
+  logs <- find_logs_for_jobs(scfg, log_jobs)
   structure(list(
     scope = inspection$scope,
     run_id = inspection$run_id,
+    focus = list(subject_id = subject_id, job_id = job_id),
     inspection = inspection,
     jobs = jobs,
     failures = failures,
@@ -1124,11 +1108,87 @@ diagnose_project <- function(input = getwd(), run_id = NULL,
   ), class = "bg_project_diagnosis")
 }
 
+#' Diagnose failed project work
+#'
+#' Reports unresolved failed, cancelled, and blocked work and locates matching
+#' logs. In an interactive R session, the default opens the guided dependency
+#' and log browser. In a non-interactive session, the default returns a
+#' structured diagnosis of the current project state assembled by
+#' [inspect_project()] across runs. Select a run for a historical post-mortem or
+#' set `interactive` explicitly when behavior must not depend on the session.
+#'
+#' @param input A project configuration object, YAML file, project directory, or
+#'   a `bg_project_inspection` object returned by [inspect_project()]. Defaults
+#'   to the current working directory.
+#' @param run_id Optional run ID. Use `NULL` for current project failures across
+#'   runs, `"latest"` for the newest run, or an explicit historical run ID.
+#' @param subject_id Optional subject identifier, with or without the `sub-`
+#'   prefix. Restricts both structured and interactive diagnosis to that
+#'   subject while preserving the selected run scope.
+#' @param job_id Optional scheduler job identifier. Opens or returns that exact
+#'   tracked job; this can select a historical job when `run_id` is `NULL`.
+#' @param interactive If `TRUE`, open the guided interactive browser. If
+#'   `FALSE`, return a structured diagnosis. The default is
+#'   `base::interactive()`, so console users get the guided browser while
+#'   scripts, tests, and reports get structured output. Interactive mode retains
+#'   the behavior formerly provided by [diagnose_pipeline()].
+#' @return When `interactive = FALSE`, a `bg_project_diagnosis` object containing
+#'   the underlying `inspection`, its `jobs`, unresolved `failures`, and matching
+#'   `logs` for the current project state or selected run. Interactive mode
+#'   returns the selected result from the guided browser, usually invisibly.
+#' @examples
+#' \dontrun{
+#' diagnose_project(scfg) # guided browser in an interactive R session
+#'
+#' diagnosis <- diagnose_project(scfg, subject_id = "014", interactive = FALSE)
+#' diagnosis$failures
+#' diagnosis$logs
+#'
+#' diagnose_project(scfg, job_id = "66273010")
+#'
+#' old_run <- diagnose_project(scfg, run$run_id, interactive = FALSE)
+#' }
+#' @seealso [inspect_project()] for routine progress monitoring and
+#'   [retry_project_run()] to preview a new run after correcting a failure.
+#' @export
+diagnose_project <- function(input = getwd(), run_id = NULL,
+                             interactive = base::interactive(),
+                             subject_id = NULL, job_id = NULL) {
+  checkmate::assert_flag(interactive)
+  if (interactive) {
+    if (inherits(input, "bg_project_inspection")) {
+      stop("Interactive diagnosis requires a project configuration, YAML file, or directory.", call. = FALSE)
+    }
+    return(run_interactive_diagnosis(
+      project_config_from_input(input), run_id = run_id,
+      subject_id = subject_id, job_id = job_id
+    ))
+  }
+  build_project_diagnosis(
+    input, run_id = run_id, subject_id = subject_id, job_id = job_id
+  )
+}
+
 #' @export
 print.bg_project_diagnosis <- function(x, ...) {
-  if (identical(x$scope, "project")) cli::cli_h2("Current project diagnosis")
-  else cli::cli_h2("Run diagnosis {.val {x$run_id}}")
-  current <- if (identical(x$scope, "project")) x$jobs$is_current_attempt else rep(TRUE, nrow(x$jobs))
+  focus <- x$focus
+  if (is.null(focus)) focus <- list(subject_id = NULL, job_id = NULL)
+  if (!is.null(focus$job_id)) {
+    cli::cli_h2("Diagnosis for job {.val {focus$job_id}}")
+  } else if (!is.null(focus$subject_id)) {
+    cli::cli_h2("Diagnosis for sub-{focus$subject_id}")
+  } else if (identical(x$scope, "project")) {
+    cli::cli_h2("Current project diagnosis")
+  } else {
+    cli::cli_h2("Run diagnosis {.val {x$run_id}}")
+  }
+  current <- if (!is.null(focus$job_id)) {
+    rep(TRUE, nrow(x$jobs))
+  } else if (identical(x$scope, "project")) {
+    !is.na(x$jobs$is_current_attempt) & x$jobs$is_current_attempt
+  } else {
+    rep(TRUE, nrow(x$jobs))
+  }
   counts <- as.data.frame(table(x$jobs$lifecycle_status[current]), stringsAsFactors = FALSE)
   names(counts) <- c("status", "n_jobs")
   print(counts, row.names = FALSE)

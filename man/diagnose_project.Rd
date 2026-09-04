@@ -7,7 +7,9 @@
 diagnose_project(
   input = getwd(),
   run_id = NULL,
-  interactive = base::interactive()
+  interactive = base::interactive(),
+  subject_id = NULL,
+  job_id = NULL
 )
 }
 \arguments{
@@ -23,6 +25,13 @@ runs, \code{"latest"} for the newest run, or an explicit historical run ID.}
 \code{base::interactive()}, so console users get the guided browser while
 scripts, tests, and reports get structured output. Interactive mode retains
 the behavior formerly provided by \code{\link[=diagnose_pipeline]{diagnose_pipeline()}}.}
+
+\item{subject_id}{Optional subject identifier, with or without the \verb{sub-}
+prefix. Restricts both structured and interactive diagnosis to that
+subject while preserving the selected run scope.}
+
+\item{job_id}{Optional scheduler job identifier. Opens or returns that exact
+tracked job; this can select a historical job when \code{run_id} is \code{NULL}.}
 }
 \value{
 When \code{interactive = FALSE}, a \code{bg_project_diagnosis} object containing
@@ -42,9 +51,11 @@ set \code{interactive} explicitly when behavior must not depend on the session.
 \dontrun{
 diagnose_project(scfg) # guided browser in an interactive R session
 
-diagnosis <- diagnose_project(scfg, interactive = FALSE)
+diagnosis <- diagnose_project(scfg, subject_id = "014", interactive = FALSE)
 diagnosis$failures
 diagnosis$logs
+
+diagnose_project(scfg, job_id = "66273010")
 
 old_run <- diagnose_project(scfg, run$run_id, interactive = FALSE)
 }

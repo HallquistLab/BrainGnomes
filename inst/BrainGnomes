@@ -52,6 +52,7 @@ format_output <- function(x, format = "table") {
     ),
     bg_project_diagnosis = list(
       scope = x$scope, run_id = x$run_id,
+      focus = x$focus,
       overview = x$inspection$overview,
       failures = x$failures, logs = x$logs, jobs = x$jobs
     ),
@@ -207,6 +208,8 @@ print_command_help <- function(command, status = 0L) {
       "Without --run, the diagnosis uses the newest attempt for each work unit across runs.\n\n",
       "Options:\n",
       "  --run=<id|latest>              Diagnose one selected run.\n",
+      "  --subject-id=<id>              Focus on one subject.\n",
+      "  --job-id=<id>                  Open one exact scheduler job.\n",
       "  --interactive                  Open the guided dependency and log browser.\n",
       "  --format=table|json            Output format.\n"
     ),
@@ -432,12 +435,18 @@ command_provenance <- function(values) {
 
 command_diagnose <- function(values) {
   input <- require_input(values, "diagnose")
-  opts <- normalize_options(values[-1L], c("run", "interactive", "format"))
+  opts <- normalize_options(
+    values[-1L], c("run", "subject_id", "job_id", "interactive", "format")
+  )
   if (is_flag(opts$interactive)) {
-    BrainGnomes::diagnose_project(input, run_id = opts$run, interactive = TRUE)
+    BrainGnomes::diagnose_project(
+      input, run_id = opts$run, subject_id = opts$subject_id,
+      job_id = opts$job_id, interactive = TRUE
+    )
   } else {
     result <- BrainGnomes::diagnose_project(
-      input, run_id = opts$run, interactive = FALSE
+      input, run_id = opts$run, subject_id = opts$subject_id,
+      job_id = opts$job_id, interactive = FALSE
     )
     format_output(result, or_else(opts$format, "table"))
   }

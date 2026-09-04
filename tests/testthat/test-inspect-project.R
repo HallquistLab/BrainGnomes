@@ -183,17 +183,18 @@ test_that("diagnose_project defaults to the R session's interactivity", {
   fixture <- make_inspection_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
   local_mocked_bindings(
-    .diagnose_pipeline_interactive = function(input, run_id = NULL) {
+    run_interactive_diagnosis = function(input, run_id = NULL,
+                                         subject_id = NULL, job_id = NULL) {
       expect_identical(input, fixture$cfg)
       expect_identical(run_id, "run-selected")
+      expect_null(subject_id)
+      expect_null(job_id)
       "guided-browser"
     },
     .package = "BrainGnomes"
   )
 
-  result <- diagnose_project(
-    fixture$cfg, run_id = "run-selected", interactive = TRUE
-  )
+  result <- diagnose_project(fixture$cfg, "run-selected", TRUE)
   expect_identical(result, "guided-browser")
 })
 
@@ -230,10 +231,13 @@ test_that("inspection and diagnosis default to the current project directory", {
   expect_equal(diagnosis$failures$job_id, "450")
 
   local_mocked_bindings(
-    .diagnose_pipeline_interactive = function(input, run_id = NULL) {
+    run_interactive_diagnosis = function(input, run_id = NULL,
+                                         subject_id = NULL, job_id = NULL) {
       expect_s3_class(input, "bg_project_cfg")
       expect_equal(input$metadata$project_directory, fixture$root)
       expect_null(run_id)
+      expect_null(subject_id)
+      expect_null(job_id)
       "guided-from-cwd"
     },
     .package = "BrainGnomes"
@@ -243,6 +247,203 @@ test_that("inspection and diagnosis default to the current project directory", {
     "diagnose_project\\(\\.\\.\\., interactive = TRUE\\)"
   )
   expect_identical(guided, "guided-from-cwd")
+})
+
+test_that("diagnose_project supports structured subject and exact job focus", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(fixture$db, "700", "mriqc_sub-01", "run-old", "FAILED")
+  add_inspection_job(fixture$db, "701", "mriqc_sub-01", "run-new", "COMPLETED")
+  add_inspection_job(fixture$db, "702", "extract_rois_rest_sub-01", "run-new", "FAILED")
+  add_inspection_job(fixture$db, "703", "fmriprep_sub-02", "run-new", "FAILED")
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), fixture$db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "UPDATE job_tracking SET time_submitted = '2026-09-01 10:00:00' WHERE sequence_id = 'run-old'")
+  DBI::dbExecute(con, "UPDATE job_tracking SET time_submitted = '2026-09-02 10:00:00' WHERE sequence_id = 'run-new'")
+
+  dir.create(file.path(fixture$log_dir, "sub-01"))
+  old_log <- file.path(fixture$log_dir, "sub-01", "mriqc_jobid-700.err")
+  current_log <- file.path(fixture$log_dir, "sub-01", "extract_jobid-702.err")
+  writeLines("historical failure", old_log)
+  writeLines("current failure", current_log)
+
+  subject <- diagnose_project(
+    fixture$cfg, subject_id = "sub-01", interactive = FALSE
+  )
+  expect_identical(subject$focus$subject_id, "01")
+  expect_setequal(subject$jobs$job_id, c("700", "701", "702"))
+  expect_identical(subject$failures$job_id, "702")
+  expect_identical(subject$logs$path, current_log)
+  expect_setequal(
+    diagnosis_current_jobs(subject)$job_id,
+    c("701", "702")
+  )
+
+  current <- diagnose_project(fixture$cfg, interactive = FALSE)
+  current_groups <- diagnosis_problem_groups(diagnosis_current_jobs(current))
+  expect_false("mriqc" %in% current_groups$stage)
+
+  exact <- diagnose_project(fixture$cfg, job_id = 700, interactive = FALSE)
+  expect_identical(exact$focus$job_id, "700")
+  expect_identical(exact$jobs$job_id, "700")
+  expect_identical(exact$failures$job_id, "700")
+  expect_identical(exact$logs$path, old_log)
+  expect_identical(diagnosis_current_jobs(exact)$job_id, "700")
+
+  expect_error(
+    diagnose_project(fixture$cfg, subject_id = "missing", interactive = FALSE),
+    "No tracked jobs were found for sub-missing"
+  )
+  expect_error(
+    diagnose_project(fixture$cfg, job_id = "missing", interactive = FALSE),
+    "No tracked job has ID missing"
+  )
+})
+
+test_that("guided diagnosis opens a singleton failure without widening scope", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(fixture$db, "900", "mriqc_sub-01", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "901", "fmriprep_sub-01", "run-one", "COMPLETED")
+  add_inspection_job(fixture$db, "902", "extract_rois_rest_sub-01", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "903", "extract_rois_rest_sub-02", "run-one", "FAILED")
+
+  prompts <- 0L
+  local_mocked_bindings(
+    prompt_input = function(...) {
+      prompts <<- prompts + 1L
+      1L
+    },
+    diagnosis_job_screen = function(scfg, job, allow_back = TRUE) {
+      expect_identical(scfg, fixture$cfg)
+      expect_true(allow_back)
+      structure(list(action = "exit", job = job), class = "bg_interactive_diagnosis")
+    },
+    .package = "BrainGnomes"
+  )
+
+  result <- diagnose_project(fixture$cfg, interactive = TRUE)
+  expect_identical(result$job$job_id, "900")
+  expect_identical(result$job$sub_id, "01")
+  expect_identical(prompts, 1L)
+})
+
+test_that("guided diagnosis keeps multi-job problem groups narrowed", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(fixture$db, "910", "mriqc_sub-01", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "911", "extract_rois_rest_sub-01", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "912", "extract_rois_rest_sub-02", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "913", "fmriprep_sub-03", "run-one", "COMPLETED")
+
+  answers <- c(2L, 2L)
+  prompt_index <- 0L
+  local_mocked_bindings(
+    prompt_input = function(...) {
+      prompt_index <<- prompt_index + 1L
+      answers[[prompt_index]]
+    },
+    diagnosis_job_screen = function(scfg, job, allow_back = TRUE) {
+      structure(list(action = "exit", job = job), class = "bg_interactive_diagnosis")
+    },
+    .package = "BrainGnomes"
+  )
+
+  result <- diagnose_project(fixture$cfg, interactive = TRUE)
+  expect_identical(result$job$job_id, "912")
+  expect_identical(result$job$stage, "extract_rois")
+  expect_identical(prompt_index, 2L)
+})
+
+test_that("guided subject and job shortcuts preserve their exact focus", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(fixture$db, "920", "mriqc_sub-01", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "921", "extract_rois_rest_sub-01", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "922", "mriqc_sub-02", "run-one", "FAILED")
+
+  answers <- 1L
+  prompt_index <- 0L
+  local_mocked_bindings(
+    prompt_input = function(...) {
+      prompt_index <<- prompt_index + 1L
+      answers[[prompt_index]]
+    },
+    diagnosis_job_screen = function(scfg, job, allow_back = TRUE) {
+      structure(list(action = "exit", job = job), class = "bg_interactive_diagnosis")
+    },
+    .package = "BrainGnomes"
+  )
+
+  subject <- diagnose_project(
+    fixture$cfg, subject_id = "01", interactive = TRUE
+  )
+  expect_identical(subject$job$job_id, "920")
+  expect_identical(prompt_index, 1L)
+
+  local_mocked_bindings(
+    prompt_input = function(...) stop("An exact job should not require a selection prompt."),
+    diagnosis_job_screen = function(scfg, job, allow_back = TRUE) {
+      expect_false(allow_back)
+      structure(list(action = "exit", job = job), class = "bg_interactive_diagnosis")
+    },
+    .package = "BrainGnomes"
+  )
+  exact <- diagnose_project(fixture$cfg, job_id = "922", interactive = TRUE)
+  expect_identical(exact$job$job_id, "922")
+  expect_identical(exact$job$sub_id, "02")
+})
+
+test_that("guided job details expose logs and immediate dependency context", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(fixture$db, "930", "submit_subjects_sub-01", "run-one", "COMPLETED")
+  add_inspection_job(fixture$db, "931", "mriqc_sub-01", "run-one", "FAILED")
+  add_inspection_job(fixture$db, "932", "postprocess_rest_sub-01", "run-one", "FAILED_BY_EXT")
+  add_tracked_job_parent(fixture$db, "931", "930")
+  add_tracked_job_parent(fixture$db, "932", "931")
+
+  subject_logs <- file.path(fixture$log_dir, "sub-01")
+  dir.create(subject_logs)
+  stderr <- file.path(subject_logs, "mriqc_jobid-931.err")
+  stdout <- file.path(subject_logs, "mriqc_jobid-931.out")
+  writeLines("failure details", stderr)
+  writeLines("scheduler output", stdout)
+
+  focused <- diagnose_project(
+    fixture$cfg, job_id = "931", interactive = FALSE
+  )
+  dependencies <- diagnosis_job_dependencies(fixture$cfg, focused$jobs)
+  expect_identical(dependencies$upstream$job_id, "930")
+  expect_identical(dependencies$downstream$job_id, "932")
+  expect_identical(diagnosis_latest_log(focused$logs, "stderr"), stderr)
+  expect_identical(diagnosis_latest_log(focused$logs, "stdout"), stdout)
+
+  local_mocked_bindings(
+    prompt_input = function(...) 6L,
+    .package = "BrainGnomes"
+  )
+  details <- diagnosis_job_screen(
+    fixture$cfg, focused$jobs, allow_back = FALSE
+  )
+  expect_identical(details$action, "exit")
+  expect_identical(details$job$job_id, "931")
+  expect_setequal(details$logs$type, c("stderr", "stdout"))
+})
+
+test_that("guided log display strips embedded terminal formatting", {
+  log_file <- tempfile("diagnosis-ansi-", fileext = ".err")
+  on.exit(unlink(log_file), add = TRUE)
+  writeLines(paste0("\033[31m", "readable failure", "\033[0m"), log_file)
+  local_mocked_bindings(
+    prompt_input = function(...) 1L,
+    .package = "BrainGnomes"
+  )
+
+  output <- capture.output(diagnosis_show_log(log_file))
+  expect_true(any(grepl("readable failure", output, fixed = TRUE)))
+  expect_false(any(grepl("\033", output, fixed = TRUE)))
 })
 
 test_that("current-directory discovery requires a project configuration", {
@@ -292,9 +493,12 @@ test_that("diagnose_pipeline delegates to the consolidated interactive diagnosis
   fixture <- make_inspection_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
   local_mocked_bindings(
-    .diagnose_pipeline_interactive = function(input, run_id = NULL) {
+    run_interactive_diagnosis = function(input, run_id = NULL,
+                                         subject_id = NULL, job_id = NULL) {
       expect_identical(input, fixture$cfg)
       expect_null(run_id)
+      expect_null(subject_id)
+      expect_null(job_id)
       "guided-browser"
     },
     .package = "BrainGnomes"
