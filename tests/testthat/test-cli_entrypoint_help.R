@@ -176,6 +176,9 @@ test_that("BrainGnomes init and config validate support a headless first project
   init <- run_brain_gnomes_cli(c("init", "cli_demo", root, "--non-interactive"))
   expect_equal(init$status, 0L, info = paste(init$output, collapse = "\n"))
   expect_true(file.exists(file.path(root, "project_config.yaml")))
+  expect_true(any(grepl("Saved project configuration to:", init$output, fixed = TRUE)))
+  expect_false(any(grepl("requires an interactive session", init$output, fixed = TRUE)))
+  expect_false(any(grepl("Not a TTY", init$output, fixed = TRUE)))
 
   validation <- run_brain_gnomes_cli(c(
     "config", "validate", file.path(root, "project_config.yaml"), "--format=json"

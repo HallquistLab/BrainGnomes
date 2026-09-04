@@ -18,7 +18,7 @@
 #' 
 #' @keywords internal
 read_multiline_input <- function(instruct=NULL, prompt="> ", n_blank=1, collapse=NULL) {
-  if (!is.null(instruct)) cat(instruct, "\n")
+  if (!is.null(instruct)) cli_instruction(instruct)
   lines <- character()
   empty_count <- 0
   
@@ -65,7 +65,7 @@ read_multiline_input <- function(instruct=NULL, prompt="> ", n_blank=1, collapse
 #' @keywords internal
 build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (press Enter to finish): ", collapse=NULL) {
   # Step 1: Multi-line input
-  cat(instruct, "\n")
+  cli_instruction(instruct)
   lines <- character()
 
   # If existing args are passed in, prompt edits and confirmation of changes. If no args, just accept entry and return
@@ -75,20 +75,17 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
   # Step 2: Interactive edit loop
   repeat {
     if (!is.null(args)) {
-      cat("\nCurrent arguments:\n")
+      cli::cli_h3("Current arguments")
       if (length(args) == 0) {
-        cat("  [None]\n")
+        cli::cli_text("{.emph (none)}")
       } else {
-        for (i in seq_along(args)) {
-          cat(sprintf("  [%d] %s\n", i, args[i]))
-        }
+        cli::cli_ol()
+        for (arg in args) cli::cli_li("{arg}")
+        cli::cli_end()
       }
 
-      cat("\nOptions:\n")
-      cat("  1: Add argument\n")
-      cat("  2: Edit argument\n")
-      cat("  3: Delete argument\n")
-      cat("  4: Done\n")
+      cli::cli_h3("Actions")
+      cli::cli_ol(c("Add argument", "Edit argument", "Delete argument", "Done"))
 
       choice <- getline("Enter choice [1-4]: ")
     } else {
@@ -157,10 +154,133 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 #   return(out)
 # }
 
+console_input_available <- function() {
+  interactive() || base::isatty(stdin())
+}
+
+normalize_cli_block <- function(x) {
+  if (!checkmate::test_string(x)) return(NULL)
+
+  x <- gsub("\r\n?", "\n", x)
+  lines <- strsplit(x, "\n", fixed = TRUE)[[1L]]
+  while (length(lines) > 0L && !nzchar(trimws(lines[[1L]]))) lines <- lines[-1L]
+  while (length(lines) > 0L && !nzchar(trimws(lines[[length(lines)]]))) {
+    lines <- lines[-length(lines)]
+  }
+  if (!length(lines)) return(NULL)
+
+  non_empty <- lines[nzchar(trimws(lines))]
+  indent <- nchar(sub("^([ \t]*).*", "\\1", non_empty))
+  common_indent <- if (length(indent)) min(indent) else 0L
+  if (common_indent > 0L) lines <- substring(lines, common_indent + 1L)
+
+  paste(lines, collapse = "\n")
+}
+
+cli_instruction <- function(x, before = TRUE) {
+  x <- normalize_cli_block(x)
+  if (is.null(x)) return(invisible(FALSE))
+
+  if (isTRUE(before)) cli::cli_text("")
+  blocks <- strsplit(x, "\n[[:space:]]*\n", perl = TRUE)[[1L]]
+
+  write_paragraph <- function(lines) {
+    paragraph <- paste(trimws(lines), collapse = " ")
+    if (nzchar(paragraph)) cli::cli_text("{paragraph}")
+  }
+
+  marker_type <- function(line) {
+    if (grepl("^[[:space:]]*[-*][[:space:]]+", line)) return("unordered")
+    if (grepl("^[[:space:]]*[0-9]+[.)][[:space:]]+", line)) return("ordered")
+    ""
+  }
+
+  marker_indent <- function(line) {
+    nchar(sub("^([[:space:]]*).*", "\\1", line))
+  }
+
+  for (block in blocks) {
+    lines <- strsplit(block, "\n", fixed = TRUE)[[1L]]
+    lines <- sub("[ \t]+$", "", lines)
+
+    # Keep directory trees and similar layout-sensitive examples intact.
+    is_preformatted <- any(grepl("\\|--|`--", lines))
+    if (is_preformatted) {
+      cli::cli_verbatim(paste(lines, collapse = "\n"))
+      cli::cli_text("")
+      next
+    }
+
+    cursor <- 1L
+    while (cursor <= length(lines)) {
+      type <- marker_type(lines[[cursor]])
+      if (nzchar(type)) {
+        items <- character()
+        while (cursor <= length(lines) && identical(marker_type(lines[[cursor]]), type)) {
+          item_indent <- marker_indent(lines[[cursor]])
+          item <- if (identical(type, "unordered")) {
+            sub("^[[:space:]]*[-*][[:space:]]+", "", lines[[cursor]])
+          } else {
+            sub("^[[:space:]]*[0-9]+[.)][[:space:]]+", "", lines[[cursor]])
+          }
+          cursor <- cursor + 1L
+
+          continuation <- character()
+          while (cursor <= length(lines) &&
+                 !nzchar(marker_type(lines[[cursor]])) &&
+                 marker_indent(lines[[cursor]]) > item_indent) {
+            continuation <- c(continuation, trimws(lines[[cursor]]))
+            cursor <- cursor + 1L
+          }
+          items <- c(items, paste(c(item, continuation), collapse = " "))
+        }
+
+        if (identical(type, "ordered")) cli::cli_ol() else cli::cli_ul()
+        for (item in items) cli::cli_li("{item}")
+        cli::cli_end()
+      } else {
+        last <- cursor
+        while (last < length(lines) && !nzchar(marker_type(lines[[last + 1L]]))) last <- last + 1L
+        write_paragraph(lines[cursor:last])
+        cursor <- last + 1L
+      }
+    }
+    cli::cli_text("")
+  }
+
+  invisible(TRUE)
+}
+
+cli_setup_section <- function(title) {
+  checkmate::assert_string(title)
+  cli::cli_text("")
+  cli::cli_rule(left = " {title} ")
+  invisible(NULL)
+}
+
+cli_numbered_values <- function(title, values, empty = "none") {
+  checkmate::assert_string(title)
+  checkmate::assert_character(values)
+  checkmate::assert_string(empty)
+
+  cli::cli_h3("{title}")
+  if (!length(values)) {
+    empty_text <- paste0("(", empty, ")")
+    cli::cli_text("{.emph {empty_text}}")
+  } else {
+    cli::cli_ol()
+    for (value in values) cli::cli_li("{value}")
+    cli::cli_end()
+  }
+  invisible(NULL)
+}
+
 #' Obtain user input from the console
 #' @param prompt The character string to display before the user input prompt (e.g., `"Enter location"`).
 #' @param prompt_eol The character string to place at the end of the prompt (e.g., `">"`).
 #' @param instruct Instructions to display above the prompt (character string, or `NULL` for none).
+#' @param heading Optional section heading printed above `instruct` with a
+#'   terminal-width horizontal rule.
 #' @param type The expected type of the input. Must be one of `"numeric"`, `"integer"`, `"character"`, `"file"`, or `"flag"`.
 #' @param lower For numeric inputs, the lowest valid value.
 #' @param upper For numeric inputs, the highest valid value.
@@ -178,20 +298,22 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 #'   It displays instructions and enforces constraints (e.g., value range, length, uniqueness). 
 #'   When `empty_keyword` is supplied and `default` is non-`NULL` with `required = FALSE`, typing the token (case-insensitive) returns a missing value for the given `type` without accepting the default.
 #' 
-#' @note This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).
+#' @note This function works in an interactive R session or in `Rscript` when
+#'   standard input is attached to a TTY. It intentionally rejects headless
+#'   input; use the argument-driven BrainGnomes CLI for that case.
 #' @importFrom glue glue
 #' @importFrom checkmate test_string assert_string assert_choice assert_number
 #' @importFrom utils type.convert
 #' @keywords internal
-prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "character", lower = -Inf, upper = Inf, 
+prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, heading = NULL, type = "character", lower = -Inf, upper = Inf,
   len = NULL, min.len=NULL, max.len=NULL, split = NULL, among = NULL, required = TRUE, uniq=FALSE, default = NULL,
   empty_keyword = "NA") {
 
   # In non-interactive sessions launched via Rscript, interactive() returns
   # FALSE even though reading from stdin is possible. Allow such cases when the
   # standard input is a TTY.
-  if (!interactive() && !base::isatty(stdin())) {
-    stop("prompt_input() requires an interactive session.")
+  if (!console_input_available()) {
+    stop("prompt_input() requires an interactive session or a TTY-connected Rscript session.")
   }
   
   if (is.null(prompt) || length(prompt) == 0L || is.na(prompt[1L])) prompt <- ""
@@ -200,6 +322,7 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   checkmate::assert_string(prompt)
   checkmate::assert_string(prompt_eol)
   checkmate::assert_string(instruct, null.ok = TRUE)
+  checkmate::assert_string(heading, null.ok = TRUE)
   checkmate::assert_choice(type, c("numeric", "integer", "character", "file", "flag"))
   checkmate::assert_number(lower)
   checkmate::assert_number(upper)
@@ -277,48 +400,26 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   }
   show_empty_hint <- !is.null(empty_keyword_display) && !is.null(default) && isFALSE(required)
 
-  normalize_instruction_block <- function(x) {
-    if (!checkmate::test_string(x)) return(NULL)
-
-    x <- gsub("\r\n?", "\n", x)
-    lines <- strsplit(x, "\n", fixed = TRUE)[[1]]
-    if (!length(lines)) return(NULL)
-
-    while (length(lines) > 0L && !nzchar(trimws(lines[1L]))) lines <- lines[-1L]
-    while (length(lines) > 0L && !nzchar(trimws(lines[length(lines)]))) lines <- lines[-length(lines)]
-    if (!length(lines)) return(NULL)
-
-    non_empty <- lines[nzchar(trimws(lines))]
-    indent_counts <- nchar(sub("^([ \t]*).*", "\\1", non_empty))
-    common_indent <- if (length(indent_counts)) min(indent_counts) else 0L
-
-    if (common_indent > 0L) {
-      lines <- substring(lines, common_indent + 1L)
-    }
-
-    paste(lines, collapse = "\n")
-  }
-
   if (type == "flag") {
     # Handle yes/no prompts
     if (!is.null(default)) {
       # Add helpful hint that pressing enter accepts default
-      prompt <- glue::glue("{prompt} (yes/no; Press enter to accept default: {ifelse(isTRUE(default), 'yes', 'no')}")
+      prompt <- glue::glue("{prompt} (yes/no; Press Enter to accept default: {ifelse(isTRUE(default), 'yes', 'no')}")
       if (show_empty_hint) prompt <- glue::glue("{prompt}; type {empty_keyword_display} to leave blank")
       prompt <- paste0(prompt, ")")
     } else if (required) {
       prompt <- glue::glue("{prompt} (yes/no)")
     } else {
-      prompt <- glue::glue("{prompt} (yes/no; Press enter to skip)")
+      prompt <- glue::glue("{prompt} (yes/no; Press Enter to skip)")
     }
   } else {
     # Non-flag input types
     if (!is.null(default)) {
-      prompt <- glue::glue("{prompt} (Press enter to accept default: {default}")
+      prompt <- glue::glue("{prompt} (Press Enter to accept default: {default}")
       if (show_empty_hint) prompt <- glue::glue("{prompt}; type {empty_keyword_display} to leave blank")
       prompt <- paste0(prompt, ")")
     } else if (!required) {
-      prompt <- glue::glue("{prompt} (Press enter to skip)")
+      prompt <- glue::glue("{prompt} (Press Enter to skip)")
     }
   }
 
@@ -331,9 +432,10 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
     prompt <- paste0(prompt_eol, " ")
   }
   
-  # print instructions
-  instruct <- normalize_instruction_block(instruct)
-  if (checkmate::test_string(instruct)) cat("\n", instruct, "\n\n", sep = "")
+  # Print a width-aware section rule and instruction block. cli output works in
+  # interactive R and in TTY-connected Rscript sessions.
+  if (checkmate::test_string(heading)) cli_setup_section(heading)
+  cli_instruction(instruct, before = is.null(heading))
 
   # define typed empty return value
   empty <- switch(type,
@@ -577,7 +679,8 @@ prompt_directory <- function(check_owner = FALSE,
 #' @importFrom utils menu select.list
 #' @noRd
 choose_fmriprep_spaces <- function(output_spaces = NULL) {
-  cat(glue("\n
+  cli_setup_section("fMRIPrep output spaces")
+  cli_instruction(glue("
       fmriprep uses --output-spaces to control the stereotaxic space and resolution
       of preprocessed images. Its default space is MNI152NLin2009cAsym and the default
       spatial resolution matches the raw/native data. Here, you can specify the output
@@ -591,7 +694,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
       TemplateFlow. Usually, res-1 is 1mm and res-2 is 2mm, but you mileage may vary.
 
       If you are using AROMA as part of your pipeline, we will automatically add
-      MNI152NLin6Asym:res-2 so that fmripost-aroma can run.\n\n"))
+      MNI152NLin6Asym:res-2 so that fmripost-aroma can run."), before = FALSE)
 
   templates_available <- c(
     "MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152NLin6Sym",
@@ -607,16 +710,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
   }
 
   repeat {
-    cat("\nCurrent --output-spaces:\n")
-    if (length(current_spaces) == 0) {
-      cat("  (none selected yet)\n")
-    } else {
-      for (i in seq_along(current_spaces)) {
-        cat(sprintf("  [%d] %s\n", i, current_spaces[i]))
-      }
-    }
-
-    cat("\nWhat would you like to do?\n")
+    cli_numbered_values("Current --output-spaces", current_spaces, "none selected yet")
     choice <- menu_safe(c("Add a space", "Delete a space", "Finish and return"), title = "Modify output spaces:")
 
     if (choice == 1) {
@@ -641,7 +735,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
     } else if (choice == 2) {
       # Delete a space
       if (length(current_spaces) == 0) {
-        cat("No spaces to delete.\n")
+        cli::cli_alert_info("There are no spaces to delete.")
       } else {
         del_choice <- select_list_safe(current_spaces, multiple = TRUE, title = "Select space(s) to remove:")
         current_spaces <- setdiff(current_spaces, del_choice)
@@ -652,7 +746,10 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
   }
 
   final_output_spaces <- paste(current_spaces, collapse = " ")
-  cat("\nFinal --output-spaces argument:\n")
-  cat("  ", final_output_spaces, "\n")
+  if (nzchar(final_output_spaces)) {
+    cli::cli_alert_success("Output spaces: {.code {final_output_spaces}}")
+  } else {
+    cli::cli_alert_info("No output spaces selected.")
+  }
   return(final_output_spaces)
 }

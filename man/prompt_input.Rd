@@ -8,6 +8,7 @@ prompt_input(
   prompt = "",
   prompt_eol = ">",
   instruct = NULL,
+  heading = NULL,
   type = "character",
   lower = -Inf,
   upper = Inf,
@@ -28,6 +29,9 @@ prompt_input(
 \item{prompt_eol}{The character string to place at the end of the prompt (e.g., \code{">"}).}
 
 \item{instruct}{Instructions to display above the prompt (character string, or \code{NULL} for none).}
+
+\item{heading}{Optional section heading printed above \code{instruct} with a
+terminal-width horizontal rule.}
 
 \item{type}{The expected type of the input. Must be one of \code{"numeric"}, \code{"integer"}, \code{"character"}, \code{"file"}, or \code{"flag"}.}
 
@@ -65,6 +69,8 @@ It displays instructions and enforces constraints (e.g., value range, length, un
 When \code{empty_keyword} is supplied and \code{default} is non-\code{NULL} with \code{required = FALSE}, typing the token (case-insensitive) returns a missing value for the given \code{type} without accepting the default.
 }
 \note{
-This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).
+This function works in an interactive R session or in \code{Rscript} when
+standard input is attached to a TTY. It intentionally rejects headless
+input; use the argument-driven BrainGnomes CLI for that case.
 }
 \keyword{internal}

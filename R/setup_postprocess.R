@@ -45,14 +45,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
 
   repeat {
     streams <- get_postprocess_stream_names(scfg)
-    cat("\nCurrent postprocessing streams:\n")
-    if (length(streams) == 0) {
-      cat("  (none defined yet)\n")
-    } else {
-      cat("\n")
-      for (i in seq_along(streams)) cat(sprintf("  [%d] %s\n", i, streams[i]))
-      cat("\n")
-    }
+    cli_numbered_values("Current postprocessing streams", streams, "none defined yet")
 
     choice <- menu_safe(c("Add a stream", "Edit a stream", "Delete a stream",
                      "Show stream settings", "Finish"),
@@ -62,7 +55,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       scfg <- setup_postprocess_stream(scfg) # add new stream
     } else if (choice == 2) {
       if (length(streams) == 0) {
-        cat("No streams to edit.\n\n")
+        cli::cli_alert_info("There are no postprocessing streams to edit.")
         next
       }
       # if we only have one stream, then default to editing it.
@@ -87,7 +80,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       )
     } else if (choice == 3) {
       if (length(streams) == 0) {
-        cat("No streams to delete.\n")
+        cli::cli_alert_info("There are no postprocessing streams to delete.")
         next
       }
       sel <- select_list_safe(streams, multiple = TRUE, title = "Select stream(s) to delete")
@@ -95,7 +88,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       scfg$postprocess[sel] <- NULL
     } else if (choice == 4) {
       if (length(streams) == 0) {
-        cat("No streams defined.\n")
+        cli::cli_alert_info("There are no postprocessing streams to show.")
         next
       }
       for (nm in streams) {
@@ -152,8 +145,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
 
   if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields))) || ("postprocess/enable" %in% fields)) {
     scfg$postprocess$enable <- prompt_input(
-      instruct = glue("\n\n
-        -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("
         Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
 
         These steps may include:
@@ -165,8 +157,9 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
           - Intensity normalization
           - Confound calculation and regression
 
-        Do you want to enable postprocessing of the BOLD data?\n"
+        Do you want to enable postprocessing of the BOLD data?"
       ),
+      heading = "Postprocessing",
       prompt = "Enable postprocessing?",
       type = "flag",
       default = if (is.null(scfg$postprocess$enable)) TRUE else isTRUE(scfg$postprocess$enable)
@@ -216,11 +209,11 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
     return(scfg) # skip out before menu system when postproc fields are passed
   }
 
-  cat(glue("\n
+  cli_instruction(glue("
       Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
       Each stream also asks about which files should be postprocessed using the stream. For example,
       files with 'rest' in their name could be postprocessed in one way and files with 'nback' could
-      be processed a different way.\n
+      be processed a different way.
       "))
 
   scfg <- manage_postprocess_streams(scfg, allow_empty = TRUE)
@@ -237,7 +230,7 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   }
 
   if (!is.null(stream_name)) {
-    cat(glue("\n--- Specifying postprocessing stream: {stream_name} ---\n"))
+    cli_setup_section(glue("Postprocessing stream: {stream_name}"))
   }
 
   defaults <- list(
@@ -658,8 +651,7 @@ setup_scrubbing <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$scrubbing$enable) ||
       (isFALSE(ppcfg$scrubbing$enable) && any(grepl("postprocess/scrubbing/", fields)))) {
     ppcfg$scrubbing$enable <- prompt_input(
-      instruct = glue("\n\n
-      -------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       Scrubbing identifies timepoints (volumes) with excessive motion or artifacts based on a user-defined expression, such as:
       'framewise_displacement > 0.9'. If you choose 'yes,' you will be prompted to define what constitutes a bad timepoint.
       This will generate two output files:
@@ -686,6 +678,7 @@ setup_scrubbing <- function(ppcfg = list(), fields = NULL) {
       The part after the semicolon ('dvars > 1.5') defines the thresholding condition.
 
       Do you want to generate scrubbing regressors?\n"),
+      heading = "Scrubbing",
       prompt = "Enable scrubbing?",
       type = "flag",
       default = FALSE
@@ -779,8 +772,7 @@ setup_apply_mask <- function(ppcfg = list(), fields = NULL) {
       (isFALSE(ppcfg$apply_mask$enable) && any(grepl("postprocess/apply_mask/", fields)))) {
 
     ppcfg$apply_mask$enable <- prompt_input(
-      instruct = glue("\n\n
-      ------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       Applying a brain mask to your fMRI data ensures that only in-brain voxels are retained during analysis.
       This step is optional but often recommended for improving efficiency and accuracy in subsequent processing.
       
@@ -790,6 +782,7 @@ setup_apply_mask <- function(ppcfg = list(), fields = NULL) {
 
       Do you want to apply a brain mask to your fMRI data?\n
       "),
+      heading = "Brain masking",
       prompt = "Apply brain mask?",
       type = "flag",
       default = TRUE
@@ -875,8 +868,7 @@ setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
       (isFALSE(ppcfg$confound_regression$enable) && any(grepl("postprocess/confound_regression/", fields)))) {
 
     ppcfg$confound_regression$enable <- prompt_input(
-      instruct = glue("\n\n
-      ------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       Confound regression applies voxelwise multiple regression to remove nuisance signals from the fMRI data.
       These regressors are typically selected from the confounds file produced by fMRIPrep.
 
@@ -892,6 +884,7 @@ setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
 
       Do you want to apply confound regression to the fMRI data during postprocessing?\n
       "),
+      heading = "Confound regression",
       prompt = "Apply confound regression?",
       type = "flag"
     )
@@ -1220,8 +1213,7 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
       (isFALSE(ppcfg$confound_calculate$enable) && any(grepl("postprocess/confound_calculate/", fields)))) {
 
     ppcfg$confound_calculate$enable <- prompt_input(
-      instruct = glue("\n\n
-      ------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       Confound calculation creates a nuisance regressor file that includes relevant noise signals (e.g., motion, 
       CompCor, global signal). This step does not apply denoising but prepares a file that can be used in later 
       statistical analyses (e.g., voxelwise GLMs).
@@ -1236,6 +1228,7 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
 
       Do you want to create a confound file in postprocessing?\n
       "),
+      heading = "Confound calculation",
       prompt = "Generate confound file?",
       type = "flag"
     )
@@ -1356,8 +1349,7 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$intensity_normalize$enable) ||
     (isFALSE(ppcfg$intensity_normalize$enable) && any(grepl("postprocess/intensity_normalize/", fields)))) {
     ppcfg$intensity_normalize$enable <- prompt_input(
-      instruct = glue("\n\n
-      ------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       fMRI image intensities are in arbitrary scanner units. Intensity
       normalization puts runs on a more consistent scale, making regression
       coefficients easier to compare across runs and participants. It changes
@@ -1378,6 +1370,7 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
 
       Do you want to apply intensity normalization to each fMRI run?\n
       "),
+      heading = "Intensity normalization",
       prompt = "Apply intensity normalization?",
       type = "flag",
       default = TRUE
@@ -1474,8 +1467,7 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
 setup_spatial_smooth <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$spatial_smooth$enable) || (isFALSE(ppcfg$spatial_smooth$enable) && any(grepl("postprocess/spatial_smooth/", fields)))) {
     ppcfg$spatial_smooth$enable <- prompt_input(
-      instruct = glue("\n\n
-      ------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       Spatial smoothing applies a 3D Gaussian kernel to the BOLD fMRI data,
       which increases the signal-to-noise ratio and improves overlap across subjects
       by reducing high-frequency spatial noise.
@@ -1485,6 +1477,7 @@ setup_spatial_smooth <- function(ppcfg = list(), fields = NULL) {
 
       Do you want to apply spatial smoothing to the BOLD data as part of postprocessing?\n
       "),
+      heading = "Spatial smoothing",
       prompt = "Apply spatial smoothing?",
       type = "flag"
     )
@@ -1533,8 +1526,7 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
       (isFALSE(ppcfg$temporal_filter$enable) && any(grepl("postprocess/temporal_filter/", fields)))) {
 
     ppcfg$temporal_filter$enable <- prompt_input(
-      instruct = glue("\n\n
-      ------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       Temporal filtering removes low- and/or high-frequency components from the fMRI time series.
       A high-pass filter (e.g., removing frequencies < 0.008 Hz) is commonly used to remove scanner drift, while a low-pass
       filter can remove physiological noise such as respiratory or cardiac fluctuations.
@@ -1554,6 +1546,7 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
       as it does not introduce autocorrelations into the data. Lowpass temporal filtering reduces high frequency noise by
       Gaussian smoothing, but also reduces the strength of the signal of interest, particularly for single-event experiments.\n
       "),
+      heading = "Temporal filtering",
       prompt = "Do you want to apply temporal filtering to each fMRI run?",
       type = "flag",
       default = TRUE
@@ -1644,8 +1637,7 @@ setup_apply_aroma <- function(ppcfg = list(), fields = NULL) {
       (isFALSE(ppcfg$apply_aroma$enable) && any(grepl("postprocess/apply_aroma/", fields)))) {
 
     ppcfg$apply_aroma$enable <- prompt_input(
-      instruct = glue("\n\n
-      ------------------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       ICA-AROMA identifies motion-related independent components from the fMRI data and outputs
       noise regressors (e.g., *_desc-aroma_timeseries.tsv) that can be used to denoise the BOLD signal.
       The pipeline asks you decide about whether to run the data through ICA-AROMA, which generates various
@@ -1658,6 +1650,7 @@ setup_apply_aroma <- function(ppcfg = list(), fields = NULL) {
 
       Do you want to apply ICA-AROMA denoising during postprocessing?\n
       "),
+      heading = "ICA-AROMA denoising",
       prompt = "Apply AROMA denoising?",
       type = "flag"
     )
