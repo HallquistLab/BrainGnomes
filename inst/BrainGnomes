@@ -436,7 +436,9 @@ command_diagnose <- function(values) {
   if (is_flag(opts$interactive)) {
     BrainGnomes::diagnose_project(input, run_id = opts$run, interactive = TRUE)
   } else {
-    result <- BrainGnomes::diagnose_project(input, run_id = opts$run)
+    result <- BrainGnomes::diagnose_project(
+      input, run_id = opts$run, interactive = FALSE
+    )
     format_output(result, or_else(opts$format, "table"))
   }
   0L

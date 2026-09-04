@@ -560,7 +560,10 @@
 #'   [diagnose_project()] for current or historical failure investigation.
 #' @export
 diagnose_pipeline <- function(input) {
-  .Deprecated("diagnose_project", package = "BrainGnomes")
+  .Deprecated(
+    "diagnose_project(..., interactive = TRUE)",
+    package = "BrainGnomes"
+  )
   diagnose_project(input, run_id = NULL, interactive = TRUE)
 }
 

@@ -147,7 +147,7 @@ problem, and then preview the retry:
 
 ```r
 status <- inspect_project(scfg)
-diagnosis <- diagnose_project(status)
+diagnosis <- diagnose_project(status, interactive = FALSE)
 failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
 retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
 

@@ -1,7 +1,7 @@
 ---
 title: "Inspecting and Diagnosing Pipeline Runs"
 author: "Michael Hallquist & Dan Shallal"
-date: "02 Sep 2026"
+date: "04 Sep 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -135,11 +135,19 @@ from `inspect_project()`.
 # Diagnose failures
 
 Routine monitoring belongs in `inspect_project()`. When current work has
-failed, use `diagnose_project()` to collect the unresolved job records and
-matching logs:
+failed, call `diagnose_project()` from an interactive R session to open the
+guided dependency and log browser:
 
 ```{r, eval=FALSE}
-diagnosis <- diagnose_project(scfg)
+diagnose_project(scfg)
+```
+
+Scripts, tests, and reports are non-interactive, so the same call returns a
+structured diagnosis there. Use `interactive = FALSE` explicitly when you want
+that result in an interactive R session:
+
+```{r, eval=FALSE}
+diagnosis <- diagnose_project(scfg, interactive = FALSE)
 diagnosis$failures
 diagnosis$logs
 ```
@@ -147,23 +155,26 @@ diagnosis$logs
 An existing inspection snapshot can be reused:
 
 ```{r, eval=FALSE}
-diagnosis <- diagnose_project(status)
+diagnosis <- diagnose_project(status, interactive = FALSE)
 ```
 
 For a historical post-mortem, select the run explicitly:
 
 ```{r, eval=FALSE}
-diagnosis <- diagnose_project(scfg, run_id = run_id)
+diagnosis <- diagnose_project(
+  scfg, run_id = run_id, interactive = FALSE
+)
 ```
 
-The guided dependency and log browser is now reached through the same function:
+Pass `interactive = TRUE` when code must open the guided browser regardless of
+how R was started:
 
 ```{r, eval=FALSE}
 diagnose_project(scfg, run_id = run_id, interactive = TRUE)
 ```
 
 `diagnose_pipeline()` remains temporarily as a deprecated compatibility wrapper
-for interactive diagnosis.
+for `diagnose_project(..., interactive = TRUE)`.
 
 # Inspect run provenance
 

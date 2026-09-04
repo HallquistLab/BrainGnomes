@@ -157,17 +157,44 @@ test_that("diagnose_project uses current failures or a selected historical run",
   failure_log <- file.path(fixture$log_dir, "sub-02", "mriqc_jobid-402.err")
   writeLines("current failure", failure_log)
 
-  current <- diagnose_project(fixture$cfg)
+  current <- diagnose_project(fixture$cfg, interactive = FALSE)
   expect_equal(current$scope, "project")
   expect_equal(current$failures$job_id, "402")
   expect_equal(current$logs$path, failure_log)
 
-  from_snapshot <- diagnose_project(inspect_project(fixture$cfg))
+  from_snapshot <- diagnose_project(
+    inspect_project(fixture$cfg), interactive = FALSE
+  )
   expect_equal(from_snapshot$failures$job_id, "402")
 
-  historical <- diagnose_project(fixture$cfg, run_id = "run-old")
+  historical <- diagnose_project(
+    fixture$cfg, run_id = "run-old", interactive = FALSE
+  )
   expect_equal(historical$scope, "run")
   expect_equal(historical$failures$job_id, "400")
+})
+
+test_that("diagnose_project defaults to the R session's interactivity", {
+  expect_identical(
+    formals(diagnose_project)$interactive,
+    quote(base::interactive())
+  )
+
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  local_mocked_bindings(
+    .diagnose_pipeline_interactive = function(input, run_id = NULL) {
+      expect_identical(input, fixture$cfg)
+      expect_identical(run_id, "run-selected")
+      "guided-browser"
+    },
+    .package = "BrainGnomes"
+  )
+
+  result <- diagnose_project(
+    fixture$cfg, run_id = "run-selected", interactive = TRUE
+  )
+  expect_identical(result, "guided-browser")
 })
 
 test_that("empty inspections and deprecated run getters retain stable contracts", {

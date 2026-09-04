@@ -1028,31 +1028,40 @@ find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
 #' Diagnose failed project work
 #'
 #' Reports unresolved failed, cancelled, and blocked work and locates matching
-#' logs. By default, diagnosis follows the current project state assembled by
-#' [inspect_project()] across runs. Select a run for a historical post-mortem.
-#' Set `interactive = TRUE` to open the guided dependency and log browser.
+#' logs. In an interactive R session, the default opens the guided dependency
+#' and log browser. In a non-interactive session, the default returns a
+#' structured diagnosis of the current project state assembled by
+#' [inspect_project()] across runs. Select a run for a historical post-mortem or
+#' set `interactive` explicitly when behavior must not depend on the session.
 #'
 #' @param input A project configuration object, YAML file, project directory, or
 #'   a `bg_project_inspection` object returned by [inspect_project()].
 #' @param run_id Optional run ID. Use `NULL` for current project failures across
 #'   runs, `"latest"` for the newest run, or an explicit historical run ID.
-#' @param interactive If `TRUE`, open the guided interactive browser. This mode
-#'   retains the behavior formerly provided by [diagnose_pipeline()].
-#' @return A `bg_project_diagnosis` object containing the underlying
-#'   `inspection`, its `jobs`, unresolved `failures`, and matching `logs` for
-#'   the current project state or selected run.
+#' @param interactive If `TRUE`, open the guided interactive browser. If
+#'   `FALSE`, return a structured diagnosis. The default is
+#'   `base::interactive()`, so console users get the guided browser while
+#'   scripts, tests, and reports get structured output. Interactive mode retains
+#'   the behavior formerly provided by [diagnose_pipeline()].
+#' @return When `interactive = FALSE`, a `bg_project_diagnosis` object containing
+#'   the underlying `inspection`, its `jobs`, unresolved `failures`, and matching
+#'   `logs` for the current project state or selected run. Interactive mode
+#'   returns the selected result from the guided browser, usually invisibly.
 #' @examples
 #' \dontrun{
-#' diagnosis <- diagnose_project(scfg)
+#' diagnose_project(scfg) # guided browser in an interactive R session
+#'
+#' diagnosis <- diagnose_project(scfg, interactive = FALSE)
 #' diagnosis$failures
 #' diagnosis$logs
 #'
-#' old_run <- diagnose_project(scfg, run$run_id)
+#' old_run <- diagnose_project(scfg, run$run_id, interactive = FALSE)
 #' }
 #' @seealso [inspect_project()] for routine progress monitoring and
 #'   [retry_project_run()] to preview a new run after correcting a failure.
 #' @export
-diagnose_project <- function(input, run_id = NULL, interactive = FALSE) {
+diagnose_project <- function(input, run_id = NULL,
+                             interactive = base::interactive()) {
   checkmate::assert_flag(interactive)
   if (interactive) {
     if (inherits(input, "bg_project_inspection")) {
@@ -1232,7 +1241,9 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
 #' @examples
 #' \dontrun{
 #' # Inspect and correct the failure before retrying.
-#' diagnosis <- diagnose_project(scfg, run$run_id)
+#' diagnosis <- diagnose_project(
+#'   scfg, run$run_id, interactive = FALSE
+#' )
 #'
 #' # Preview only; no jobs are submitted.
 #' retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)

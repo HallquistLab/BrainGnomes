@@ -2,6 +2,11 @@
 
 Released 2026-09-02
 
+* Make `diagnose_project()` open its guided dependency and log browser by
+  default in interactive R sessions, while scripts, tests, reports, and the
+  non-interactive CLI continue to receive structured diagnosis data. Callers
+  can still select either behavior explicitly with `interactive = TRUE/FALSE`.
+
 * Add `inspect_project()` as the single front door for database-backed project
   and run monitoring. Its compact dashboard integrates the newest attempt for
   each work unit across runs, while ordinary data frames expose project, run,
