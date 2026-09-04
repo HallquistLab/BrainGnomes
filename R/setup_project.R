@@ -86,6 +86,14 @@ setup_project <- function(input = NULL, fields = NULL) {
   }
   if (is.null(scfg$schema_version)) scfg$schema_version <- 1L
 
+  if (is.null(fields)) {
+    cli::cli_h1("BrainGnomes project setup")
+    cli_instruction(
+      "Answer each prompt to configure the project. Press Enter to accept a displayed default.",
+      before = FALSE
+    )
+  }
+
   # run through configuration of each step
   scfg <- setup_project_metadata(scfg, fields)
   scfg <- setup_flywheel_sync(scfg, fields)
@@ -98,6 +106,7 @@ setup_project <- function(input = NULL, fields = NULL) {
   scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
 
+  if (is.null(fields)) cli_setup_section("Save configuration")
   scfg <- save_project_config(scfg)
 
   return(scfg)
@@ -312,8 +321,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if (is.null(scfg$fmriprep$enable) || (isFALSE(scfg$fmriprep$enable) && any(grepl("fmriprep/", fields))) || ("fmriprep/enable" %in% fields)) {
     scfg$fmriprep$enable <- prompt_input(
-      instruct = glue("\n\n
-      -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       fMRIPrep is a standardized and robust tool for preprocessing BIDS-organized functional and anatomical MRI data.
       It performs essential steps such as motion correction, susceptibility distortion correction, tissue segmentation,
       coregistration, normalization to standard space, and estimation of nuisance regressors.
@@ -322,8 +330,9 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
       You will have the option to specify output spaces (e.g., MNI152NLin2009cAsym, T1w) and provide 
       a FreeSurfer license file, which is necessary for anatomical processing. You can also pass custom CLI
-      options and schedule settings.\n\n
+      options and schedule settings.
       "),
+      heading = "fMRIPrep",
       prompt = "Do you want to include fMRIPrep as part of your preprocessing pipeline?",
       type = "flag",
       default = if (is.null(scfg$fmriprep$enable)) TRUE else isTRUE(scfg$fmriprep$enable)
@@ -393,8 +402,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 
   if (is.null(scfg$bids_validation$enable) || (isFALSE(scfg$bids_validation$enable) && any(grepl("bids_validation/", fields))) || ("bids_validation/enable" %in% fields)) {
     scfg$bids_validation$enable <- prompt_input(
-      instruct = glue("\n\n
-      -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       BIDS validation checks whether your dataset adheres to the Brain Imaging Data Structure (BIDS) standard.
       This can be helpful for ensuring that all filenames, metadata, and required files follow expected conventions.
       It can identify missing fields, naming issues, or formatting problems that could cause downstream tools to fail.
@@ -405,6 +413,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
       Saying 'Yes' configures BIDS validation with this project, but validation is submitted separately
       through run_bids_validation().
       "),
+      heading = "BIDS validation",
       prompt = "Enable BIDS validation?",
       type = "flag",
       default = if (is.null(scfg$bids_validation$enable)) TRUE else isTRUE(scfg$bids_validation$enable)
@@ -452,8 +461,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$mriqc$enable) || (isFALSE(scfg$mriqc$enable) && any(grepl("mriqc/", fields))) || ("mriqc/enable" %in% fields)) {
     scfg$mriqc$enable <- prompt_input(
-      instruct = glue("\n\n
-      -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       MRIQC is a tool for automated quality assessment of structural and functional MRI data. 
       It calculates a wide array of image quality metrics (IQMs) for each scan, such as signal-to-noise ratio, 
       motion estimates, and image sharpness. It also produces visual reports to help you identify 
@@ -463,8 +471,9 @@ setup_mriqc <- function(scfg, fields = NULL) {
       and guide decisions about inclusion, exclusion, or further inspection.
 
       MRIQC supports both group-level and individual-level analyses and produces HTML reports and TSV files.
-      Saying 'Yes' here only runs the individual-level QC checks on each dataset.\n\n
+      Saying 'Yes' here only runs the individual-level QC checks on each dataset.
       "),
+      heading = "MRIQC",
       prompt = "Run MRIQC?",
       type = "flag",
       default = if (is.null(scfg$mriqc$enable)) TRUE else isTRUE(scfg$mriqc$enable)
@@ -508,11 +517,11 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields))) || ("flywheel_sync/enable" %in% fields)) {
     scfg$flywheel_sync$enable <- prompt_input(
-      instruct = glue("\n\n
-      -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       Flywheel sync will download DICOM files from a Flywheel project using the
       'fw sync' command-line interface. This step should be run prior to BIDS
-      conversion to ensure all data are available locally.\n\n"),
+      conversion to ensure all data are available locally."),
+      heading = "Flywheel sync",
       prompt = "Run Flywheel sync?",
       type = "flag",
       default = if (is.null(scfg$flywheel_sync$enable)) FALSE else isTRUE(scfg$flywheel_sync$enable)
@@ -576,8 +585,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$bids_conversion$enable) || (isFALSE(scfg$bids_conversion$enable) && any(grepl("bids_conversion/", fields))) || ("bids_conversion/enable" %in% fields)) {
     scfg$bids_conversion$enable <- prompt_input(
-      instruct = glue("\n\n
-      -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       This step sets up DICOM to BIDS conversion using heudiconv. Heudiconv uses a heuristic
       file to match DICOM files to expected scans, allowing the tool to convert DICOMs to NIfTI images
       and reorganize them into BIDS format.
@@ -613,8 +621,9 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
       |       |-- 2.dcm
 
       You will also be asked for the location of the heuristic file. If you don't have a heuristic file,
-      please see some examples here: https://github.com/nipy/heudiconv/tree/master/heudiconv/heuristics.\n\n
+      please see some examples here: https://github.com/nipy/heudiconv/tree/master/heudiconv/heuristics.
       "),
+      heading = "BIDS conversion",
       prompt = "Run BIDS conversion?",
       type = "flag",
       default = if (is.null(scfg$bids_conversion$enable)) TRUE else isTRUE(scfg$bids_conversion$enable)
@@ -767,8 +776,7 @@ setup_aroma <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$aroma$enable) || (isFALSE(scfg$aroma$enable) && any(grepl("aroma/", fields))) || ("aroma/enable" %in% fields)) {
     scfg$aroma$enable <- prompt_input(
-      instruct = glue("\n\n
-      -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("
       ICA-AROMA (Independent Component Analysis-based Automatic Removal Of Motion Artifacts) is a data-driven
       method for identifying and removing motion-related independent components from BOLD fMRI data using 
       non-aggressive regression. It is designed to reduce motion artifacts without relying on motion estimates 
@@ -781,8 +789,9 @@ setup_aroma <- function(scfg, fields = NULL) {
       Note: Enabling this step **does not** remove motion-related components from the data. Instead, it extracts 
       the AROMA noise components and prepares them for optional regression in a later postprocessing step.
 
-      If you wish to run ICA-AROMA denoising on your BOLD data, answer 'Yes' here.\n
+      If you wish to run ICA-AROMA denoising on your BOLD data, answer 'Yes' here.
       "),
+      heading = "ICA-AROMA",
       prompt = "Run ICA-AROMA?",
       type = "flag",
       default = if (is.null(scfg$aroma$enable)) TRUE else isTRUE(scfg$aroma$enable)
@@ -866,8 +875,9 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   }
 
   if ("compute_environment/scheduler" %in% fields) {
-    scfg$compute_environment$scheduler <- prompt_input("Scheduler (slurm/torque): ",
-    instruct = glue("\n\n-----------------------------------------------------------------------------------------------------------------\nThe pipeline currently runs on TORQUE (aka qsub) and SLURM clusters.\nWhich will you use?\n"),
+    scfg$compute_environment$scheduler <- prompt_input("Scheduler (slurm/torque):",
+      instruct = "BrainGnomes currently supports SLURM and TORQUE (qsub) clusters.",
+      heading = "Compute environment",
       type = "character", len = 1L, among = c("slurm", "torque")
     )
   }

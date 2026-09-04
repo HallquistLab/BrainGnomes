@@ -16,14 +16,7 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
 
   repeat {
     streams <- get_extract_stream_names(scfg)
-    cat("\nCurrent extraction streams:\n")
-    if (length(streams) == 0) {
-      cat("  (none defined yet)\n")
-    } else {
-      cat("\n")
-      for (i in seq_along(streams)) cat(sprintf("  [%d] %s\n", i, streams[i]))
-      cat("\n")
-    }
+    cli_numbered_values("Current extraction streams", streams, "none defined yet")
 
     choice <- menu_safe(c("Add a stream", "Edit a stream", "Delete a stream",
                          "Show stream settings", "Finish"),
@@ -32,13 +25,13 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
     if (choice == 1) {
       all_streams <- get_postprocess_stream_names(scfg)
       if (length(all_streams) == 0) {
-        cat("You must define at least one postprocess stream before defining an extraction stream.\n\n")
+        cli::cli_alert_warning("Define at least one postprocessing stream before adding an extraction stream.")
         next
       }
       scfg <- setup_extract_stream(scfg) # add new stream
     } else if (choice == 2) {
       if (length(streams) == 0) {
-        cat("No streams to edit.\n\n")
+        cli::cli_alert_info("There are no extraction streams to edit.")
         next
       }
       sel <- if (length(streams) == 1L) streams else select_list_safe(streams, multiple = FALSE, title = "Select stream to edit")
@@ -61,7 +54,7 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
       )
     } else if (choice == 3) {
       if (length(streams) == 0) {
-        cat("No streams to delete.\n")
+        cli::cli_alert_info("There are no extraction streams to delete.")
         next
       }
       sel <- select_list_safe(streams, multiple = TRUE, title = "Select stream(s) to delete")
@@ -69,7 +62,7 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
       scfg$extract_rois[sel] <- NULL
     } else if (choice == 4) {
       if (length(streams) == 0) {
-        cat("No streams defined.\n")
+        cli::cli_alert_info("There are no extraction streams to show.")
         next
       }
       for (nm in streams) {
@@ -96,7 +89,16 @@ setup_extract_streams <- function(scfg = list(), fields = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
   if (is.null(scfg$extract_rois$enable) || (isFALSE(scfg$extract_rois$enable) && any(grepl("extract_rois/", fields))) || ("extract_rois/enable" %in% fields)) {
-    scfg$extract_rois$enable <- prompt_input("Perform ROI extraction?", type = "flag", default = if (is.null(scfg$extract_rois$enable)) FALSE else isTRUE(scfg$extract_rois$enable))
+    scfg$extract_rois$enable <- prompt_input(
+      prompt = "Perform ROI extraction?",
+      instruct = paste(
+        "ROI extraction summarizes postprocessed signals within atlas regions",
+        "and can optionally calculate region-to-region correlations."
+      ),
+      heading = "ROI extraction",
+      type = "flag",
+      default = if (is.null(scfg$extract_rois$enable)) FALSE else isTRUE(scfg$extract_rois$enable)
+    )
   }
 
   if (!isTRUE(scfg$extract_rois$enable)) return(scfg)
@@ -147,7 +149,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if (!is.null(stream_name)) {
-    cat(glue("\n--- Specifying extraction stream: {stream_name} ---\n", .trim = FALSE))
+    cli_setup_section(glue("Extraction stream: {stream_name}"))
   }
 
   defaults <- list(
@@ -242,7 +244,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if ("extract_rois/correlation/method" %in% fields) {
-    cat(glue("
+    cli_instruction(glue("
       BrainGnomes supports several methods for computing correlations among ROI time series.
       You may choose one or more of these, which will produce files ending _cor-<method>_connectivity.tsv.
       If you choose 'none', then no such files will be produced, but the ROI time series will
@@ -254,7 +256,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
       )
       if (any(method == "none")) {
         if (length(method) > 1L) {
-          cat("You may not choose correlation methods if you choose 'none.'\n")
+          cli::cli_alert_warning("Choose either correlation methods or 'none', not both.")
         } else {
           excfg$save_ts <- TRUE # if they say none, then they must intend to extract the timeseries (otherwise, nothing would happen!)
           fields <- fields[fields != "extract_rois/save_ts"]
