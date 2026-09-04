@@ -114,7 +114,9 @@ immediately and the function returns the new run handle.</p>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="co"># Inspect and correct the failure before retrying.</span></span></span>
-<span class="r-in"><span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="diagnose_project.html">diagnose_project</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Preview only; no jobs are submitted.</span></span></span>
 <span class="r-in"><span><span class="va">retry_plan</span> <span class="op">&lt;-</span> <span class="fu">retry_project_run</span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>

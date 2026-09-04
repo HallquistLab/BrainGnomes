@@ -52,9 +52,7 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/filtfilt_cpp.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/find_run_logs.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/framewise_displacement.html</loc></url>
-<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_all_nodes.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.html</loc></url>
-<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_job_type.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_nested_values.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_postproc_output_files.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.html</loc></url>
@@ -62,8 +60,6 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_run_provenance.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_sequence_ids.html</loc></url>
-<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_status_color.html</loc></url>
-<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_status_symbol.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_step_title.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_subject_dirs.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/get_subject_logger.html</loc></url>
@@ -101,8 +97,6 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/postprocess_confounds.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/postprocess_subject.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/prepare_intensity_reference.html</loc></url>
-<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/print_step_tree_by_type.html</loc></url>
-<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/print_subject_summary_tree.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/process_subject.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/prompt_directory.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/prompt_input.html</loc></url>

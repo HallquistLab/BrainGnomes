@@ -9,7 +9,7 @@ most recent attempt for each project or subject-level work unit. Set
 ## Usage
 
 ``` r
-inspect_project(input, run_id = NULL)
+inspect_project(input = getwd(), run_id = NULL)
 ```
 
 ## Arguments
@@ -17,6 +17,7 @@ inspect_project(input, run_id = NULL)
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - run_id:
 

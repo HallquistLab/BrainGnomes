@@ -4,6 +4,24 @@
 
 Released 2026-09-02
 
+- Make
+  [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
+  open its guided dependency and log browser by default in interactive R
+  sessions, while scripts, tests, reports, and the non-interactive CLI
+  continue to receive structured diagnosis data. Callers can still
+  select either behavior explicitly with `interactive = TRUE/FALSE`.
+  [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md),
+  [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md),
+  and the deprecated
+  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  now accept an explicit project directory or YAML path and default to
+  the project in the current working directory when input is omitted.
+  Guided diagnosis now starts with current unresolved problems, groups
+  repeated stage/stream failures, and preserves every subject, run, and
+  job selection while drilling down. Exact `subject_id` and `job_id`
+  shortcuts are available in R and the CLI, and full run-wide job lists
+  appear only when explicitly requested.
+
 - Add
   [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
   as the single front door for database-backed project and run

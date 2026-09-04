@@ -19,6 +19,21 @@ library(BrainGnomes)
 scfg <- load_project("/project/my_study")
 ```
 
+Both functions also accept the project directory or configuration YAML
+path directly. If the project root is the current working directory, the
+input can be omitted:
+
+``` r
+
+setwd("/project/my_study")
+inspect_project()
+diagnose_project() # guided browser in an interactive R session
+```
+
+Automatic discovery checks only the current directory. It does not
+search parent directories, and reports a clear error if
+`project_config.yaml` is not there.
+
 ## Inspect current project progress
 
 The default inspection integrates all tracked runs:
@@ -143,13 +158,38 @@ use `$runs` and `$jobs` from
 
 Routine monitoring belongs in
 [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md).
-When current work has failed, use
+When current work has failed, call
 [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
-to collect the unresolved job records and matching logs:
+from an interactive R session to open the guided dependency and log
+browser:
 
 ``` r
 
-diagnosis <- diagnose_project(scfg)
+diagnose_project(scfg)
+```
+
+The browser begins with unresolved failures grouped by stage and stream.
+A single-job group opens that job directly; a repeated problem first
+narrows to the affected subjects. Subject, run, and job selections are
+retained during the drill-down, so the browser never returns to a full
+run-wide job list unless you explicitly choose that broader view.
+
+If you already know the subject or scheduler job ID, start at that
+scope:
+
+``` r
+
+diagnose_project(scfg, subject_id = "540294")
+diagnose_project(scfg, job_id = "66273010")
+```
+
+Scripts, tests, and reports are non-interactive, so the same call
+returns a structured diagnosis there. Use `interactive = FALSE`
+explicitly when you want that result in an interactive R session:
+
+``` r
+
+diagnosis <- diagnose_project(scfg, interactive = FALSE)
 diagnosis$failures
 diagnosis$logs
 ```
@@ -158,18 +198,20 @@ An existing inspection snapshot can be reused:
 
 ``` r
 
-diagnosis <- diagnose_project(status)
+diagnosis <- diagnose_project(status, interactive = FALSE)
 ```
 
 For a historical post-mortem, select the run explicitly:
 
 ``` r
 
-diagnosis <- diagnose_project(scfg, run_id = run_id)
+diagnosis <- diagnose_project(
+  scfg, run_id = run_id, interactive = FALSE
+)
 ```
 
-The guided dependency and log browser is now reached through the same
-function:
+Pass `interactive = TRUE` when code must open the guided browser
+regardless of how R was started:
 
 ``` r
 
@@ -178,7 +220,7 @@ diagnose_project(scfg, run_id = run_id, interactive = TRUE)
 
 [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 remains temporarily as a deprecated compatibility wrapper for
-interactive diagnosis.
+`diagnose_project(..., interactive = TRUE)`.
 
 ## Inspect run provenance
 
@@ -251,6 +293,8 @@ BrainGnomes status /project/my_study --run=<run-id> --view=jobs --format=csv
 
 BrainGnomes diagnose /project/my_study
 BrainGnomes diagnose /project/my_study --run=<run-id> --interactive
+BrainGnomes diagnose /project/my_study --subject-id=540294 --interactive
+BrainGnomes diagnose /project/my_study --job-id=66273010 --interactive
 BrainGnomes logs /project/my_study --run=<run-id> --failed-only --tail=50
 BrainGnomes provenance /project/my_study --run=<run-id> --format=json
 

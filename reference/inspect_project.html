@@ -62,7 +62,7 @@ inspect only one submission.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">inspect_project</span><span class="op">(</span><span class="va">input</span>, run_id <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">inspect_project</span><span class="op">(</span>input <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">getwd</a></span><span class="op">(</span><span class="op">)</span>, run_id <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -70,7 +70,8 @@ inspect only one submission.</p>
 
 
 <dl><dt id="arg-input">input<a class="anchor" aria-label="anchor" href="#arg-input"></a></dt>
-<dd><p>A project configuration object, YAML file, or project directory.</p></dd>
+<dd><p>A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.</p></dd>
 
 
 <dt id="arg-run-id">run_id<a class="anchor" aria-label="anchor" href="#arg-run-id"></a></dt>

@@ -162,13 +162,18 @@
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/load_project.html">load_project</a></span><span class="op">(</span><span class="st">"/project/my_study"</span><span class="op">)</span></span>
 <span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
+<p>The inspection and diagnosis helpers also accept a project directory directly. When the current working directory is the project root, omit it entirely:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="st">"/project/my_study"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="op">)</span>  <span class="co"># guided browser in an interactive R session</span></span></code></pre></div>
 <p>The command-line interface preserves the same workflow. The shorter <code>init</code> and <code>run</code> command names are also accepted.</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co"># Only when a run needs investigation:</span></span>
-<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--interactive</span></span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co"># Only when a run needs investigation:</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--interactive</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="optional-inspection-and-automation-tools">Optional inspection and automation tools<a class="anchor" aria-label="anchor" href="#optional-inspection-and-automation-tools"></a>
 </h3>
@@ -182,7 +187,7 @@
 <strong>Plan</strong> (<code><a href="reference/plan_project.html">plan_project()</a></code> or <code>BrainGnomes plan</code>) exposes the stages, streams, subject/session scope, resources, dependencies, and implicit setup work that BrainGnomes has resolved. It is useful for review, persistence, and automated approval workflows. <code><a href="reference/run_project.html">run_project()</a></code> resolves this same execution model internally, so users do not need to create or submit a plan first.</li>
 </ul>
 <p>For example, an optional review-and-submit workflow is:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">validation</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/validate_project_config.html">validate_project_config</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">preflight</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/doctor.html">doctor</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plan_project.html">plan_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"all"</span><span class="op">)</span></span>
@@ -195,18 +200,22 @@
 <p>Every submitted run records a provenance bundle beneath <code>&lt;log_directory&gt;/runs/&lt;run_id&gt;/</code>. It contains the exact configuration and resolved subject scope plus a JSON record of the request, resources, dependencies, BrainGnomes/R/platform versions, submission host, scheduler, and checksummed containers and other execution-driving files. Read it with <code>get_run_provenance(scfg, run$run_id)</code> or <code>BrainGnomes provenance &lt;project&gt;</code>. Before jobs are submitted, <code><a href="reference/run_project.html">run_project()</a></code> reports when it is finding subjects and saving this run record. The first use of a large container in a project can take a minute because BrainGnomes reads the complete file to identify the exact copy used; later runs reuse the project’s saved result while the file is unchanged.</p>
 <p><code>inspect_project(scfg)</code> reports the current effective project state across runs, using the newest attempt for each subject, stage, and stream. Its <code>overview</code>, <code>stages</code>, <code>subjects</code>, <code>subject_stages</code>, <code>runs</code>, <code>attempts</code>, and <code>jobs</code> elements are ordinary data frames. Supply <code>run_id = "latest"</code> or an explicit ID to restrict inspection to one submission.</p>
 <p>If work fails, first inspect the failed jobs and logs, correct the underlying problem, and then preview the retry:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">status</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
-<span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">status</span><span class="op">)</span></span>
+<span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">status</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">failed_logs</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/find_run_logs.html">find_run_logs</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, failed_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">retry_plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># This submits a new run; it does not change the original run.</span></span>
 <span><span class="va">retry_run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p>In an interactive session, <code>diagnose_project(scfg)</code> starts with current unresolved problems and carries each stage, subject, or run selection forward until a specific job and its logs are reached. Skip directly to a known subject or scheduler job when useful:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, job_id <span class="op">=</span> <span class="st">"66273010"</span><span class="op">)</span></span></code></pre></div>
 <p>By default, retry includes jobs that failed or were cancelled. Set <code>include_blocked = TRUE</code> only when the new run should also include downstream jobs that could not start because an earlier job failed. The new run records the source run ID in provenance.</p>
 <p>The CLI requires an explicit choice between a preview and action:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
 <p>Cancellation follows the same preview-first pattern and affects only queued or running scheduler jobs; it does not delete project data or outputs. BIDS validation remains independently schedulable with <code><a href="reference/run_bids_validation.html">run_bids_validation()</a></code> or <code>BrainGnomes validate-bids</code>. The <a href="https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> shows the primary workflow and these optional tools.</p>
 </div>
 </div>

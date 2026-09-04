@@ -8,14 +8,32 @@ browser.
 ## Usage
 
 ``` r
-diagnose_pipeline(input)
+diagnose_pipeline(
+  input = getwd(),
+  run_id = NULL,
+  subject_id = NULL,
+  job_id = NULL
+)
 ```
 
 ## Arguments
 
 - input:
 
-  A project configuration object or project directory.
+  A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
+
+- run_id:
+
+  Optional run ID to diagnose.
+
+- subject_id:
+
+  Optional subject identifier to focus.
+
+- job_id:
+
+  Optional exact scheduler job identifier to open.
 
 ## Value
 

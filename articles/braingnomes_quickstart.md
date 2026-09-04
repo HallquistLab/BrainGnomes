@@ -631,23 +631,54 @@ find_run_logs(scfg, run$run_id, failed_only = TRUE)
 
 ### Step 3: Diagnose when needed
 
-Diagnosis is not a routine prerequisite. Use
+Diagnosis is not a routine prerequisite. In an interactive R session,
 [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
-when current failed, blocked, or cancelled work needs investigation:
+opens the guided dependency and log browser for current failed, blocked,
+or cancelled work:
 
 ``` r
 
-diagnosis <- diagnose_project(scfg)
+diagnose_project(scfg)
+```
+
+The guided browser starts with unresolved problems and retains each
+narrowing choice. Provide `subject_id` or `job_id` to open a smaller
+scope immediately:
+
+``` r
+
+diagnose_project(scfg, subject_id = "540294")
+diagnose_project(scfg, job_id = "66273010")
+```
+
+Use `interactive = FALSE` for a structured result that can be queried in
+R. This is also the default in scripts, tests, and reports:
+
+``` r
+
+diagnosis <- diagnose_project(scfg, interactive = FALSE)
 diagnosis$failures
 diagnosis$logs
 ```
 
-Supply a run ID for a historical post-mortem. The guided dependency and
-log browser is available through `interactive = TRUE`:
+The configuration object is optional when the project root is the
+current working directory. In that case,
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+and
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
+find `project_config.yaml` in
+[`getwd()`](https://rdrr.io/r/base/getwd.html); they do not search
+parent directories.
+
+Supply a run ID for a historical post-mortem. Set the mode explicitly
+when the code must behave the same way in interactive and
+non-interactive sessions:
 
 ``` r
 
-diagnose_project(scfg, run_id = run$run_id)
+diagnosis <- diagnose_project(
+  scfg, run_id = run$run_id, interactive = FALSE
+)
 diagnose_project(scfg, run_id = run$run_id, interactive = TRUE)
 ```
 
@@ -737,11 +768,13 @@ before retrying it.
 
 # Inspect current project progress, then diagnose unresolved failures.
 status <- inspect_project(scfg)
-diagnosis <- diagnose_project(status)
+diagnosis <- diagnose_project(status, interactive = FALSE)
 
 # Select one run when preparing a run-specific retry.
 run_status <- inspect_project(scfg, run_id = run$run_id)
-diagnosis <- diagnose_project(scfg, run_id = run$run_id)
+diagnosis <- diagnose_project(
+  scfg, run_id = run$run_id, interactive = FALSE
+)
 failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
 
 # Review what would be retried. This does not submit anything.

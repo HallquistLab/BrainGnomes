@@ -65,7 +65,9 @@ to compare the original and retry runs.
 ``` r
 if (FALSE) { # \dontrun{
 # Inspect and correct the failure before retrying.
-diagnosis <- diagnose_project(scfg, run$run_id)
+diagnosis <- diagnose_project(
+  scfg, run$run_id, interactive = FALSE
+)
 
 # Preview only; no jobs are submitted.
 retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)

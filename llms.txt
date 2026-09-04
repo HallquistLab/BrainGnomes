@@ -102,6 +102,17 @@ scfg <- load_project("/project/my_study")
 run <- run_project(scfg)
 ```
 
+The inspection and diagnosis helpers also accept a project directory
+directly. When the current working directory is the project root, omit
+it entirely:
+
+``` r
+
+setwd("/project/my_study")
+inspect_project()
+diagnose_project()  # guided browser in an interactive R session
+```
+
 The command-line interface preserves the same workflow. The shorter
 `init` and `run` command names are also accepted.
 
@@ -179,12 +190,23 @@ underlying problem, and then preview the retry:
 ``` r
 
 status <- inspect_project(scfg)
-diagnosis <- diagnose_project(status)
+diagnosis <- diagnose_project(status, interactive = FALSE)
 failed_logs <- find_run_logs(scfg, run$run_id, failed_only = TRUE)
 retry_plan <- retry_project_run(scfg, run$run_id, dry_run = TRUE)
 
 # This submits a new run; it does not change the original run.
 retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)
+```
+
+In an interactive session, `diagnose_project(scfg)` starts with current
+unresolved problems and carries each stage, subject, or run selection
+forward until a specific job and its logs are reached. Skip directly to
+a known subject or scheduler job when useful:
+
+``` r
+
+diagnose_project(scfg, subject_id = "540294")
+diagnose_project(scfg, job_id = "66273010")
 ```
 
 By default, retry includes jobs that failed or were cancelled. Set
