@@ -17,12 +17,14 @@ make_inspection_project <- function() {
 }
 
 add_inspection_job <- function(db, job_id, job_name, run_id, status,
-                               scheduler_options = "--constraint=a-very-long-value") {
+                               scheduler_options = "--constraint=a-very-long-value",
+                               wall_time = "08:00:00") {
   insert_tracked_job(db, job_id, list(
     job_name = job_name,
     sequence_id = run_id,
     status = status,
     scheduler = "slurm",
+    wall_time = wall_time,
     scheduler_options = scheduler_options
   ))
 }
@@ -126,6 +128,10 @@ test_that("inspect_project supports run scope and structured resolutions", {
   expect_equal(nrow(status$runs), 1L)
   expect_equal(summary(status, by = "attempt"), status$attempts)
   expect_equal(summary(status, by = "job"), status$jobs)
+  expect_equal(summary(status, by = "active"), status$active)
+  expect_equal(
+    summary(status, by = "reconciliation"), status$reconciliation
+  )
 
   output <- capture.output(
     messages <- capture.output(print(status), type = "message")
@@ -139,6 +145,183 @@ test_that("inspect_project supports run scope and structured resolutions", {
     inspect_project(fixture$cfg, run_id = "missing"),
     "No tracked project run"
   )
+})
+
+test_that("inspect_project applies subject focus at every resolution", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(fixture$db, "310", "mriqc_sub-01", "run-old", "COMPLETED")
+  add_inspection_job(fixture$db, "311", "fmriprep_sub-01", "run-new", "QUEUED")
+  add_inspection_job(fixture$db, "312", "mriqc_sub-02", "run-new", "FAILED")
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), fixture$db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(
+    con,
+    "UPDATE job_tracking SET time_submitted = '2026-09-01 10:00:00' WHERE sequence_id = 'run-old'"
+  )
+  DBI::dbExecute(
+    con,
+    "UPDATE job_tracking SET time_submitted = '2026-09-02 10:00:00' WHERE sequence_id = 'run-new'"
+  )
+
+  focused <- inspect_project(fixture$cfg, subject_id = "sub-01")
+  expect_identical(focused$subject_id, "01")
+  expect_true(all(focused$jobs$sub_id == "01"))
+  expect_true(all(focused$subject_stages$sub_id == "01"))
+  expect_identical(focused$subjects$sub_id, "01")
+  expect_setequal(focused$runs$run_id, c("run-old", "run-new"))
+  expect_equal(sum(focused$runs$n_jobs), 2L)
+  expect_identical(focused$active$job_id, "311")
+
+  selected <- inspect_project(
+    fixture$cfg, run_id = "run-new", subject_id = "01"
+  )
+  expect_identical(selected$scope, "run")
+  expect_identical(selected$jobs$job_id, "311")
+  expect_identical(selected$runs$n_jobs, 1L)
+
+  diagnosis <- diagnose_project(focused, interactive = FALSE)
+  expect_identical(diagnosis$focus$subject_id, "01")
+  expect_true(all(diagnosis$jobs$sub_id == "01"))
+
+  output <- capture.output(
+    messages <- capture.output(print(focused), type = "message")
+  )
+  expect_true(any(grepl("Subject: sub-01", c(output, messages), fixed = TRUE)))
+  expect_error(
+    inspect_project(fixture$cfg, subject_id = "missing"),
+    "No tracked jobs were found for sub-missing"
+  )
+})
+
+test_that("active job health reports elapsed time and requested limits", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(
+    fixture$db, "320", "mriqc_sub-01", "run-one", "QUEUED",
+    wall_time = "08:00:00"
+  )
+  add_inspection_job(
+    fixture$db, "321", "fmriprep_sub-02", "run-one", "STARTED",
+    wall_time = "00:30:00"
+  )
+  add_inspection_job(
+    fixture$db, "322", "mriqc_sub-03", "run-one", "COMPLETED"
+  )
+  con <- DBI::dbConnect(RSQLite::SQLite(), fixture$db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(
+    con,
+    paste0(
+      "UPDATE job_tracking SET time_submitted = '2026-09-04 08:00:00' ",
+      "WHERE job_id = '320'"
+    )
+  )
+  DBI::dbExecute(
+    con,
+    paste0(
+      "UPDATE job_tracking SET time_submitted = '2026-09-04 08:00:00', ",
+      "time_started = '2026-09-04 09:00:00' WHERE job_id = '321'"
+    )
+  )
+
+  inspection <- inspect_project(fixture$cfg)
+  expect_setequal(inspection$active$job_id, c("320", "321"))
+  expect_equal(nrow(inspection$reconciliation), 0L)
+  expect_false(inspection$scheduler_refreshed)
+
+  current_jobs <- as.data.frame(
+    inspection$jobs[inspection$jobs$is_current_attempt, , drop = FALSE]
+  )
+  health <- build_active_job_health(
+    fixture$cfg, current_jobs,
+    retrieved_at = as.POSIXct("2026-09-04 10:00:00"), refresh = FALSE
+  )
+  queued <- health$active[health$active$job_id == "320", , drop = FALSE]
+  running <- health$active[health$active$job_id == "321", , drop = FALSE]
+  expect_equal(queued$queue_seconds, 7200)
+  expect_true(is.na(queued$runtime_seconds))
+  expect_equal(running$runtime_seconds, 3600)
+  expect_equal(running$requested_wall_seconds, 1800)
+  expect_true(running$overdue)
+  expect_identical(running$health, "OVERDUE")
+  expect_s3_class(health$active$state_since, "POSIXct")
+  expect_equal(
+    unname(parse_wall_time_seconds(c("08:00:00", "1-02:03:04"))),
+    c(28800, 93784)
+  )
+
+  local_mocked_bindings(
+    scheduler_job_status = function(job_ids, scheduler = "local", user = NULL) {
+      data.frame(
+        job_id = job_ids, scheduler = scheduler,
+        scheduler_status = "MISSING", scheduler_raw_status = "MISSING",
+        query_detail = NA_character_, stringsAsFactors = FALSE
+      )
+    },
+    .package = "BrainGnomes"
+  )
+  refreshed_health <- build_active_job_health(
+    fixture$cfg, current_jobs,
+    retrieved_at = as.POSIXct("2026-09-04 10:00:00"), refresh = TRUE
+  )
+  refreshed_running <- refreshed_health$active[
+    refreshed_health$active$job_id == "321", , drop = FALSE
+  ]
+  expect_identical(refreshed_running$health, "OVERDUE")
+})
+
+test_that("scheduler refresh is read-only and exposes reconciliation", {
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  fixture$cfg$compute_environment <- list(scheduler = "slurm")
+  add_inspection_job(fixture$db, "330", "mriqc_sub-01", "run-one", "QUEUED")
+  add_inspection_job(fixture$db, "331", "fmriprep_sub-02", "run-one", "STARTED")
+
+  local_mocked_bindings(
+    scheduler_job_status = function(job_ids, scheduler = "local", user = NULL) {
+      observed <- c(`330` = "RUNNING", `331` = "COMPLETED")[job_ids]
+      data.frame(
+        job_id = job_ids, scheduler = scheduler,
+        scheduler_status = unname(observed),
+        scheduler_raw_status = unname(observed),
+        query_detail = NA_character_, stringsAsFactors = FALSE
+      )
+    },
+    .package = "BrainGnomes"
+  )
+  refreshed <- inspect_project(fixture$cfg, refresh = TRUE)
+  expect_true(refreshed$scheduler_refreshed)
+  expect_setequal(
+    refreshed$active$health, c("DATABASE_LAG", "STALE_DATABASE")
+  )
+  expect_true(all(refreshed$active$stale))
+  expect_equal(nrow(refreshed$reconciliation), 2L)
+  expect_true(all(!refreshed$reconciliation$agrees))
+  expect_equal(refreshed$overview$n_active_attention, 2L)
+  expect_equal(refreshed$overview$n_active_stale, 2L)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), fixture$db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  database_jobs <- DBI::dbGetQuery(
+    con, "SELECT job_id, status FROM job_tracking ORDER BY job_id"
+  )
+  expect_identical(database_jobs$status, c("QUEUED", "STARTED"))
+
+  output <- capture.output(
+    messages <- capture.output(print(refreshed), type = "message")
+  )
+  output <- c(output, messages)
+  expect_true(any(grepl("Oldest or noteworthy active jobs", output, fixed = TRUE)))
+  expect_true(any(grepl("STALE_DATABASE", output, fixed = TRUE)))
+
+})
+
+test_that("scheduler refresh reports unsupported schedulers without failing", {
+  unavailable <- scheduler_job_status(c("1", "2"), "unsupported")
+  expect_true(all(unavailable$scheduler_status == "UNAVAILABLE"))
+  expect_true(all(grepl("Unsupported scheduler", unavailable$query_detail)))
 })
 
 test_that("diagnose_project uses current failures or a selected historical run", {

@@ -147,9 +147,19 @@ unchanged.
 
 `inspect_project(scfg)` reports the current effective project state across
 runs, using the newest attempt for each subject, stage, and stream. Its
-`overview`, `stages`, `subjects`, `subject_stages`, `runs`, `attempts`, and
-`jobs` elements are ordinary data frames. Supply `run_id = "latest"` or an
-explicit ID to restrict inspection to one submission.
+`overview`, `active`, `reconciliation`, `stages`, `subjects`,
+`subject_stages`, `runs`, `attempts`, and `jobs` elements are ordinary data
+frames. Supply `subject_id` to focus every view on one subject, or
+`run_id = "latest"`/an explicit ID to restrict inspection to one submission.
+The default remains database-only; `refresh = TRUE` adds a read-only scheduler
+comparison for jobs recorded as queued or running.
+
+```r
+subject_status <- inspect_project(scfg, subject_id = "540294")
+active_status <- inspect_project(scfg, refresh = TRUE)
+active_status$active
+active_status$reconciliation
+```
 
 If work fails, first inspect the failed jobs and logs, correct the underlying
 problem, and then preview the retry:

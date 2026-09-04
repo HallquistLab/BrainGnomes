@@ -133,6 +133,14 @@ test_that("BrainGnomes diagnose help distinguishes guided and prompt-free use", 
   expect_true(any(grepl("--job-id=<id>", res$output, fixed = TRUE)))
 })
 
+test_that("BrainGnomes status help exposes focused active-job inspection", {
+  res <- run_brain_gnomes_cli(c("status", "--help"))
+  expect_equal(res$status, 0L)
+  expect_true(any(grepl("every resolution", res$output, fixed = TRUE)))
+  expect_true(any(grepl("--refresh", res$output, fixed = TRUE)))
+  expect_true(any(grepl("active, reconciliation", res$output, fixed = TRUE)))
+})
+
 test_that("inspection command help makes optional use cases explicit", {
   expected <- list(
     config = c("Optional inspection tooling", "not required before run_project"),

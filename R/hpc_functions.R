@@ -227,6 +227,116 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 }
 
 
+# Convert scheduler-specific states to the lifecycle vocabulary used by job
+# waiting and project inspection. Keep this scheduler-aware because, for
+# example, `S` means sleeping (active) to ps but suspended to some schedulers.
+normalize_scheduler_job_status <- function(status, scheduler) {
+  scheduler <- tolower(as.character(scheduler)[[1L]])
+  scheduler <- switch(scheduler,
+    sbatch = "slurm", qsub = "torque", sh = "local", scheduler
+  )
+  status <- toupper(trimws(as.character(status)))
+  status <- sub("[+].*$", "", status)
+  status <- sub("[[:space:]].*$", "", status)
+  normalized <- rep("UNKNOWN", length(status))
+  normalized[is.na(status) | !nzchar(status) | status == "MISSING"] <-
+    "MISSING"
+
+  if (scheduler == "local") {
+    normalized[status %in% c("D", "I", "R", "S", "U", "W")] <- "RUNNING"
+    normalized[status == "T"] <- "SUSPENDED"
+    normalized[status == "C"] <- "COMPLETED"
+    normalized[status %in% c("X", "Z")] <- "FAILED"
+  } else {
+    normalized[status %in% c(
+      "PENDING", "CONFIGURING", "REQUEUED", "RESIZING", "Q", "W", "QUEUED"
+    )] <- "QUEUED"
+    normalized[status %in% c("RUNNING", "COMPLETING", "R", "E", "H")] <-
+      "RUNNING"
+    normalized[status %in% c("SUSPENDED", "STOPPED", "S", "T")] <-
+      "SUSPENDED"
+    normalized[status %in% c("COMPLETED", "COMPLETE", "C")] <- "COMPLETED"
+    normalized[status == "CANCELLED"] <- "CANCELLED"
+    normalized[status %in% c(
+      "BOOT_FAIL", "DEADLINE", "FAILED", "NODE_FAIL", "OUT_OF_MEMORY",
+      "PREEMPTED", "REVOKED", "TIMEOUT", "ZOMBIE", "Z"
+    )] <- "FAILED"
+  }
+  normalized[status == "UNAVAILABLE"] <- "UNAVAILABLE"
+  normalized
+}
+
+# Scheduler-neutral adapter over the existing scheduler-specific query
+# functions. This is deliberately internal: users inspect in-flight work with
+# inspect_project(), while wait_for_job() consumes the same canonical result.
+scheduler_job_status <- function(job_ids, scheduler = "local", user = NULL) {
+  job_ids <- as.character(job_ids)
+  scheduler <- tolower(as.character(scheduler)[[1L]])
+  scheduler <- switch(scheduler,
+    sbatch = "slurm", qsub = "torque", sh = "local", scheduler
+  )
+  empty_result <- function() {
+    data.frame(
+      job_id = character(), scheduler = character(),
+      scheduler_status = character(), scheduler_raw_status = character(),
+      query_detail = character(), stringsAsFactors = FALSE
+    )
+  }
+  unavailable_result <- function(detail) {
+    data.frame(
+      job_id = job_ids, scheduler = scheduler,
+      scheduler_status = rep("UNAVAILABLE", length(job_ids)),
+      scheduler_raw_status = rep(NA_character_, length(job_ids)),
+      query_detail = rep(detail, length(job_ids)), stringsAsFactors = FALSE
+    )
+  }
+  if (length(job_ids) == 0L) return(empty_result())
+
+  command <- switch(scheduler,
+    slurm = "sacct", torque = "qselect", local = "ps", ""
+  )
+  if (!nzchar(command)) {
+    return(unavailable_result(paste0("Unsupported scheduler: ", scheduler)))
+  }
+  if (!nzchar(Sys.which(command))) {
+    return(unavailable_result(paste0(
+      "Scheduler command is unavailable: ", command
+    )))
+  }
+
+  result <- tryCatch(
+    switch(scheduler,
+      slurm = slurm_job_status(job_ids, user = user),
+      torque = torque_job_status(job_ids, user = user),
+      local = local_job_status(job_ids, user = user)
+    ),
+    error = function(error) error
+  )
+  if (inherits(result, "error")) {
+    return(unavailable_result(conditionMessage(result)))
+  }
+
+  id_column <- if (scheduler == "local") "PID" else "JobID"
+  status_column <- if (scheduler == "local") "STAT" else "State"
+  if (!all(c(id_column, status_column) %in% names(result))) {
+    return(unavailable_result(
+      "Scheduler query did not return job identifiers and states."
+    ))
+  }
+  keep <- !duplicated(as.character(result[[id_column]]))
+  match_index <- match(job_ids, as.character(result[[id_column]][keep]))
+  raw_status <- as.character(result[[status_column]][keep])[match_index]
+  raw_status[is.na(raw_status) | !nzchar(raw_status)] <- "MISSING"
+  data.frame(
+    job_id = job_ids, scheduler = scheduler,
+    scheduler_status = normalize_scheduler_job_status(raw_status, scheduler),
+    scheduler_raw_status = raw_status,
+    query_detail = rep(NA_character_, length(job_ids)),
+    stringsAsFactors = FALSE
+  )
+}
+
+
 #' This function pauses execution of an R script while a scheduled qsub job is not yet complete.
 #'
 #' It is intended to give you control over job dependencies within R when the formal PBS
@@ -275,62 +385,11 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
   wait_start <- Sys.time()
 
   get_job_status <- function() { # use variables in parent environment
-    if (scheduler %in% c("slurm", "sbatch")) {
-      status <- slurm_job_status(job_ids)
-      state <- vapply(status$State, function(x) {
-        switch(x,
-          "BOOT_FAIL" = "failed",
-          "CANCELLED" = "cancelled",
-          "COMPLETED" = "complete",
-          "DEADLINE" = "failed",
-          "FAILED" = "failed",
-          "NODE_FAIL" = "failed",
-          "OUT_OF_MEMORY" = "failed",
-          "PENDING" = "queued",
-          "PREEMPTED" = "failed",
-          "RUNNING" = "running",
-          "REQUEUED" = "queued",
-          "REVOKED" = "failed",
-          "SUSPENDED" = "suspended",
-          "TIMEOUT" = "failed",
-          "MISSING" = "missing", # scheduler has not registered the job
-          "unknown"
-        )
-      }, character(1))    
-    } else if (scheduler %in% c("sh", "local")) {
-      status <- local_job_status(job_ids)
-      state <- vapply(status$STAT, function(x) {
-        switch(x,
-          "C" = "complete",
-          "I" = "running", # idle/sleeping
-          "R" = "running",
-          "S" = "running", # sleeping
-          "T" = "suspended",
-          "U" = "running",
-          "Z" = "failed", # zombie
-          "unknown"
-        )
-      }, character(1))
-    } else if (scheduler %in% c("torque", "qsub")) {
-      # QSUB
-      status <- torque_job_status(job_ids)
-      state <- status$State
-
-      # no need for additional mapping in simple torque results
-      # state <- sapply(status$State, function(x) {
-      #   switch(x,
-      #     "C" = "complete",
-      #     "R" = "running",
-      #     "Q" = "queued",
-      #     "H" = "suspended",
-      #     "W" = "suspended", # waiting
-      #     stop("Unable to understand job state: ", x)
-      #   )
-      # })
-    } else {
-      stop("unknown scheduler: ", scheduler)
-    }
-    return(state)
+    status <- scheduler_job_status(job_ids, scheduler = scheduler)
+    state <- tolower(status$scheduler_status)
+    state[state == "completed"] <- "complete"
+    state[state == "unavailable"] <- "unknown"
+    state
   }
 
   ret_code <- NULL # should be set to TRUE if all jobs complete and FALSE if any job fails 

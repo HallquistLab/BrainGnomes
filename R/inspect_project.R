@@ -398,7 +398,9 @@
 }
 
 .build_project_inspection <- function(scfg, jobs, scope = "project", run_id = NULL,
+                                      subject_id = NULL, refresh = FALSE,
                                       all_runs = NULL) {
+  retrieved_at <- Sys.time()
   jobs <- .annotate_tracked_jobs(jobs)
   if (is.null(all_runs)) all_runs <- .project_runs_from_jobs(jobs)
   attempts <- .aggregate_job_attempts(jobs)
@@ -421,6 +423,15 @@
     current[!is.na(current$sub_id), , drop = FALSE], c("sub_id", "ses_id")
   )
   overview <- .inspection_overview(current, jobs, all_runs, scope, run_id)
+  active_health <- build_active_job_health(
+    scfg, jobs[jobs$is_current_attempt, , drop = FALSE],
+    retrieved_at = retrieved_at, refresh = refresh
+  )
+  overview$n_active_attention <- sum(active_health$active$health %in% c(
+    "STALE_DATABASE", "DATABASE_LAG", "SUSPENDED", "OVERDUE", "UNCONFIRMED"
+  ))
+  overview$n_active_overdue <- sum(active_health$active$overdue)
+  overview$n_active_stale <- sum(active_health$active$stale)
   runs <- if (identical(scope, "run") && !is.null(run_id) && !is.na(run_id)) {
     all_runs[all_runs$run_id == run_id, , drop = FALSE]
   } else {
@@ -440,6 +451,7 @@
   attr(jobs, "scope") <- scope
   attr(jobs, "run_id") <- run_id
   attr(jobs, "project") <- project_name
+  attr(jobs, "subject_id") <- subject_id
 
   structure(list(
     project = project_name,
@@ -447,8 +459,12 @@
     log_directory = log_directory,
     scope = scope,
     run_id = run_id,
-    retrieved_at = Sys.time(),
+    subject_id = subject_id,
+    scheduler_refreshed = isTRUE(refresh),
+    retrieved_at = retrieved_at,
     overview = overview,
+    active = active_health$active,
+    reconciliation = active_health$reconciliation,
     stages = stages,
     subjects = subjects,
     subject_stages = subject_stages,
@@ -471,11 +487,23 @@
 #' @param run_id Optional run ID. Use `"latest"` for the most recently recorded
 #'   run, an explicit run ID for an older submission, or `NULL` (the default)
 #'   for current project status across all runs.
+#' @param subject_id Optional subject identifier, with or without the `sub-`
+#'   prefix. When supplied, every returned resolution is restricted to that
+#'   subject, including its run summaries.
+#' @param refresh If `TRUE`, query the configured scheduler for jobs recorded as
+#'   queued or running. The query is read-only: database values are retained and
+#'   any differences are returned in `reconciliation`. The default, `FALSE`,
+#'   relies only on the tracking database.
 #' @return A `bg_project_inspection` object. Its `overview`, `stages`,
-#'   `subjects`, `subject_stages`, `runs`, `attempts`, and `jobs` elements are
-#'   data frames suitable for programmatic queries.
+#'   `active`, `reconciliation`, `subjects`, `subject_stages`, `runs`,
+#'   `attempts`, and `jobs` elements are data frames suitable for programmatic
+#'   queries.
 #' @details The `overview` table contains one row for the selected scope.
 #'   `stages` and `subjects` aggregate its current work units;
+#'   `active` reports current queued and running jobs with elapsed time,
+#'   requested wall time, and health flags. When `refresh = TRUE`,
+#'   `reconciliation` compares those database states with the scheduler without
+#'   modifying either source.
 #'   `subject_stages` retains the stage and stream detail; `runs` summarizes
 #'   submissions; and `attempts` retains both current and superseded logical
 #'   attempts. `jobs` contains the underlying tracking rows and marks the rows
@@ -489,14 +517,19 @@
 #' status <- inspect_project(scfg)
 #' status
 #' summary(status, by = "subject")
-#' subset(status$subject_stages, sub_id == "014")
+#' subject <- inspect_project(scfg, subject_id = "014")
+#' subject$active
 #'
-#' latest <- inspect_project(scfg, run_id = "latest")
+#' latest <- inspect_project(scfg, run_id = "latest", refresh = TRUE)
+#' latest$reconciliation
 #' subset(latest$jobs, lifecycle_status == "FAILED")
 #' }
 #' @seealso [diagnose_project()] for failure and log investigation.
 #' @export
-inspect_project <- function(input = getwd(), run_id = NULL) {
+inspect_project <- function(input = getwd(), run_id = NULL,
+                            subject_id = NULL, refresh = FALSE) {
+  subject_id <- normalize_inspection_subject_id(subject_id)
+  checkmate::assert_flag(refresh)
   scfg <- project_config_from_input(input)
   all_jobs <- .read_project_tracking_jobs(scfg)
   all_jobs <- .annotate_tracked_jobs(all_jobs)
@@ -523,15 +556,27 @@ inspect_project <- function(input = getwd(), run_id = NULL) {
       jobs <- all_jobs[all_jobs$sequence_id == resolved, , drop = FALSE]
     }
   }
+  if (!is.null(subject_id)) {
+    jobs <- jobs[!is.na(jobs$sub_id) & jobs$sub_id == subject_id, , drop = FALSE]
+    if (nrow(jobs) == 0L) {
+      run_text <- if (is.null(run_id)) "" else paste0(" in the selected run")
+      stop(
+        "No tracked jobs were found for sub-", subject_id, run_text, ".",
+        call. = FALSE
+      )
+    }
+  }
+  scoped_runs <- .project_runs_from_jobs(jobs)
 
   .build_project_inspection(
-    scfg, jobs, scope = scope, run_id = resolved, all_runs = all_runs
+    scfg, jobs, scope = scope, run_id = resolved,
+    subject_id = subject_id, refresh = refresh, all_runs = scoped_runs
   )
 }
 
 #' @export
 summary.bg_project_inspection <- function(object,
-                                          by = c("run", "stage", "subject", "subject_stage", "runs", "attempt", "job"),
+                                          by = c("run", "stage", "subject", "subject_stage", "runs", "attempt", "job", "active", "reconciliation"),
                                           ...) {
   by <- match.arg(by)
   switch(by,
@@ -541,7 +586,9 @@ summary.bg_project_inspection <- function(object,
     subject_stage = object$subject_stages,
     runs = object$runs,
     attempt = object$attempts,
-    job = object$jobs
+    job = object$jobs,
+    active = object$active,
+    reconciliation = object$reconciliation
   )
 }
 
@@ -553,8 +600,10 @@ summary.bg_project_inspection <- function(object,
 }
 
 #' @export
-print.bg_project_inspection <- function(x, ..., max_subjects = 12L) {
+print.bg_project_inspection <- function(x, ..., max_subjects = 12L,
+                                        max_active = 8L) {
   checkmate::assert_integerish(max_subjects, len = 1L, lower = 0)
+  checkmate::assert_integerish(max_active, len = 1L, lower = 0)
   overview <- x$overview[1L, , drop = FALSE]
   title <- if (identical(x$scope, "run") && !is.na(x$run_id)) {
     paste0("BrainGnomes run ", x$run_id)
@@ -562,6 +611,9 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L) {
     paste0("BrainGnomes project: ", x$project)
   }
   cli::cli_h2(title)
+  if (!is.null(x$subject_id)) {
+    cli::cli_text("Subject: {.strong sub-{x$subject_id}}")
+  }
   cli::cli_text("Status: {.strong {overview$overall_status}}")
   cli::cli_text(
     "Scope: {overview$n_runs} run{?s} | {overview$n_subjects} subject{?s}"
@@ -572,6 +624,22 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L) {
   cli::cli_text(
     "Tracked jobs: {overview$n_jobs} total | {overview$n_jobs_running} running | {overview$n_jobs_queued} queued"
   )
+
+  if (nrow(x$active) > 0L && max_active > 0L) {
+    shown_active <- utils::head(x$active, max_active)
+    cli::cli_h3("Oldest or noteworthy active jobs")
+    print(active_status_display_table(shown_active), row.names = FALSE)
+    if (nrow(x$active) > nrow(shown_active)) {
+      cli::cli_alert_info(
+        "{nrow(x$active) - nrow(shown_active)} additional active job{?s} omitted."
+      )
+    }
+    if (overview$n_active_attention > 0L) {
+      cli::cli_alert_warning(
+        "{overview$n_active_attention} active job{?s} need scheduler or timing attention."
+      )
+    }
+  }
 
   if (nrow(x$stages) > 0L) {
     cli::cli_h3("Stage and stream progress")
@@ -593,7 +661,9 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L) {
   } else if (overview$n_units == 0L) {
     cli::cli_alert_info("No tracked work was found for this scope.")
   }
-  cli::cli_alert_info("Use summary(x, by = \"subject\") or x$subject_stages for complete structured views.")
+  cli::cli_alert_info(
+    "Use x$active, summary(x, by = \"subject\"), or x$subject_stages for complete structured views."
+  )
   invisible(x)
 }
 
@@ -622,6 +692,7 @@ print.bg_run_jobs <- function(x, ..., max = 20L) {
   scope <- attr(x, "scope", exact = TRUE)
   run_id <- attr(x, "run_id", exact = TRUE)
   project <- attr(x, "project", exact = TRUE)
+  subject_id <- attr(x, "subject_id", exact = TRUE)
   project_scope <- identical(scope, "project")
   shown_jobs <- if (project_scope && "is_current_attempt" %in% names(x)) {
     as.data.frame(x[x$is_current_attempt, , drop = FALSE])
@@ -633,6 +704,7 @@ print.bg_run_jobs <- function(x, ..., max = 20L) {
   } else {
     cli::cli_h2("Tracked jobs for run {.val {run_id}}")
   }
+  if (!is.null(subject_id)) cli::cli_text("Subject: {.strong sub-{subject_id}}")
   counts <- .status_counts(shown_jobs$lifecycle_status)
   cli::cli_text(
     "{nrow(shown_jobs)} total | {counts[['n_completed']]} completed | {counts[['n_running']]} running | {counts[['n_queued']]} queued | {counts[['n_failed']]} failed | {counts[['n_blocked']]} blocked"
