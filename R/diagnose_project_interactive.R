@@ -4,18 +4,6 @@
 
 diagnosis_problem_statuses <- c("FAILED", "BLOCKED", "CANCELLED")
 
-diagnosis_subject_id <- function(subject_id) {
-  if (is.null(subject_id)) return(NULL)
-  if (length(subject_id) != 1L || is.na(subject_id)) {
-    stop("subject_id must be one non-missing subject identifier.", call. = FALSE)
-  }
-  subject_id <- sub("^sub-", "", as.character(subject_id))
-  if (!nzchar(subject_id)) {
-    stop("subject_id must be a non-empty subject identifier.", call. = FALSE)
-  }
-  subject_id
-}
-
 diagnosis_job_id <- function(job_id) {
   if (is.null(job_id)) return(NULL)
   if (length(job_id) != 1L || is.na(job_id)) {
@@ -503,7 +491,9 @@ run_interactive_diagnosis <- function(input, run_id = NULL,
     selected <- if (direct_job) {
       jobs[1L, , drop = FALSE]
     } else if (!is.null(subject_id)) {
-      diagnosis_choose_subject_job(jobs, diagnosis_subject_id(subject_id))
+      diagnosis_choose_subject_job(
+        jobs, normalize_inspection_subject_id(subject_id)
+      )
     } else if (!is.null(run_id)) {
       heading <- paste0("Unresolved problems in run ", diagnosis$run_id)
       diagnosis_choose_scope_job(jobs, heading)

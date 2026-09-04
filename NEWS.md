@@ -2,6 +2,16 @@
 
 Released 2026-09-02
 
+* Extend `inspect_project()` with subject-wide focus and an active-job view.
+  `subject_id` now restricts every structured resolution, while `$active`
+  reports queue/runtime age, requested wall time, and noteworthy health states.
+  Optional `refresh = TRUE` performs a read-only scheduler comparison and
+  records differences in `$reconciliation`. Scheduler refresh and
+  `wait_for_job()` share one internal adapter over the existing Slurm, TORQUE,
+  and local-process query functions rather than maintaining parallel query
+  implementations. Matching `status --sub-id`, `--view=active`,
+  `--view=reconciliation`, and `--refresh` options are available in the CLI.
+
 * Make `diagnose_project()` open its guided dependency and log browser by
   default in interactive R sessions, while scripts, tests, reports, and the
   non-interactive CLI continue to receive structured diagnosis data. Callers

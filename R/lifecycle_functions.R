@@ -1043,15 +1043,18 @@ find_logs_for_jobs <- function(scfg, jobs) {
 
 build_project_diagnosis <- function(input, run_id = NULL,
                                      subject_id = NULL, job_id = NULL) {
-  subject_id <- diagnosis_subject_id(subject_id)
+  subject_id <- normalize_inspection_subject_id(subject_id)
   job_id <- diagnosis_job_id(job_id)
+  if (inherits(input, "bg_project_inspection") && is.null(subject_id)) {
+    subject_id <- normalize_inspection_subject_id(input$subject_id)
+  }
   inspection <- if (inherits(input, "bg_project_inspection")) {
     if (!is.null(run_id)) {
       stop("run_id cannot be supplied when input is already a project inspection.", call. = FALSE)
     }
     input
   } else {
-    inspect_project(input, run_id = run_id)
+    inspect_project(input, run_id = run_id, subject_id = subject_id)
   }
   scfg <- if (inherits(input, "bg_project_inspection")) {
     structure(list(

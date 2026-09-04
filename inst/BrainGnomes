@@ -46,7 +46,10 @@ format_output <- function(x, format = "table") {
     bg_project_run = unclass(x),
     bg_run_provenance = unclass(x),
     bg_project_inspection = list(
-      overview = x$overview, stages = x$stages, subjects = x$subjects,
+      subject_id = x$subject_id, scheduler_refreshed = x$scheduler_refreshed,
+      retrieved_at = x$retrieved_at, overview = x$overview,
+      active = x$active, reconciliation = x$reconciliation,
+      stages = x$stages, subjects = x$subjects,
       subject_stages = x$subject_stages, runs = x$runs,
       attempts = x$attempts, jobs = x$jobs
     ),
@@ -176,13 +179,15 @@ print_command_help <- function(command, status = 0L) {
       "Usage: BrainGnomes status <project_directory|config.yaml> [options]\n\n",
       "Inspect current tracked project progress across runs by default.\n\n",
       "Options:\n",
-      "  --sub-id=<id>                  Limit subject, subject-stage, or job rows.\n",
+      "  --sub-id=<id>                  Inspect one subject at every resolution.\n",
       "  --ses-id=<id>                  Optional session ID; requires --sub-id.\n",
       "  --summary                      Alias for --view=overview.\n",
       "  --runs                         Alias for --view=runs.\n",
       "  --run=<id|latest>              Limit inspection to one tracked run.\n",
       "  --view=<view>                  overview, stages, subjects, subject-stages,\n",
-      "                                 runs, attempts, jobs, or dashboard.\n",
+      "                                 runs, attempts, jobs, active, reconciliation,\n",
+      "                                 or dashboard.\n",
+      "  --refresh                      Compare queued/running jobs with the scheduler.\n",
       "  --watch                        Refresh until no tracked jobs are queued/running.\n",
       "  --interval=<seconds>           Watch refresh interval (default 30).\n",
       "  --format=table|json|csv        Output format.\n"
@@ -353,7 +358,8 @@ command_validate_bids <- function(values) {
 command_status <- function(values) {
   input <- require_input(values, "status")
   opts <- normalize_options(values[-1L], c(
-    "sub_id", "ses_id", "summary", "runs", "run", "view", "watch", "interval", "format"
+    "sub_id", "ses_id", "summary", "runs", "run", "view", "refresh",
+    "watch", "interval", "format"
   ))
   format <- or_else(opts$format, "table")
   if (!is.null(opts$ses_id) && is.null(opts$sub_id)) usage_error("--ses-id requires --sub-id.")
@@ -363,7 +369,10 @@ command_status <- function(values) {
 
   view <- if (is_flag(opts$runs)) "runs" else if (is_flag(opts$summary)) "overview" else or_else(opts$view, "dashboard")
   view <- gsub("-", "_", tolower(view), fixed = TRUE)
-  allowed_views <- c("dashboard", "overview", "stages", "subjects", "subject_stages", "runs", "attempts", "jobs")
+  allowed_views <- c(
+    "dashboard", "overview", "stages", "subjects", "subject_stages",
+    "runs", "attempts", "jobs", "active", "reconciliation"
+  )
   if (!view %in% allowed_views) usage_error(paste0("Unknown status view: ", view))
   if (view == "dashboard" && format != "table") view <- "overview"
 
@@ -373,7 +382,10 @@ command_status <- function(values) {
   ses_id <- if (is.null(opts$ses_id)) NULL else sub("^ses-", "", as.character(opts$ses_id))
 
   repeat {
-    inspection <- BrainGnomes::inspect_project(input, run_id = opts$run)
+    inspection <- BrainGnomes::inspect_project(
+      input, run_id = opts$run, subject_id = sub_id,
+      refresh = is_flag(opts$refresh) || view == "reconciliation"
+    )
     payload <- switch(view,
       dashboard = inspection,
       overview = inspection$overview,
@@ -382,19 +394,20 @@ command_status <- function(values) {
       subject_stages = inspection$subject_stages,
       runs = inspection$runs,
       attempts = inspection$attempts,
-      jobs = inspection$jobs
+      jobs = inspection$jobs,
+      active = inspection$active,
+      reconciliation = inspection$reconciliation
     )
-    if (!is.null(sub_id)) {
+    if (!is.null(ses_id)) {
       if (view == "dashboard") {
         payload <- inspection$subject_stages
       }
-      if (!is.data.frame(payload) || !"sub_id" %in% names(payload)) {
-        usage_error("--sub-id requires --view=subjects, --view=subject-stages, or --view=jobs.")
+      if (!is.data.frame(payload) || !"ses_id" %in% names(payload)) {
+        usage_error("--ses-id requires a view with session-level rows.")
       }
-      payload <- payload[!is.na(payload$sub_id) & payload$sub_id == sub_id, , drop = FALSE]
-      if (!is.null(ses_id) && "ses_id" %in% names(payload)) {
-        payload <- payload[!is.na(payload$ses_id) & payload$ses_id == ses_id, , drop = FALSE]
-      }
+      payload <- payload[
+        !is.na(payload$ses_id) & payload$ses_id == ses_id, , drop = FALSE
+      ]
     }
     format_output(payload, format)
     active <- inspection$overview$n_jobs_running + inspection$overview$n_jobs_queued

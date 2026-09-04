@@ -18,8 +18,10 @@ BrainGnomes separates routine progress inspection from failure diagnosis:
 - `inspect_project()` answers, "What is happening now?"
 - `diagnose_project()` answers, "What failed, and where are its logs?"
 
-Both functions use the project's job-tracking database. Inspection does not
-contact the scheduler, submit work, or change project files.
+Both functions use the project's job-tracking database. Inspection is
+database-only by default. An optional read-only refresh can compare active
+records with the scheduler; inspection never submits work or changes project
+files.
 
 ```{r, eval=FALSE}
 library(BrainGnomes)
@@ -58,6 +60,8 @@ The object contains ordinary data frames at several resolutions:
 
 ```{r, eval=FALSE}
 status$overview
+status$active
+status$reconciliation
 status$stages
 status$subjects
 status$subject_stages
@@ -73,6 +77,7 @@ summary(status)                         # one-row overview
 summary(status, by = "stage")
 summary(status, by = "subject")
 summary(status, by = "subject_stage")
+summary(status, by = "active")
 ```
 
 Because these are data frames, ordinary R queries work without another API:
@@ -82,6 +87,41 @@ subset(status$subjects, status != "COMPLETED")
 subset(status$subject_stages, sub_id == "540296")
 subset(status$jobs, lifecycle_status %in% c("RUNNING", "QUEUED"))
 ```
+
+## Focus on one subject
+
+Use `subject_id` with or without the `sub-` prefix to restrict every
+resolution, including the run summaries and active-job table:
+
+```{r, eval=FALSE}
+subject_status <- inspect_project(scfg, subject_id = "540294")
+subject_status$overview
+subject_status$runs
+subject_status$subject_stages
+subject_status$active
+```
+
+This is a true inspection scope rather than a display filter, so the returned
+counts and summaries all describe that subject.
+
+## Check active jobs against the scheduler
+
+`status$active` is available without contacting the scheduler. It reports
+database status, time in the current state, requested wall time, and flags a
+running record that has exceeded that request. To compare queued and running
+database records with their current scheduler states, request a refresh:
+
+```{r, eval=FALSE}
+refreshed <- inspect_project(scfg, refresh = TRUE)
+refreshed$active
+refreshed$reconciliation
+```
+
+The refresh is read-only. It preserves the database status, places the
+scheduler observation beside it, and flags unconfirmed or mismatched records
+without updating tracking data. Internally this uses the same scheduler query
+path as `wait_for_job()`, including the existing Slurm, TORQUE, and local
+process status functions.
 
 ## How status is integrated across runs
 
@@ -263,6 +303,9 @@ The command line exposes the same inspection resolutions:
 BrainGnomes status /project/my_study
 BrainGnomes status /project/my_study --view=stages
 BrainGnomes status /project/my_study --view=subjects
+BrainGnomes status /project/my_study --sub-id=540294
+BrainGnomes status /project/my_study --view=active --refresh
+BrainGnomes status /project/my_study --view=reconciliation
 BrainGnomes status /project/my_study --run=latest --watch
 BrainGnomes status /project/my_study --run=<run-id> --view=jobs --format=csv
 

@@ -4,7 +4,12 @@
 \alias{inspect_project}
 \title{Inspect current project progress}
 \usage{
-inspect_project(input = getwd(), run_id = NULL)
+inspect_project(
+  input = getwd(),
+  run_id = NULL,
+  subject_id = NULL,
+  refresh = FALSE
+)
 }
 \arguments{
 \item{input}{A project configuration object, YAML file, or project directory.
@@ -13,11 +18,21 @@ Defaults to the current working directory.}
 \item{run_id}{Optional run ID. Use \code{"latest"} for the most recently recorded
 run, an explicit run ID for an older submission, or \code{NULL} (the default)
 for current project status across all runs.}
+
+\item{subject_id}{Optional subject identifier, with or without the \verb{sub-}
+prefix. When supplied, every returned resolution is restricted to that
+subject, including its run summaries.}
+
+\item{refresh}{If \code{TRUE}, query the configured scheduler for jobs recorded as
+queued or running. The query is read-only: database values are retained and
+any differences are returned in \code{reconciliation}. The default, \code{FALSE},
+relies only on the tracking database.}
 }
 \value{
 A \code{bg_project_inspection} object. Its \code{overview}, \code{stages},
-\code{subjects}, \code{subject_stages}, \code{runs}, \code{attempts}, and \code{jobs} elements are
-data frames suitable for programmatic queries.
+\code{active}, \code{reconciliation}, \code{subjects}, \code{subject_stages}, \code{runs},
+\code{attempts}, and \code{jobs} elements are data frames suitable for programmatic
+queries.
 }
 \description{
 Provides a compact, non-interactive view of tracked work from submission
@@ -29,6 +44,10 @@ inspect only one submission.
 \details{
 The \code{overview} table contains one row for the selected scope.
 \code{stages} and \code{subjects} aggregate its current work units;
+\code{active} reports current queued and running jobs with elapsed time,
+requested wall time, and health flags. When \code{refresh = TRUE},
+\code{reconciliation} compares those database states with the scheduler without
+modifying either source.
 \code{subject_stages} retains the stage and stream detail; \code{runs} summarizes
 submissions; and \code{attempts} retains both current and superseded logical
 attempts. \code{jobs} contains the underlying tracking rows and marks the rows
@@ -43,9 +62,11 @@ run separately by session retain their session identifier.
 status <- inspect_project(scfg)
 status
 summary(status, by = "subject")
-subset(status$subject_stages, sub_id == "014")
+subject <- inspect_project(scfg, subject_id = "014")
+subject$active
 
-latest <- inspect_project(scfg, run_id = "latest")
+latest <- inspect_project(scfg, run_id = "latest", refresh = TRUE)
+latest$reconciliation
 subset(latest$jobs, lifecycle_status == "FAILED")
 }
 }
