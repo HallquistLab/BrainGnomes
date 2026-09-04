@@ -26,6 +26,20 @@ library(BrainGnomes)
 scfg <- load_project("/project/my_study")
 ```
 
+Both functions also accept the project directory or configuration YAML path
+directly. If the project root is the current working directory, the input can
+be omitted:
+
+```{r, eval=FALSE}
+setwd("/project/my_study")
+inspect_project()
+diagnose_project() # guided browser in an interactive R session
+```
+
+Automatic discovery checks only the current directory. It does not search
+parent directories, and reports a clear error if `project_config.yaml` is not
+there.
+
 # Inspect current project progress
 
 The default inspection integrates all tracked runs:

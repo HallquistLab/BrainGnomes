@@ -9,7 +9,23 @@ supported_project_steps <- function() {
 
 project_config_from_input <- function(input) {
   if (inherits(input, "bg_project_cfg")) return(input)
-  if (checkmate::test_string(input)) return(load_project(input, validate = FALSE))
+  if (checkmate::test_string(input)) {
+    if (checkmate::test_directory_exists(input)) {
+      config_file <- file.path(input, "project_config.yaml")
+      if (!checkmate::test_file_exists(config_file)) {
+        project_dir <- normalizePath(
+          input, winslash = "/", mustWork = FALSE
+        )
+        stop(
+          "No project_config.yaml found in project directory: ",
+          project_dir,
+          ". Supply a project configuration object, YAML file, or project directory.",
+          call. = FALSE
+        )
+      }
+    }
+    return(load_project(input, validate = FALSE))
+  }
   stop("input must be a bg_project_cfg object, YAML file, or project directory", call. = FALSE)
 }
 
@@ -1035,7 +1051,8 @@ find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
 #' set `interactive` explicitly when behavior must not depend on the session.
 #'
 #' @param input A project configuration object, YAML file, project directory, or
-#'   a `bg_project_inspection` object returned by [inspect_project()].
+#'   a `bg_project_inspection` object returned by [inspect_project()]. Defaults
+#'   to the current working directory.
 #' @param run_id Optional run ID. Use `NULL` for current project failures across
 #'   runs, `"latest"` for the newest run, or an explicit historical run ID.
 #' @param interactive If `TRUE`, open the guided interactive browser. If
@@ -1060,14 +1077,16 @@ find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
 #' @seealso [inspect_project()] for routine progress monitoring and
 #'   [retry_project_run()] to preview a new run after correcting a failure.
 #' @export
-diagnose_project <- function(input, run_id = NULL,
+diagnose_project <- function(input = getwd(), run_id = NULL,
                              interactive = base::interactive()) {
   checkmate::assert_flag(interactive)
   if (interactive) {
     if (inherits(input, "bg_project_inspection")) {
       stop("Interactive diagnosis requires a project configuration, YAML file, or directory.", call. = FALSE)
     }
-    return(.diagnose_pipeline_interactive(input, run_id = run_id))
+    return(.diagnose_pipeline_interactive(
+      project_config_from_input(input), run_id = run_id
+    ))
   }
 
   inspection <- if (inherits(input, "bg_project_inspection")) {

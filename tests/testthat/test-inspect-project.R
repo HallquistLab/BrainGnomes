@@ -197,6 +197,74 @@ test_that("diagnose_project defaults to the R session's interactivity", {
   expect_identical(result, "guided-browser")
 })
 
+test_that("inspection and diagnosis default to the current project directory", {
+  expect_identical(formals(inspect_project)$input, quote(getwd()))
+  expect_identical(formals(diagnose_project)$input, quote(getwd()))
+  expect_identical(formals(diagnose_pipeline)$input, quote(getwd()))
+
+  fixture <- make_inspection_project()
+  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
+  add_inspection_job(
+    fixture$db, "450", "mriqc_sub-01", "run-current", "FAILED"
+  )
+  yaml::write_yaml(
+    as.list(fixture$cfg), file.path(fixture$root, "project_config.yaml")
+  )
+
+  from_directory <- inspect_project(fixture$root)
+  expect_equal(
+    from_directory$jobs$job_id[
+      from_directory$jobs$lifecycle_status == "FAILED"
+    ],
+    "450"
+  )
+
+  withr::local_dir(fixture$root)
+  from_cwd <- inspect_project()
+  expect_equal(
+    from_cwd$jobs$job_id[from_cwd$jobs$lifecycle_status == "FAILED"],
+    "450"
+  )
+
+  diagnosis <- diagnose_project(interactive = FALSE)
+  expect_equal(diagnosis$failures$job_id, "450")
+
+  local_mocked_bindings(
+    .diagnose_pipeline_interactive = function(input, run_id = NULL) {
+      expect_s3_class(input, "bg_project_cfg")
+      expect_equal(input$metadata$project_directory, fixture$root)
+      expect_null(run_id)
+      "guided-from-cwd"
+    },
+    .package = "BrainGnomes"
+  )
+  expect_warning(
+    guided <- diagnose_pipeline(),
+    "diagnose_project\\(\\.\\.\\., interactive = TRUE\\)"
+  )
+  expect_identical(guided, "guided-from-cwd")
+})
+
+test_that("current-directory discovery requires a project configuration", {
+  empty_dir <- tempfile("not-a-project-")
+  dir.create(empty_dir)
+  on.exit(unlink(empty_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  withr::local_dir(empty_dir)
+
+  expect_error(
+    inspect_project(),
+    "No project_config.yaml found in project directory"
+  )
+  expect_error(
+    diagnose_project(interactive = FALSE),
+    "No project_config.yaml found in project directory"
+  )
+  expect_error(
+    suppressWarnings(diagnose_pipeline()),
+    "No project_config.yaml found in project directory"
+  )
+})
+
 test_that("empty inspections and deprecated run getters retain stable contracts", {
   fixture <- make_inspection_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)

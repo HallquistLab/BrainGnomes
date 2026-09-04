@@ -4,11 +4,16 @@
 \alias{diagnose_project}
 \title{Diagnose failed project work}
 \usage{
-diagnose_project(input, run_id = NULL, interactive = base::interactive())
+diagnose_project(
+  input = getwd(),
+  run_id = NULL,
+  interactive = base::interactive()
+)
 }
 \arguments{
 \item{input}{A project configuration object, YAML file, project directory, or
-a \code{bg_project_inspection} object returned by \code{\link[=inspect_project]{inspect_project()}}.}
+a \code{bg_project_inspection} object returned by \code{\link[=inspect_project]{inspect_project()}}. Defaults
+to the current working directory.}
 
 \item{run_id}{Optional run ID. Use \code{NULL} for current project failures across
 runs, \code{"latest"} for the newest run, or an explicit historical run ID.}

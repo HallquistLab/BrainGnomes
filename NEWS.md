@@ -6,6 +6,10 @@ Released 2026-09-02
   default in interactive R sessions, while scripts, tests, reports, and the
   non-interactive CLI continue to receive structured diagnosis data. Callers
   can still select either behavior explicitly with `interactive = TRUE/FALSE`.
+  `inspect_project()`, `diagnose_project()`, and the deprecated
+  `diagnose_pipeline()` now accept an explicit project directory or YAML path
+  and default to the project in the current working directory when input is
+  omitted.
 
 * Add `inspect_project()` as the single front door for database-backed project
   and run monitoring. Its compact dashboard integrates the newest attempt for

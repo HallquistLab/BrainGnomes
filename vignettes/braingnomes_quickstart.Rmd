@@ -393,6 +393,10 @@ diagnosis$failures
 diagnosis$logs
 ```
 
+The configuration object is optional when the project root is the current
+working directory. In that case, `inspect_project()` and `diagnose_project()`
+find `project_config.yaml` in `getwd()`; they do not search parent directories.
+
 Supply a run ID for a historical post-mortem. Set the mode explicitly when the
 code must behave the same way in interactive and non-interactive sessions:
 

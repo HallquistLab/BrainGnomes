@@ -4,10 +4,11 @@
 \alias{diagnose_pipeline}
 \title{Deprecated interactive pipeline diagnosis}
 \usage{
-diagnose_pipeline(input)
+diagnose_pipeline(input = getwd())
 }
 \arguments{
-\item{input}{A project configuration object or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 }
 \value{
 The value returned by \code{diagnose_project(input, interactive = TRUE)}.

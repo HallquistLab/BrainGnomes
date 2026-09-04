@@ -3,7 +3,7 @@
 #' Internal implementation retained while the guided browser is consolidated
 #' behind [diagnose_project()].
 #'
-#' @param input A project configuration object or project directory.
+#' @param input A project configuration object, YAML file, or project directory.
 #' @param run_id Optional run ID to open directly. If `NULL`, prompt for a
 #'   subject or run.
 #' @return Depending on the selected action, the chosen run's job tree, log
@@ -554,12 +554,13 @@
 #' `diagnose_project(..., interactive = TRUE)`. It remains as a compatibility
 #' wrapper for the established guided dependency and log browser.
 #'
-#' @param input A project configuration object or project directory.
+#' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @return The value returned by `diagnose_project(input, interactive = TRUE)`.
 #' @seealso [inspect_project()] for routine progress monitoring and
 #'   [diagnose_project()] for current or historical failure investigation.
 #' @export
-diagnose_pipeline <- function(input) {
+diagnose_pipeline <- function(input = getwd()) {
   .Deprecated(
     "diagnose_project(..., interactive = TRUE)",
     package = "BrainGnomes"

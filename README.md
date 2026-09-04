@@ -82,6 +82,15 @@ scfg <- load_project("/project/my_study")
 run <- run_project(scfg)
 ```
 
+The inspection and diagnosis helpers also accept a project directory directly.
+When the current working directory is the project root, omit it entirely:
+
+```r
+setwd("/project/my_study")
+inspect_project()
+diagnose_project()  # guided browser in an interactive R session
+```
+
 The command-line interface preserves the same workflow. The shorter `init` and
 `run` command names are also accepted.
 
