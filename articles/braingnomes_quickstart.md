@@ -622,6 +622,14 @@ atlases, masks, and other selected execution files.
 status <- inspect_project(scfg)
 status$stages
 status$subjects
+status$active
+
+# Focus every view and count on one subject.
+subject_status <- inspect_project(scfg, subject_id = "540294")
+
+# Optionally compare active database records with the scheduler (read-only).
+refreshed <- inspect_project(scfg, refresh = TRUE)
+refreshed$reconciliation
 
 # Restrict the same views to this submission.
 run_status <- inspect_project(scfg, run_id = run$run_id)
@@ -760,9 +768,12 @@ run <- submit_project_plan(plan)
 By default,
 [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
 integrates the newest attempt for every tracked subject, stage, and
-stream across runs. Use a run ID when you specifically want one
-submission. If work fails, diagnose the failure and correct its cause
-before retrying it.
+stream across runs. Use `subject_id` to make all returned counts and
+tables subject-specific, or a run ID when you specifically want one
+submission. Its `$active` table is database-backed; `refresh = TRUE`
+adds a read-only comparison with the scheduler in `$active` and
+`$reconciliation`. If work fails, diagnose the failure and correct its
+cause before retrying it.
 
 ``` r
 
@@ -832,6 +843,8 @@ Run operations support observation and recovery:
 ``` bash
 BrainGnomes status /project/my_study
 BrainGnomes status /project/my_study --view=subjects
+BrainGnomes status /project/my_study --sub-id=540294
+BrainGnomes status /project/my_study --view=active --refresh
 BrainGnomes status /project/my_study --run=latest --watch
 BrainGnomes provenance /project/my_study --run=latest --format=json
 BrainGnomes logs /project/my_study --run=latest --failed-only --tail=50

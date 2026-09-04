@@ -714,6 +714,14 @@ masks, and other selected execution files.</p>
 <code class="sourceCode R"><span><span class="va">status</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">status</span><span class="op">$</span><span class="va">stages</span></span>
 <span><span class="va">status</span><span class="op">$</span><span class="va">subjects</span></span>
+<span><span class="va">status</span><span class="op">$</span><span class="va">active</span></span>
+<span></span>
+<span><span class="co"># Focus every view and count on one subject.</span></span>
+<span><span class="va">subject_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Optionally compare active database records with the scheduler (read-only).</span></span>
+<span><span class="va">refreshed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, refresh <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">refreshed</span><span class="op">$</span><span class="va">reconciliation</span></span>
 <span></span>
 <span><span class="co"># Restrict the same views to this submission.</span></span>
 <span><span class="va">run_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span></span>
@@ -820,9 +828,14 @@ is an optional view of the execution model that
 <h2 id="optional-run-operations">Optional run operations<a class="anchor" aria-label="anchor" href="#optional-run-operations"></a>
 </h2>
 <p>By default, <code><a href="../reference/inspect_project.html">inspect_project()</a></code> integrates the newest
-attempt for every tracked subject, stage, and stream across runs. Use a
-run ID when you specifically want one submission. If work fails,
-diagnose the failure and correct its cause before retrying it.</p>
+attempt for every tracked subject, stage, and stream across runs. Use
+<code>subject_id</code> to make all returned counts and tables
+subject-specific, or a run ID when you specifically want one submission.
+Its <code>$active</code> table is database-backed;
+<code>refresh = TRUE</code> adds a read-only comparison with the
+scheduler in <code>$active</code> and <code>$reconciliation</code>. If
+work fails, diagnose the failure and correct its cause before retrying
+it.</p>
 <div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Inspect current project progress, then diagnose unresolved failures.</span></span>
 <span><span class="va">status</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
@@ -877,13 +890,15 @@ the command line. These commands are examples, not prerequisites for
 <p>Run operations support observation and recovery:</p>
 <div class="sourceCode" id="cb24"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
 <span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>subjects</span>
-<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--watch</span></span>
-<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> provenance /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--format</span><span class="op">=</span>json</span>
-<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> logs /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--failed-only</span> <span class="at">--tail</span><span class="op">=</span>50</span>
-<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span>
-<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
+<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--sub-id</span><span class="op">=</span>540294</span>
+<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>active <span class="at">--refresh</span></span>
+<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--watch</span></span>
+<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> provenance /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--format</span><span class="op">=</span>json</span>
+<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> logs /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--failed-only</span> <span class="at">--tail</span><span class="op">=</span>50</span>
+<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
+<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span>
+<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
+<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
 <p>Use the run ID reported by <code>status --runs</code> when retrying
 so the source is unambiguous. Retry and cancellation require
 <code>--dry-run</code> or the explicit <code>--yes</code> confirmation

@@ -62,7 +62,12 @@ inspect only one submission.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">inspect_project</span><span class="op">(</span>input <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">getwd</a></span><span class="op">(</span><span class="op">)</span>, run_id <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">inspect_project</span><span class="op">(</span></span>
+<span>  input <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">getwd</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  run_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  subject_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  refresh <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -79,17 +84,35 @@ Defaults to the current working directory.</p></dd>
 run, an explicit run ID for an older submission, or <code>NULL</code> (the default)
 for current project status across all runs.</p></dd>
 
+
+<dt id="arg-subject-id">subject_id<a class="anchor" aria-label="anchor" href="#arg-subject-id"></a></dt>
+<dd><p>Optional subject identifier, with or without the <code>sub-</code>
+prefix. When supplied, every returned resolution is restricted to that
+subject, including its run summaries.</p></dd>
+
+
+<dt id="arg-refresh">refresh<a class="anchor" aria-label="anchor" href="#arg-refresh"></a></dt>
+<dd><p>If <code>TRUE</code>, query the configured scheduler for jobs recorded as
+queued or running. The query is read-only: database values are retained and
+any differences are returned in <code>reconciliation</code>. The default, <code>FALSE</code>,
+relies only on the tracking database.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>bg_project_inspection</code> object. Its <code>overview</code>, <code>stages</code>,
-<code>subjects</code>, <code>subject_stages</code>, <code>runs</code>, <code>attempts</code>, and <code>jobs</code> elements are
-data frames suitable for programmatic queries.</p>
+<code>active</code>, <code>reconciliation</code>, <code>subjects</code>, <code>subject_stages</code>, <code>runs</code>,
+<code>attempts</code>, and <code>jobs</code> elements are data frames suitable for programmatic
+queries.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The <code>overview</code> table contains one row for the selected scope.
 <code>stages</code> and <code>subjects</code> aggregate its current work units;
+<code>active</code> reports current queued and running jobs with elapsed time,
+requested wall time, and health flags. When <code>refresh = TRUE</code>,
+<code>reconciliation</code> compares those database states with the scheduler without
+modifying either source.
 <code>subject_stages</code> retains the stage and stream detail; <code>runs</code> summarizes
 submissions; and <code>attempts</code> retains both current and superseded logical
 attempts. <code>jobs</code> contains the underlying tracking rows and marks the rows
@@ -110,9 +133,11 @@ run separately by session retain their session identifier.</p>
 <span class="r-in"><span><span class="va">status</span> <span class="op">&lt;-</span> <span class="fu">inspect_project</span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">status</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">status</span>, by <span class="op">=</span> <span class="st">"subject"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">status</span><span class="op">$</span><span class="va">subject_stages</span>, <span class="va">sub_id</span> <span class="op">==</span> <span class="st">"014"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">subject</span> <span class="op">&lt;-</span> <span class="fu">inspect_project</span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"014"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">subject</span><span class="op">$</span><span class="va">active</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="va">latest</span> <span class="op">&lt;-</span> <span class="fu">inspect_project</span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="st">"latest"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">latest</span> <span class="op">&lt;-</span> <span class="fu">inspect_project</span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="st">"latest"</span>, refresh <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">latest</span><span class="op">$</span><span class="va">reconciliation</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">latest</span><span class="op">$</span><span class="va">jobs</span>, <span class="va">lifecycle_status</span> <span class="op">==</span> <span class="st">"FAILED"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>

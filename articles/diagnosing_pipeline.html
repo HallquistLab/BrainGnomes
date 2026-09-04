@@ -88,9 +88,10 @@ now?”</li>
 <code><a href="../reference/diagnose_project.html">diagnose_project()</a></code> answers, “What failed, and where are
 its logs?”</li>
 </ul>
-<p>Both functions use the project’s job-tracking database. Inspection
-does not contact the scheduler, submit work, or change project
-files.</p>
+<p>Both functions use the project’s job-tracking database. Inspection is
+database-only by default. An optional read-only refresh can compare
+active records with the scheduler; inspection never submits work or
+changes project files.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
 <span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_project.html">load_project</a></span><span class="op">(</span><span class="st">"/project/my_study"</span><span class="op">)</span></span></code></pre></div>
@@ -119,6 +120,8 @@ available in the returned object but are not printed automatically.</p>
 <p>The object contains ordinary data frames at several resolutions:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">status</span><span class="op">$</span><span class="va">overview</span></span>
+<span><span class="va">status</span><span class="op">$</span><span class="va">active</span></span>
+<span><span class="va">status</span><span class="op">$</span><span class="va">reconciliation</span></span>
 <span><span class="va">status</span><span class="op">$</span><span class="va">stages</span></span>
 <span><span class="va">status</span><span class="op">$</span><span class="va">subjects</span></span>
 <span><span class="va">status</span><span class="op">$</span><span class="va">subject_stages</span></span>
@@ -130,13 +133,47 @@ available in the returned object but are not printed automatically.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">status</span><span class="op">)</span>                         <span class="co"># one-row overview</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">status</span>, by <span class="op">=</span> <span class="st">"stage"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">status</span>, by <span class="op">=</span> <span class="st">"subject"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">status</span>, by <span class="op">=</span> <span class="st">"subject_stage"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">status</span>, by <span class="op">=</span> <span class="st">"subject_stage"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">status</span>, by <span class="op">=</span> <span class="st">"active"</span><span class="op">)</span></span></code></pre></div>
 <p>Because these are data frames, ordinary R queries work without
 another API:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">status</span><span class="op">$</span><span class="va">subjects</span>, <span class="va">status</span> <span class="op">!=</span> <span class="st">"COMPLETED"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">status</span><span class="op">$</span><span class="va">subject_stages</span>, <span class="va">sub_id</span> <span class="op">==</span> <span class="st">"540296"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">status</span><span class="op">$</span><span class="va">jobs</span>, <span class="va">lifecycle_status</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"RUNNING"</span>, <span class="st">"QUEUED"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<div class="section level3">
+<h3 id="focus-on-one-subject">Focus on one subject<a class="anchor" aria-label="anchor" href="#focus-on-one-subject"></a>
+</h3>
+<p>Use <code>subject_id</code> with or without the <code>sub-</code>
+prefix to restrict every resolution, including the run summaries and
+active-job table:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">subject_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
+<span><span class="va">subject_status</span><span class="op">$</span><span class="va">overview</span></span>
+<span><span class="va">subject_status</span><span class="op">$</span><span class="va">runs</span></span>
+<span><span class="va">subject_status</span><span class="op">$</span><span class="va">subject_stages</span></span>
+<span><span class="va">subject_status</span><span class="op">$</span><span class="va">active</span></span></code></pre></div>
+<p>This is a true inspection scope rather than a display filter, so the
+returned counts and summaries all describe that subject.</p>
+</div>
+<div class="section level3">
+<h3 id="check-active-jobs-against-the-scheduler">Check active jobs against the scheduler<a class="anchor" aria-label="anchor" href="#check-active-jobs-against-the-scheduler"></a>
+</h3>
+<p><code>status$active</code> is available without contacting the
+scheduler. It reports database status, time in the current state,
+requested wall time, and flags a running record that has exceeded that
+request. To compare queued and running database records with their
+current scheduler states, request a refresh:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">refreshed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, refresh <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">refreshed</span><span class="op">$</span><span class="va">active</span></span>
+<span><span class="va">refreshed</span><span class="op">$</span><span class="va">reconciliation</span></span></code></pre></div>
+<p>The refresh is read-only. It preserves the database status, places
+the scheduler observation beside it, and flags unconfirmed or mismatched
+records without updating tracking data. Internally this uses the same
+scheduler query path as <code><a href="../reference/wait_for_job.html">wait_for_job()</a></code>, including the
+existing Slurm, TORQUE, and local process status functions.</p>
+</div>
 <div class="section level3">
 <h3 id="how-status-is-integrated-across-runs">How status is integrated across runs<a class="anchor" aria-label="anchor" href="#how-status-is-integrated-across-runs"></a>
 </h3>
@@ -187,7 +224,7 @@ states remain visible.</p>
 <h2 id="choose-the-run-you-mean">Choose the run you mean<a class="anchor" aria-label="anchor" href="#choose-the-run-you-mean"></a>
 </h2>
 <p>Use the run table to find historical IDs:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">status</span><span class="op">$</span><span class="va">runs</span></span>
 <span><span class="va">run_id</span> <span class="op">&lt;-</span> <span class="va">status</span><span class="op">$</span><span class="va">runs</span><span class="op">$</span><span class="va">run_id</span><span class="op">[[</span><span class="fl">1L</span><span class="op">]</span><span class="op">]</span></span></code></pre></div>
 <p>For retry or cancellation, an explicit run ID is safer than
@@ -199,7 +236,7 @@ run.</p>
 </h2>
 <p>Supply <code>"latest"</code> or an explicit ID to restrict every
 inspection view to one submission:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">latest</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="st">"latest"</span><span class="op">)</span></span>
 <span><span class="va">selected</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="va">run_id</span><span class="op">)</span></span>
 <span></span>
@@ -218,7 +255,7 @@ from <code><a href="../reference/inspect_project.html">inspect_project()</a></co
 <p>Routine monitoring belongs in <code><a href="../reference/inspect_project.html">inspect_project()</a></code>. When
 current work has failed, call <code><a href="../reference/diagnose_project.html">diagnose_project()</a></code> from an
 interactive R session to open the guided dependency and log browser:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
 <p>The browser begins with unresolved failures grouped by stage and
 stream. A single-job group opens that job directly; a repeated problem
@@ -228,28 +265,28 @@ full run-wide job list unless you explicitly choose that broader
 view.</p>
 <p>If you already know the subject or scheduler job ID, start at that
 scope:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, job_id <span class="op">=</span> <span class="st">"66273010"</span><span class="op">)</span></span></code></pre></div>
 <p>Scripts, tests, and reports are non-interactive, so the same call
 returns a structured diagnosis there. Use
 <code>interactive = FALSE</code> explicitly when you want that result in
 an interactive R session:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">diagnosis</span><span class="op">$</span><span class="va">failures</span></span>
 <span><span class="va">diagnosis</span><span class="op">$</span><span class="va">logs</span></span></code></pre></div>
 <p>An existing inspection snapshot can be reused:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">status</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>For a historical post-mortem, select the run explicitly:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span></span>
 <span>  <span class="va">scfg</span>, run_id <span class="op">=</span> <span class="va">run_id</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Pass <code>interactive = TRUE</code> when code must open the guided
 browser regardless of how R was started:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="va">run_id</span>, interactive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> remains temporarily as a deprecated
 compatibility wrapper for
@@ -260,7 +297,7 @@ compatibility wrapper for
 </h2>
 <p>Before deciding what to rerun, inspect the settings and scope that
 produced the selected run:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">provenance</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_run_provenance.html">get_run_provenance</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run_id</span><span class="op">)</span></span>
 <span><span class="va">provenance</span><span class="op">$</span><span class="va">request</span></span>
 <span><span class="va">provenance</span><span class="op">$</span><span class="va">execution</span><span class="op">$</span><span class="va">subjects</span></span>
@@ -275,17 +312,17 @@ execution-driving files.</p>
 <p>A retry creates a <strong>new run</strong>. It does not restart
 scheduler jobs in place and does not change the original run. Always
 preview it first:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">retry_plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">retry_plan</span><span class="op">$</span><span class="va">jobs</span></span>
 <span><span class="va">retry_plan</span><span class="op">$</span><span class="va">subjects</span></span></code></pre></div>
 <p>After correcting the underlying cause, submit the retry
 explicitly:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">retry_run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>Jobs marked <code>FAILED_BY_EXT</code> were blocked by an earlier
 failure and are excluded by default. Include them when appropriate:</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">retry_plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span></span>
 <span>  <span class="va">scfg</span>, <span class="va">run_id</span>, include_blocked <span class="op">=</span> <span class="cn">TRUE</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -297,7 +334,7 @@ failure and are excluded by default. Include them when appropriate:</p>
 It does not delete data, logs, or completed outputs. Preview the
 scheduler commands before making a separate explicit cancellation
 request:</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/cancel_project_run.html">cancel_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/cancel_project_run.html">cancel_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -305,23 +342,26 @@ request:</p>
 <h2 id="command-line-inspection-and-recovery">Command-line inspection and recovery<a class="anchor" aria-label="anchor" href="#command-line-inspection-and-recovery"></a>
 </h2>
 <p>The command line exposes the same inspection resolutions:</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
-<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>stages</span>
-<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>subjects</span>
-<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--watch</span></span>
-<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --view=jobs <span class="at">--format</span><span class="op">=</span>csv</span>
-<span id="cb20-6"><a href="#cb20-6" tabindex="-1"></a></span>
-<span id="cb20-7"><a href="#cb20-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study</span>
-<span id="cb20-8"><a href="#cb20-8" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --interactive</span>
-<span id="cb20-9"><a href="#cb20-9" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--subject-id</span><span class="op">=</span>540294 <span class="at">--interactive</span></span>
-<span id="cb20-10"><a href="#cb20-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--job-id</span><span class="op">=</span>66273010 <span class="at">--interactive</span></span>
-<span id="cb20-11"><a href="#cb20-11" tabindex="-1"></a><span class="ex">BrainGnomes</span> logs /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --failed-only <span class="at">--tail</span><span class="op">=</span>50</span>
-<span id="cb20-12"><a href="#cb20-12" tabindex="-1"></a><span class="ex">BrainGnomes</span> provenance /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --format=json</span>
-<span id="cb20-13"><a href="#cb20-13" tabindex="-1"></a></span>
-<span id="cb20-14"><a href="#cb20-14" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb20-15"><a href="#cb20-15" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span>
-<span id="cb20-16"><a href="#cb20-16" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb20-17"><a href="#cb20-17" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
+<div class="sourceCode" id="cb22"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>stages</span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>subjects</span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--sub-id</span><span class="op">=</span>540294</span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>active <span class="at">--refresh</span></span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>reconciliation</span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--watch</span></span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --view=jobs <span class="at">--format</span><span class="op">=</span>csv</span>
+<span id="cb22-9"><a href="#cb22-9" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study</span>
+<span id="cb22-11"><a href="#cb22-11" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --interactive</span>
+<span id="cb22-12"><a href="#cb22-12" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--subject-id</span><span class="op">=</span>540294 <span class="at">--interactive</span></span>
+<span id="cb22-13"><a href="#cb22-13" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--job-id</span><span class="op">=</span>66273010 <span class="at">--interactive</span></span>
+<span id="cb22-14"><a href="#cb22-14" tabindex="-1"></a><span class="ex">BrainGnomes</span> logs /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --failed-only <span class="at">--tail</span><span class="op">=</span>50</span>
+<span id="cb22-15"><a href="#cb22-15" tabindex="-1"></a><span class="ex">BrainGnomes</span> provenance /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --format=json</span>
+<span id="cb22-16"><a href="#cb22-16" tabindex="-1"></a></span>
+<span id="cb22-17"><a href="#cb22-17" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
+<span id="cb22-18"><a href="#cb22-18" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span>
+<span id="cb22-19"><a href="#cb22-19" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
+<span id="cb22-20"><a href="#cb22-20" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
 <p>Retry and cancellation require either a dry-run preview or explicit
 confirmation. Neither routine inspection nor diagnosis changes scheduler
 state.</p>
