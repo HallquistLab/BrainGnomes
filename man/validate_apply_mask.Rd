@@ -10,7 +10,8 @@ validate_apply_mask(
   mask_file,
   tolerance = 1e-05,
   max_volumes = 32L,
-  chunk_size = 100L
+  chunk_size = 100L,
+  absolute_tolerance = 1e-04
 )
 }
 \arguments{
@@ -20,7 +21,7 @@ validate_apply_mask(
 
 \item{mask_file}{Path to the binary mask NIfTI file (1s = brain, 0s = non-brain).}
 
-\item{tolerance}{Maximum relative numerical error allowed inside the mask.}
+\item{tolerance}{Relative numerical tolerance allowed inside the mask.}
 
 \item{max_volumes}{Maximum number of timepoints compared. The default uses
 32 timepoints deterministically distributed over the complete run,
@@ -28,6 +29,10 @@ including the first and last. Runs with 32 or fewer timepoints use every
 volume. Use \code{Inf} for exhaustive replay.}
 
 \item{chunk_size}{Number of volumes compared at a time.}
+
+\item{absolute_tolerance}{Absolute numerical tolerance allowed inside the
+mask. The default accommodates float32 rounding when FSL converts scaled
+integer NIfTI data.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
@@ -46,9 +51,11 @@ it. Voxels inside the mask that remain zero across the compared volumes are
 reported.
 }
 \details{
-Validation requires the sampled post-mask volumes to equal the exact expected
-transform within \code{tolerance}. This prevents an all-zero or otherwise altered
-in-mask output from passing merely because nothing leaked outside the mask.
-Spatial-grid and mask-validity checks remain exhaustive.
+For sampled in-mask values, validation requires
+\code{abs(post - expected) <= absolute_tolerance + tolerance * abs(expected)}.
+This prevents an all-zero or otherwise altered output from passing while
+allowing small float32 conversion differences. Sampled values outside the
+mask must still be finite and exactly zero. Spatial-grid and mask-validity
+checks remain exhaustive.
 }
 \keyword{internal}
