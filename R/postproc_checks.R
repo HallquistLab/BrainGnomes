@@ -170,8 +170,12 @@ pp_distributed_volume_indices <- function(nt, max_volumes) {
 #' @keywords internal
 #' @noRd
 pp_compare_numeric <- function(observed, expected, tolerance = 1e-5,
-                                require_finite = TRUE) {
+                                require_finite = TRUE,
+                                absolute_tolerance = NULL) {
   checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+  checkmate::assert_number(
+    absolute_tolerance, lower = 0, finite = TRUE, null.ok = TRUE
+  )
   if (length(observed) != length(expected)) {
     stop("Observed and expected values have different lengths.", call. = FALSE)
   }
@@ -187,7 +191,15 @@ pp_compare_numeric <- function(observed, expected, tolerance = 1e-5,
     relative_error <- absolute_error / pmax(1, abs(expected[jointly_finite]))
     max_absolute_error <- max(absolute_error)
     max_relative_error <- max(relative_error)
-    numeric_mismatches <- sum(relative_error > tolerance)
+    if (is.null(absolute_tolerance)) {
+      # Preserve the historical hybrid tolerance for validators that have not
+      # explicitly selected separate absolute and relative tolerances.
+      allowed_error <- tolerance * pmax(1, abs(expected[jointly_finite]))
+    } else {
+      allowed_error <- absolute_tolerance +
+        tolerance * abs(expected[jointly_finite])
+    }
+    numeric_mismatches <- sum(absolute_error > allowed_error)
   } else {
     max_absolute_error <- if (length(observed)) Inf else 0
     max_relative_error <- if (length(observed)) Inf else 0
@@ -322,12 +334,15 @@ pp_validate_censor <- function(censor, n_timepoints) {
 #' @param pre_file Path to the 4D fMRI data before masking.
 #' @param post_file Path to the 4D fMRI data after masking.
 #' @param mask_file Path to the binary mask NIfTI file (1s = brain, 0s = non-brain).
-#' @param tolerance Maximum relative numerical error allowed inside the mask.
+#' @param tolerance Relative numerical tolerance allowed inside the mask.
 #' @param max_volumes Maximum number of timepoints compared. The default uses
 #'   32 timepoints deterministically distributed over the complete run,
 #'   including the first and last. Runs with 32 or fewer timepoints use every
 #'   volume. Use `Inf` for exhaustive replay.
 #' @param chunk_size Number of volumes compared at a time.
+#' @param absolute_tolerance Absolute numerical tolerance allowed inside the
+#'   mask. The default accommodates float32 rounding when FSL converts scaled
+#'   integer NIfTI data.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes:
@@ -337,21 +352,26 @@ pp_validate_censor <- function(censor, n_timepoints) {
 #'     compared volumes.
 #'
 #' @details
-#' Validation requires the sampled post-mask volumes to equal the exact expected
-#' transform within `tolerance`. This prevents an all-zero or otherwise altered
-#' in-mask output from passing merely because nothing leaked outside the mask.
-#' Spatial-grid and mask-validity checks remain exhaustive.
+#' For sampled in-mask values, validation requires
+#' `abs(post - expected) <= absolute_tolerance + tolerance * abs(expected)`.
+#' This prevents an all-zero or otherwise altered output from passing while
+#' allowing small float32 conversion differences. Sampled values outside the
+#' mask must still be finite and exactly zero. Spatial-grid and mask-validity
+#' checks remain exhaustive.
 #'
 #' @keywords internal
 #' @importFrom RNifti readNifti
 #' @importFrom matrixStats rowAnys
 validate_apply_mask <- function(pre_file, post_file, mask_file,
-                                tolerance = 1e-5, max_volumes = 32L,
-                                chunk_size = 100L) {
+                                tolerance = 1e-5,
+                                max_volumes = 32L,
+                                chunk_size = 100L,
+                                absolute_tolerance = 1e-4) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
   checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
+  checkmate::assert_number(absolute_tolerance, lower = 0, finite = TRUE)
   checkmate::assert_count(chunk_size, positive = TRUE)
 
   pre_post_grid <- pp_compare_nifti_grid(
@@ -412,7 +432,10 @@ validate_apply_mask <- function(pre_file, post_file, mask_file,
     expected <- pre_matrix
     expected[!mask_vec, ] <- 0
     comparison <- pp_compare_numeric(
-      post_matrix, expected, tolerance = tolerance, require_finite = TRUE
+      post_matrix, expected,
+      tolerance = tolerance,
+      require_finite = TRUE,
+      absolute_tolerance = absolute_tolerance
     )
     aggregate$max_absolute_error <- max(
       aggregate$max_absolute_error, comparison$max_absolute_error
@@ -456,12 +479,14 @@ validate_apply_mask <- function(pre_file, post_file, mask_file,
   msg <- sprintf(
     paste0(
       "%s (%d/%d volumes%s): ",
-      "%d mismatched values, max relative error %.6g ",
-      "(tol %.6g); %d outside-mask voxels nonzero/nonfinite; ",
+      "%d mismatched values, max absolute error %.6g, ",
+      "max scaled error %.6g (atol %.6g, rtol %.6g); ",
+      "%d outside-mask voxels nonzero/nonfinite; ",
       "%d in-mask voxels zero for all compared volumes."
     ),
     replay_label, length(volume_indices), pre_dims[4], endpoint_note,
-    aggregate$n_mismatched, aggregate$max_relative_error, tolerance,
+    aggregate$n_mismatched, aggregate$max_absolute_error,
+    aggregate$max_relative_error, absolute_tolerance, tolerance,
     external_violations, internal_zeros
   )
 
@@ -473,6 +498,7 @@ validate_apply_mask <- function(pre_file, post_file, mask_file,
     aggregate,
     list(
       tolerance = tolerance,
+      absolute_tolerance = absolute_tolerance,
       volumes_compared = length(volume_indices),
       total_volumes = pre_dims[4],
       max_volumes = max_volumes,

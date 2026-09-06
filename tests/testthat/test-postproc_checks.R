@@ -131,6 +131,7 @@ test_that("validate_apply_mask passes when masking is correct", {
 
 test_that("validate_apply_mask samples 32 distributed volumes by default", {
   expect_identical(formals(validate_apply_mask)$max_volumes, 32L)
+  expect_identical(formals(validate_apply_mask)$absolute_tolerance, 1e-4)
 
   nx <- 4; ny <- 4; nz <- 3; nt <- 41
   mask <- array(0L, dim = c(nx, ny, nz))
@@ -176,6 +177,49 @@ test_that("validate_apply_mask samples 32 distributed volumes by default", {
   endpoint_result <- validate_apply_mask(pre_file, post_file, mask_file)
   expect_false(endpoint_result)
   expect_gt(attr(endpoint_result, "external_violations"), 0L)
+})
+
+test_that("validate_apply_mask accommodates scaled-int16 float output noise", {
+  dims <- c(4L, 4L, 3L, 8L)
+  mask <- array(0L, dim = dims[1:3])
+  mask[2:3, 2:3, 2] <- 1L
+  pre <- array(0, dim = dims)
+  pre[2:3, 2:3, 2, ] <- rep(c(0.023, 0.4, 1.2, 2.7), dims[4])
+  correct <- pre * array(rep(mask, dims[4]), dim = dims)
+  rounded <- correct
+  rounded[2, 2, 2, ] <- rounded[2, 2, 2, ] + 3e-5
+
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  mask_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, mask_file)), add = TRUE)
+  write_synth_4d(pre, pre_file)
+  write_synth_4d(rounded, post_file)
+  write_synth_mask(mask, mask_file)
+
+  result <- validate_apply_mask(pre_file, post_file, mask_file)
+  expect_true(result)
+  expect_identical(attr(result, "details")$absolute_tolerance, 1e-4)
+  expect_identical(attr(result, "details")$tolerance, 1e-5)
+  expect_match(attr(result, "message"), "atol 0.0001, rtol 1e-05")
+
+  strict <- validate_apply_mask(
+    pre_file, post_file, mask_file, absolute_tolerance = 1e-5
+  )
+  expect_false(strict)
+  expect_gt(attr(strict, "details")$n_mismatched, 0L)
+
+  corrupted <- correct
+  corrupted[2, 2, 2, 1] <- corrupted[2, 2, 2, 1] + 2e-4
+  write_synth_4d(corrupted, post_file)
+  expect_false(validate_apply_mask(pre_file, post_file, mask_file))
+
+  outside_leak <- correct
+  outside_leak[1, 1, 1, 1] <- 3e-5
+  write_synth_4d(outside_leak, post_file)
+  outside_result <- validate_apply_mask(pre_file, post_file, mask_file)
+  expect_false(outside_result)
+  expect_identical(attr(outside_result, "external_violations"), 1L)
 })
 
 test_that("validate_apply_mask fails when outside-mask voxels have signal", {
