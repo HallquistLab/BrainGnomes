@@ -14,7 +14,8 @@ validate_apply_mask(
   mask_file,
   tolerance = 1e-05,
   max_volumes = 32L,
-  chunk_size = 100L
+  chunk_size = 100L,
+  absolute_tolerance = 1e-04
 )
 ```
 
@@ -34,7 +35,7 @@ validate_apply_mask(
 
 - tolerance:
 
-  Maximum relative numerical error allowed inside the mask.
+  Relative numerical tolerance allowed inside the mask.
 
 - max_volumes:
 
@@ -46,6 +47,12 @@ validate_apply_mask(
 - chunk_size:
 
   Number of volumes compared at a time.
+
+- absolute_tolerance:
+
+  Absolute numerical tolerance allowed inside the mask. The default
+  accommodates float32 rounding when FSL converts scaled integer NIfTI
+  data.
 
 ## Value
 
@@ -62,8 +69,9 @@ Attributes:
 
 ## Details
 
-Validation requires the sampled post-mask volumes to equal the exact
-expected transform within `tolerance`. This prevents an all-zero or
-otherwise altered in-mask output from passing merely because nothing
-leaked outside the mask. Spatial-grid and mask-validity checks remain
-exhaustive.
+For sampled in-mask values, validation requires
+`abs(post - expected) <= absolute_tolerance + tolerance * abs(expected)`.
+This prevents an all-zero or otherwise altered output from passing while
+allowing small float32 conversion differences. Sampled values outside
+the mask must still be finite and exactly zero. Spatial-grid and
+mask-validity checks remain exhaustive.

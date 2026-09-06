@@ -159,6 +159,11 @@ Released 2026-09-02
   deterministic, pre-selected, and spatially balanced across image
   resolutions.
 
+- Allow up to `1e-4` absolute float32 conversion error when replaying
+  values inside an applied mask, while retaining relative-error checks
+  and requiring values outside the mask to remain finite and exactly
+  zero.
+
 - Make temporal-filter validation deterministic and pre-selected,
   require finite per-voxel stopband and passband evidence, verify that
   no-noise-IC AROMA output is actually unchanged, reject wholly invalid
