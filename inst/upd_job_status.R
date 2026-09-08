@@ -47,6 +47,22 @@ args$cascade <- isTRUE(args$cascade)
 if (isTRUE(args$output_dir == "NULL")) args$output_dir <- NULL
 if (isTRUE(args$output_manifest_file == "NULL")) args$output_manifest_file <- NULL
 
+# Very short jobs, especially array tasks, can start before the submission
+# process has finished inserting their tracking row. Resolve/retry here so the
+# STARTED receipt is not lost to that scheduler race.
+if (isTRUE(toupper(args$status) == "STARTED")) {
+  for (attempt in seq_len(40L)) {
+    resolved_job_id <- BrainGnomes:::resolve_tracked_job_id(
+      args$sqlite_db, args$job_id
+    )
+    if (!is.null(resolved_job_id)) {
+      args$job_id <- resolved_job_id
+      break
+    }
+    Sys.sleep(0.25)
+  }
+}
+
 # Capture output manifest if status is COMPLETED.
 output_manifest <- NULL
 if (isTRUE(toupper(args$status) == "COMPLETED")) {

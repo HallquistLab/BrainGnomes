@@ -475,12 +475,20 @@ record_run_provenance <- function(scfg, run_id, execution, debug = FALSE,
     ),
     execution = list(
       scope_deferred = execution$scope_deferred,
-      scope_status = if (execution$scope_deferred) "deferred" else "resolved",
+      scope_status = execution$scope_status,
+      deferred_reasons = execution$deferred_reasons,
       scope_resolved_at = if (execution$scope_deferred) {
         NA_character_
       } else recorded_at,
       subjects = execution$subjects,
-      job_plan = build_project_jobs(scfg, execution)
+      job_plan = build_project_jobs(scfg, execution),
+      scope_events = list(list(
+        event = if (execution$scope_deferred) "scope_deferred" else "scope_resolved",
+        recorded_at = recorded_at,
+        reason = if (execution$scope_deferred) execution$deferred_reasons else NULL,
+        n_subjects = length(unique(execution$subjects$sub_id)),
+        n_subject_sessions = nrow(execution$subjects)
+      ))
     ),
     configuration = list(
       source_file = attr(scfg, "yaml_file", exact = TRUE),
@@ -517,6 +525,112 @@ record_run_provenance <- function(scfg, run_id, execution, debug = FALSE,
     )
   )
   write_json_atomic(record, run_provenance_file(scfg, run_id))
+}
+
+normalize_scope_table <- function(subjects) {
+  result <- as.data.frame(subjects, stringsAsFactors = FALSE)
+  result <- result[, sort(names(result)), drop = FALSE]
+  result[] <- lapply(result, function(value) {
+    value <- as.character(value)
+    value[is.na(value)] <- "<NA>"
+    value
+  })
+  if (nrow(result) > 1L && ncol(result) > 0L) {
+    result <- result[do.call(order, unname(result)), , drop = FALSE]
+  }
+  rownames(result) <- NULL
+  result
+}
+
+record_run_scope_realization <- function(scfg, run_id, subjects,
+                                         reason = "flywheel_sync") {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+  checkmate::assert_string(run_id)
+  checkmate::assert_data_frame(subjects)
+  run_dir <- run_provenance_directory(scfg, run_id)
+  recorded_at <- run_provenance_timestamp()
+  realization <- list(
+    schema_version = "brain-gnomes-run-scope-v1",
+    run_id = run_id,
+    recorded_at = recorded_at,
+    reason = reason,
+    n_subjects = length(unique(subjects$sub_id)),
+    n_subject_sessions = nrow(subjects),
+    subjects = subjects
+  )
+  realization_file <- file.path(run_dir, "scope-realization.json")
+  if (file.exists(realization_file)) {
+    existing <- tryCatch(
+      jsonlite::read_json(realization_file, simplifyVector = TRUE),
+      error = function(e) NULL
+    )
+    if (!is.list(existing) ||
+        !identical(existing$schema_version, "brain-gnomes-run-scope-v1") ||
+        !identical(normalize_scope_table(existing$subjects),
+                   normalize_scope_table(subjects))) {
+      stop(
+        "The run's saved subject scope differs from the newly discovered scope: ",
+        realization_file, call. = FALSE
+      )
+    }
+    recorded_at <- existing$recorded_at
+    subjects <- as.data.frame(existing$subjects, stringsAsFactors = FALSE)
+  } else {
+    write_job_contract_once(
+      realization, realization_file, "Run scope realization"
+    )
+  }
+  subjects_file <- file.path(run_dir, "subjects.tsv")
+  write_table_atomic(subjects, subjects_file)
+
+  provenance_file <- run_provenance_file(scfg, run_id)
+  if (file.exists(provenance_file)) {
+    record <- jsonlite::read_json(provenance_file, simplifyVector = FALSE)
+    if (identical(record$execution$scope_status, "resolved") &&
+        !is.null(record$files$scope_realization)) {
+      return(invisible(normalizePath(
+        realization_file, winslash = "/", mustWork = TRUE
+      )))
+    }
+    record$execution$scope_status <- "resolved"
+    record$execution$scope_resolved_at <- recorded_at
+    record$execution$subjects <- subjects
+    events <- record$execution$scope_events
+    if (is.null(events)) events <- list()
+    events[[length(events) + 1L]] <- list(
+      event = "scope_resolved",
+      recorded_at = recorded_at,
+      reason = reason,
+      n_subjects = length(unique(subjects$sub_id)),
+      n_subject_sessions = nrow(subjects)
+    )
+    record$execution$scope_events <- events
+    record$files$scope_realization <- normalizePath(
+      realization_file, winslash = "/", mustWork = TRUE
+    )
+    record$files$subjects <- normalizePath(
+      subjects_file, winslash = "/", mustWork = TRUE
+    )
+    write_json_atomic(record, provenance_file)
+  }
+  invisible(normalizePath(
+    realization_file, winslash = "/", mustWork = TRUE
+  ))
+}
+
+realize_deferred_subjects <- function(snapshot) {
+  checkmate::assert_list(snapshot)
+  subjects <- discover_project_subjects(
+    snapshot$scfg,
+    steps = names(snapshot$steps)[snapshot$steps],
+    subject_filter = snapshot$subject_filter,
+    allow_empty = FALSE
+  )
+  record_run_scope_realization(
+    snapshot$scfg, snapshot$sequence_id, subjects,
+    reason = "flywheel_sync"
+  )
+  subjects
 }
 
 tracked_jobs_for_provenance <- function(scfg, run_id) {
@@ -654,7 +768,7 @@ print.bg_run_provenance <- function(x, ...) {
   cli::cli_text("Recorded: {x$recorded_at}")
   cli::cli_text("Invocation: {x$invocation$interface}")
   cli::cli_text("Steps: {paste(x$request$steps, collapse = ', ')}")
-  if (isTRUE(x$execution$scope_deferred)) {
+  if (identical(x$execution$scope_status, "deferred")) {
     cli::cli_text("Scope: deferred until Flywheel synchronization")
   } else {
     subjects <- x$execution$subjects

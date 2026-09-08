@@ -2,7 +2,7 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{submit_project_plan}
 \alias{submit_project_plan}
-\title{Submit a saved or in-memory execution plan}
+\title{Submit a saved or in-memory request plan}
 \usage{
 submit_project_plan(plan, debug = FALSE, log_level = "INFO")
 }
@@ -17,5 +17,9 @@ submit_project_plan(plan, debug = FALSE, log_level = "INFO")
 A \code{bg_project_run} object returned by \code{\link[=run_project]{run_project()}}.
 }
 \description{
-Submit a saved or in-memory execution plan
+The saved configuration, requested stages and streams, and resolved subject
+scope are reused. Deferred scope is discovered after Flywheel synchronization.
+The plan itself is not the final scheduler contract: BrainGnomes writes an
+immutable manifest immediately before each job is submitted and a runtime
+receipt when that job starts.
 }

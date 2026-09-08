@@ -145,6 +145,11 @@ test_that("deferred submission finalizes the resolved subject scope", {
   expect_identical(after$execution$scope_status, "resolved")
   expect_identical(after$execution$subjects$sub_id, "01")
   expect_true(nzchar(after$execution$scope_resolved_at))
+  printed <- capture.output(print(after), type = "message")
+  expect_true(any(grepl("Scope: 1 subject", printed, fixed = TRUE)))
+  expect_false(any(grepl(
+    "Scope: deferred until Flywheel synchronization", printed, fixed = TRUE
+  )))
   subjects <- utils::read.delim(after$files$subjects, stringsAsFactors = FALSE)
   expect_identical(subjects$sub_id, 1L)
 })

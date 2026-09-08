@@ -138,7 +138,8 @@ print_command_help <- function(command, status = 0L) {
     ),
     plan = paste0(
       "Usage: BrainGnomes plan <project_directory|config.yaml> [options]\n\n",
-      "Optional inspection/persistence view of the execution model that run_project resolves internally.\n",
+      "Optional inspection/persistence view of the request that run_project resolves internally.\n",
+      "It is not an exact scheduler job list; Flywheel subject scope may remain deferred until sync.\n",
       "Create a plan for review or automation; it is not required before a direct run.\n\n",
       "Options:\n",
       "  --steps=<steps>                Space-separated stages or all.\n",
@@ -194,7 +195,7 @@ print_command_help <- function(command, status = 0L) {
     ),
     provenance = paste0(
       "Usage: BrainGnomes provenance <project_directory|config.yaml> [options]\n\n",
-      "Show what BrainGnomes submitted for one run: settings, subjects, software, host, scheduler, identifying file checksums, and current jobs.\n\n",
+      "Show one run's request and realized work: settings, subjects, software, scheduler, job manifests, runtime receipts, file checksums, and current jobs.\n\n",
       "Options:\n",
       "  --run=<id|latest>              Select a submitted run (default latest).\n",
       "  --format=table|json            Summary or complete machine-readable record.\n"

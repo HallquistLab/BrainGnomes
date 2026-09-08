@@ -117,9 +117,11 @@ test_that("BrainGnomes provenance help describes the complete record", {
   res <- run_brain_gnomes_cli(c("provenance", "--help"))
   expect_equal(res$status, 0L)
   expect_true(any(grepl(
-    "what BrainGnomes submitted for one run",
+    "one run's request and realized work",
     res$output, fixed = TRUE
   )))
+  expect_true(any(grepl("job manifests", res$output, fixed = TRUE)))
+  expect_true(any(grepl("runtime receipts", res$output, fixed = TRUE)))
   expect_true(any(grepl("^  --run=<id\\|latest>", res$output)))
   expect_true(any(grepl("^  --format=table\\|json", res$output)))
 })

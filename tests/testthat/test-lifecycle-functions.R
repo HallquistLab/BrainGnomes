@@ -113,6 +113,8 @@ test_that("plans expose the same resolved execution model used by direct runs", 
   expect_identical(plan$request$force, execution$force)
   expect_equal(plan$subjects, execution$subjects)
   expect_identical(plan$scope_deferred, execution$scope_deferred)
+  expect_identical(plan$scope_status, execution$scope_status)
+  expect_identical(plan$deferred_reasons, execution$deferred_reasons)
 })
 
 test_that("Flywheel plans defer scope and preserve the requested filter", {
@@ -131,6 +133,8 @@ test_that("Flywheel plans defer scope and preserve the requested filter", {
     quiet = TRUE
   )
   expect_true(plan$scope_deferred)
+  expect_identical(plan$scope_status, "deferred")
+  expect_identical(plan$deferred_reasons, "flywheel_sync")
   expect_identical(plan$request$subject_filter, "01")
   expect_true(is.na(plan$jobs$n_jobs[plan$jobs$stage == "fmriprep"]))
 

@@ -301,6 +301,16 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     
     sched_args <- do.call(get_job_sched_args, sched_call)
     tracking_args$scheduler_options <- sched_args
+    tracking_args <- enrich_job_tracking_args(
+      scfg, tracking_args,
+      stage = name,
+      stream = if (name == "postprocess") pp_stream else if (name == "extract_rois") ex_stream else NULL,
+      sub_id = sub_id,
+      ses_id = if (session_level && has_ses) ses_id else NULL,
+      job_role = if (name == "postprocess") "controller" else "subject",
+      stdout_log = unname(env_variables["stdout_log"]),
+      stderr_log = unname(env_variables["stderr_log"])
+    )
     
     # determine the directory to use for the job submission
     if (session_level && has_ses) {
@@ -827,6 +837,15 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
     sentinel_tracking_args$mem_total <- sentinel_scfg$postprocess$memgb
     sentinel_tracking_args$scheduler <- scfg$compute_environment$scheduler
     sentinel_tracking_args$scheduler_options <- sentinel_sched_args
+    sentinel_tracking_args <- enrich_job_tracking_args(
+      scfg, sentinel_tracking_args,
+      stage = "postprocess", stream = pp_stream,
+      sub_id = sub_id,
+      ses_id = if (!is.null(ses_id) && !is.na(ses_id)) ses_id else NULL,
+      job_role = "sentinel",
+      stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/postprocess_{pp_stream}_sentinel_jobid-%j.out"),
+      stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/postprocess_{pp_stream}_sentinel_jobid-%j.err")
+    )
 
     sentinel_jid <- cluster_job_submit(
       postprocess_sentinel_sched_script,
