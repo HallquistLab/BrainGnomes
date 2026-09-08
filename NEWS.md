@@ -1,3 +1,13 @@
+# BrainGnomes (development version)
+
+* Distinguish optional request plans from final scheduler contracts. Plans now
+  report whether their subject scope is resolved or deferred. Flywheel runs
+  record the realized post-sync scope before downstream submission; every
+  tracked scheduler job receives an immutable pre-submission manifest and a
+  compute-host runtime receipt that verifies execution-driving files. Structured
+  work-unit and contract fields are stored in the tracking database with an
+  automatic migration for existing projects.
+
 # BrainGnomes 0.9-2
 
 Released 2026-09-02

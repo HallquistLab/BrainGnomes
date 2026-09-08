@@ -12,7 +12,16 @@
     mem_total = character(), scheduler = character(),
     scheduler_options = character(), time_submitted = character(),
     time_started = character(), time_ended = character(), status = character(),
-    output_manifest = character(), stringsAsFactors = FALSE
+    output_manifest = character(), contract_id = character(),
+    stage = character(), stream = character(), sub_id = character(),
+    ses_id = character(), job_role = character(), unit_key = character(),
+    attempt = integer(), job_manifest_path = character(),
+    job_manifest_checksum = character(), runtime_receipt_path = character(),
+    runtime_receipt_checksum = character(), runtime_host = character(),
+    contract_status = character(), scheduler_terminal_state = character(),
+    exit_code = integer(), failure_category = character(),
+    stdout_log = character(), stderr_log = character(),
+    stringsAsFactors = FALSE
   )
 }
 
@@ -104,7 +113,17 @@
 .annotate_tracked_jobs <- function(jobs) {
   if (!is.data.frame(jobs)) jobs <- .empty_tracked_jobs()
   needed <- names(.empty_tracked_jobs())
-  for (name in setdiff(needed, names(jobs))) jobs[[name]] <- .empty_tracked_jobs()[[name]]
+  empty <- .empty_tracked_jobs()
+  for (name in setdiff(needed, names(jobs))) {
+    prototype <- empty[[name]]
+    jobs[[name]] <- if (is.integer(prototype)) {
+      rep(NA_integer_, nrow(jobs))
+    } else if (is.numeric(prototype)) {
+      rep(NA_real_, nrow(jobs))
+    } else {
+      rep(NA_character_, nrow(jobs))
+    }
+  }
 
   if (nrow(jobs) == 0L) {
     jobs$stage <- character()
@@ -119,13 +138,26 @@
   }
 
   names_ <- as.character(jobs$job_name)
-  jobs$stage <- .job_stage(names_)
-  jobs$stream <- .job_stream(names_, jobs$stage)
-  jobs$sub_id <- .extract_job_token(names_, "sub")
-  jobs$ses_id <- .extract_job_token(names_, "ses")
+  fill_missing <- function(value, fallback) {
+    missing <- is.na(value) | !nzchar(as.character(value))
+    value[missing] <- fallback[missing]
+    value
+  }
+  jobs$stage <- fill_missing(as.character(jobs$stage), .job_stage(names_))
+  jobs$stream <- fill_missing(
+    as.character(jobs$stream), .job_stream(names_, jobs$stage)
+  )
+  jobs$sub_id <- fill_missing(
+    as.character(jobs$sub_id), .extract_job_token(names_, "sub")
+  )
+  jobs$ses_id <- fill_missing(
+    as.character(jobs$ses_id), .extract_job_token(names_, "ses")
+  )
   session_stages <- c("bids_conversion", "postprocess", "extract_rois")
   jobs$ses_id[!jobs$stage %in% session_stages] <- NA_character_
-  jobs$job_role <- .job_role(names_, jobs$sub_id)
+  jobs$job_role <- fill_missing(
+    as.character(jobs$job_role), .job_role(names_, jobs$sub_id)
+  )
   jobs$lifecycle_status <- .lifecycle_status(jobs$status)
 
   # Array and sentinel records use concise scheduler names. Attribute them to
@@ -151,11 +183,12 @@
   ses <- ifelse(is.na(jobs$ses_id), "", jobs$ses_id)
   stream <- ifelse(is.na(jobs$stream), "", jobs$stream)
   project_name <- ifelse(is.na(names_) | !nzchar(names_), paste0("job-", jobs$job_id), names_)
-  jobs$unit_key <- ifelse(
+  derived_unit_key <- ifelse(
     subject_key,
     paste("subject", jobs$sub_id, ses, jobs$stage, stream, sep = "::"),
     paste("project", jobs$stage, stream, project_name, sep = "::")
   )
+  jobs$unit_key <- fill_missing(as.character(jobs$unit_key), derived_unit_key)
   jobs$is_current_attempt <- FALSE
   jobs
 }

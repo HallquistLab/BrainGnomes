@@ -116,10 +116,13 @@ None of the following is a prerequisite for `run_project()`:
   modules, containers, or storage have changed, or before an expensive run when
   an up-front environment report is desirable.
 - **Plan** (`plan_project()` or `BrainGnomes plan`) exposes the stages, streams,
-  subject/session scope, resources, dependencies, and implicit setup work that
-  BrainGnomes has resolved. It is useful for review, persistence, and automated
-  approval workflows. `run_project()` resolves this same execution model
-  internally, so users do not need to create or submit a plan first.
+  known subject/session scope, resources, dependencies, and implicit setup work
+  for a request. It is useful for review, persistence, and automated approval
+  workflows. A plan is not a pre-rendered scheduler job list. When Flywheel may
+  add data, it says that scope is deferred and the run records the subjects and
+  sessions found after synchronization. `run_project()` resolves this same
+  request model internally, so users do not need to create or submit a plan
+  first.
 
 For example, an optional review-and-submit workflow is:
 
@@ -144,6 +147,23 @@ and saving this run record. The first use of a large container in a project can
 take a minute because BrainGnomes reads the complete file to identify the exact
 copy used; later runs reuse the project's saved result while the file is
 unchanged.
+
+The run record distinguishes intended work from work actually sent to the
+scheduler. Immediately before each managed `sbatch` or `qsub` submission,
+BrainGnomes writes an immutable job manifest beneath
+`<log_directory>/runs/<run_id>/jobs/`. It records the stage, subject/session,
+resources, dependencies, command, relevant environment, logs, and checksums of
+the scripts, configuration, containers, and other files that control that job.
+When the scheduler starts the job, a runtime receipt records the compute host
+and verifies those checksums. A missing or changed manifest or execution-driving
+file stops the job with a pointer to its receipt. These paths also appear in
+`inspect_project(scfg)$jobs` and the run provenance.
+
+For a Flywheel run, the initial plan and run record mark subject scope as
+deferred. After synchronization succeeds, BrainGnomes saves
+`scope-realization.json` with the subjects and sessions it found, then creates
+the downstream job manifests. This permits new Flywheel data to enter the run
+without treating the earlier plan as an exact job roster.
 
 `inspect_project(scfg)` reports the current effective project state across
 runs, using the newest attempt for each subject, stage, and stream. Its

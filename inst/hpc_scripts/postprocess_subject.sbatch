@@ -109,6 +109,24 @@ log_message DEBUG "Using task status directory $task_status_dir"
 array_stdout_log="$(dirname $stdout_log)/postprocess_${stream_name}_task-%a_jobid-%A.out"
 array_stderr_log="$(dirname $stdout_log)/postprocess_${stream_name}_task-%a_jobid-%A.err"
 
+# Seal the dynamically discovered array specification before submitting it.
+export filelist_path task_status_dir
+array_manifest=$("${R_HOME}/bin/Rscript" "${pkg_dir}/prepare_job_manifest.R" \
+  --sqlite_db "$sqlite_db" \
+  --sequence_id "$BG_RUN_ID" \
+  --contract_directory "$BG_CONTRACT_DIRECTORY" \
+  --script "$postprocess_image_sched_script" \
+  --scheduler "slurm" \
+  --scheduler_options "$sched_args --array=0-${last_idx}%${max_concurrent_images}" \
+  --stage "postprocess" \
+  --stream "$stream_name" \
+  --sub_id "$sub_id" \
+  --ses_id "${ses_id:-NULL}" \
+  --job_role "array" \
+  --job_name "postprocess_${stream_name}_array" \
+  --stdout_log "$array_stdout_log" \
+  --stderr_log "$array_stderr_log")
+
 # Submit a single job array with concurrency throttle
 array_jid=$(sbatch \
   --parsable \
@@ -117,13 +135,13 @@ array_jid=$(sbatch \
   --output="$array_stdout_log" \
   --error="$array_stderr_log" \
   --array="0-${last_idx}%${max_concurrent_images}" \
-  --export=ALL,filelist_path="$filelist_path",task_status_dir="$task_status_dir",stdout_log="$array_stdout_log",stderr_log="$array_stderr_log" \
+  --export=ALL,filelist_path="$filelist_path",task_status_dir="$task_status_dir",stdout_log="$array_stdout_log",stderr_log="$array_stderr_log",BG_JOB_MANIFEST="$array_manifest" \
   "$postprocess_image_sched_script")
 
 log_message INFO "Submitted array job $array_jid for $n_files images (max concurrent: $max_concurrent_images) in $out_dir"
 
 # Track the array parent in the DB
-"${R_HOME}/bin/Rscript" "$insert_tracked_job_path" --sqlite_db "$sqlite_db" --job_id "$array_jid" --job_name "postprocess_${stream_name}_array" --scheduler "slurm" --scheduler_options "$sched_args"
+"${R_HOME}/bin/Rscript" "$insert_tracked_job_path" --sqlite_db "$sqlite_db" --job_id "$array_jid" --job_name "postprocess_${stream_name}_array" --scheduler "slurm" --scheduler_options "$sched_args" --job_manifest_path "$array_manifest"
 "${R_HOME}/bin/Rscript" "$add_parent_path" --sqlite_db "$sqlite_db" --job_id "$array_jid" --parent_job_id "$SLURM_JOB_ID" --child_level 2
 
 # Read the sentinel job ID written by submit_postprocess() in R

@@ -18,7 +18,9 @@ dataset); absolute paths are used as provided. If \code{NULL}, the value stored 
 \item{wait_jobs}{Optional character vector of upstream scheduler job IDs that
 must complete before this validation job starts.}
 
-\item{sequence_id}{Optional sequence ID used for job tracking.}
+\item{sequence_id}{Optional sequence ID used for job tracking. When omitted,
+BrainGnomes creates one so that the validation job still receives a job
+manifest and can be found as one tracked submission.}
 }
 \value{
 The job id returned by the scheduler.

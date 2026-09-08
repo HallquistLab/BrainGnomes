@@ -12,7 +12,9 @@
 #'   \code{scfg$bids_validation$outfile} is used.
 #' @param wait_jobs Optional character vector of upstream scheduler job IDs that
 #'   must complete before this validation job starts.
-#' @param sequence_id Optional sequence ID used for job tracking.
+#' @param sequence_id Optional sequence ID used for job tracking. When omitted,
+#'   BrainGnomes creates one so that the validation job still receives a job
+#'   manifest and can be found as one tracked submission.
 #' @return The job id returned by the scheduler.
 #' @export
 #' @examples
@@ -21,6 +23,8 @@
 #' }
 run_bids_validation <- function(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
+  if (is.null(sequence_id)) sequence_id <- uuid::UUIDgenerate()
+  checkmate::assert_string(sequence_id)
 
   if (!validate_exists(scfg$compute_environment$bids_validator)) {
     stop("Cannot run BIDS validation without a bids_validator location.")
@@ -63,6 +67,12 @@ run_bids_validation <- function(scfg, outfile = NULL, wait_jobs = NULL, sequence
   if (!is.null(scfg$bids_validation$memgb)) tracking_args$mem_total <- scfg$bids_validation$memgb
   if (!is.null(scfg$compute_environment$scheduler)) tracking_args$scheduler <- scfg$compute_environment$scheduler
   tracking_args$scheduler_options <- sched_args
+  tracking_args <- enrich_job_tracking_args(
+    scfg, tracking_args,
+    stage = "bids_validation", job_role = "project",
+    stdout_log = unname(env_variables["stdout_log"]),
+    stderr_log = unname(env_variables["stderr_log"])
+  )
   
   job_id <- submit_bids_validation(
     scfg,

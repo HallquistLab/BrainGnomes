@@ -608,7 +608,9 @@ resolve_project_execution <- function(scfg, steps, subject_filter = NULL,
   structure(c(unclass(selection), list(
     subject_filter = subject_filter,
     subjects = subjects,
-    scope_deferred = scope_deferred
+    scope_deferred = scope_deferred,
+    scope_status = if (scope_deferred) "deferred" else "resolved",
+    deferred_reasons = if (scope_deferred) "flywheel_sync" else character()
   )), class = "bg_project_execution")
 }
 
@@ -729,11 +731,14 @@ build_project_jobs <- function(scfg, execution) {
 
 #' Inspect or persist the resolved project execution model
 #'
-#' `plan_project()` is optional inspection and automation tooling. It exposes the
-#' stages, streams, subject/session scope, resources, dependencies, and implicit
-#' setup work resolved for a request. [run_project()] resolves the same execution
-#' model internally, so creating or submitting a plan is not required for a
-#' direct run.
+#' `plan_project()` is optional inspection and automation tooling. It records a
+#' request: the stages, streams, known subject/session scope, resources,
+#' dependencies, and implicit setup work resolved at planning time. It is not a
+#' pre-rendered scheduler job list. When Flywheel synchronization can add data,
+#' the plan reports deferred scope and the run records the realized subjects
+#' after synchronization. Each actual scheduler submission is sealed separately
+#' in a job manifest. [run_project()] resolves the same request model internally,
+#' so creating or submitting a plan is not required for a direct run.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
 #' @param steps Pipeline stages or `"all"`.
@@ -781,6 +786,8 @@ plan_project <- function(input, steps = "all", subject_filter = NULL,
     ),
     subjects = subjects,
     scope_deferred = execution$scope_deferred,
+    scope_status = execution$scope_status,
+    deferred_reasons = execution$deferred_reasons,
     jobs = jobs
   ), class = "bg_project_plan")
   if (!quiet) print(result)
@@ -792,7 +799,9 @@ print.bg_project_plan <- function(x, ...) {
   cli::cli_h2("BrainGnomes execution plan {.val {x$plan_id}}")
   cli::cli_text("Steps: {paste(x$request$steps, collapse = ', ')}")
   if (isTRUE(x$scope_deferred)) {
-    cli::cli_alert_info("Subject discovery is deferred until Flywheel synchronization completes.")
+    cli::cli_alert_info(
+      "Subject discovery is deferred until {paste(x$deferred_reasons, collapse = ', ')} completes."
+    )
   } else {
     cli::cli_text("Scope: {length(unique(x$subjects$sub_id))} subject{?s}, {nrow(x$subjects)} subject/session row{?s}.")
   }
@@ -835,12 +844,28 @@ read_project_plan <- function(file) {
   class(plan$config) <- unique(c("bg_project_cfg", class(plan$config)))
   plan$subjects <- as.data.frame(plan$subjects, stringsAsFactors = FALSE)
   plan$jobs <- as.data.frame(plan$jobs, stringsAsFactors = FALSE)
+  if (is.null(plan$scope_status)) {
+    plan$scope_status <- if (isTRUE(plan$scope_deferred)) "deferred" else "resolved"
+  }
+  if (is.null(plan$deferred_reasons)) {
+    plan$deferred_reasons <- if (isTRUE(plan$scope_deferred)) {
+      "flywheel_sync"
+    } else {
+      character()
+    }
+  }
   class(plan) <- "bg_project_plan"
   attr(plan, "source_file") <- source_file
   plan
 }
 
-#' Submit a saved or in-memory execution plan
+#' Submit a saved or in-memory request plan
+#'
+#' The saved configuration, requested stages and streams, and resolved subject
+#' scope are reused. Deferred scope is discovered after Flywheel synchronization.
+#' The plan itself is not the final scheduler contract: BrainGnomes writes an
+#' immutable manifest immediately before each job is submitted and a runtime
+#' receipt when that job starts.
 #' @param plan A `bg_project_plan` object or YAML plan path.
 #' @param debug Enable debug submission mode.
 #' @param log_level Pipeline log threshold.

@@ -452,7 +452,23 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       snapshot_rds = snap_file,
       stdout_log = stdout_log,
       stderr_log = stderr_log,
+      upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
       log_level = scfg$log_level
+    )
+    controller_tracking_args <- list(
+      job_name = "submit_subjects",
+      sequence_id = sequence_id,
+      n_nodes = 1,
+      n_cpus = scfg$submit_subjects$ncores,
+      wall_time = hours_to_dhms(scfg$submit_subjects$nhours),
+      mem_total = scfg$submit_subjects$memgb,
+      scheduler = scfg$compute_environment$scheduler,
+      scheduler_options = sched_args
+    )
+    controller_tracking_args <- enrich_job_tracking_args(
+      scfg, controller_tracking_args,
+      stage = "subject_submission", job_role = "controller",
+      stdout_log = stdout_log, stderr_log = stderr_log
     )
     controller_id <- cluster_job_submit(
       sched_script,
@@ -460,7 +476,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       sched_args = sched_args,
       env_variables = env_variables,
       wait_jobs = flywheel_id,
-      echo = FALSE
+      echo = FALSE,
+      tracking_sqlite_db = scfg$metadata$sqlite_db,
+      tracking_args = controller_tracking_args
     )
     return(invisible(new_project_run(
       scfg, sequence_id,
@@ -650,6 +668,11 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
     scheduler = scfg$compute_environment$scheduler,
     scheduler_options = sched_args
   )
+  tracking_args <- enrich_job_tracking_args(
+    scfg, tracking_args,
+    stage = "flywheel_sync", job_role = "project",
+    stdout_log = stdout_log, stderr_log = stderr_log
+  )
 
   # preflight permission checks for project-level paths
   pf_issues <- c(
@@ -714,6 +737,11 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
     mem_total = scfg[["fsaverage"]]$memgb,
     scheduler = scfg$compute_environment$scheduler,
     scheduler_options = sched_args
+  )
+  tracking_args <- enrich_job_tracking_args(
+    scfg, tracking_args,
+    stage = "fsaverage_setup", job_role = "project",
+    stdout_log = stdout_log, stderr_log = stderr_log
   )
   tracking_sqlite_db <- scfg$metadata$sqlite_db
 
@@ -1204,6 +1232,11 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     mem_total = scfg[["prefetch_templates"]]$memgb,
     scheduler = scfg$compute_environment$scheduler,
     scheduler_options = sched_args
+  )
+  tracking_args <- enrich_job_tracking_args(
+    scfg, tracking_args,
+    stage = "prefetch_templates", job_role = "project",
+    stdout_log = stdout_log, stderr_log = stderr_log
   )
   
   job_id <- cluster_job_submit(sched_script,

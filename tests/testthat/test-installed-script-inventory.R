@@ -17,7 +17,10 @@ run_installed_script_help <- function(script_name) {
 test_that("installed R-script inventory contains only supported entry points and workers", {
   expected <- list(
     public = "BrainGnomes",
-    scheduler_helpers = c("add_parent.R", "insert_tracked_job.R", "upd_job_status.R"),
+    scheduler_helpers = c(
+      "add_parent.R", "insert_tracked_job.R", "prepare_job_manifest.R",
+      "upd_job_status.R"
+    ),
     internal_workers = c("extract_cli.R", "postprocess_cli.R")
   )
   inst_dir <- system.file(package = "BrainGnomes")

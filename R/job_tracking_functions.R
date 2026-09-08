@@ -141,6 +141,44 @@ ensure_tracking_db_schema <- function(sqlite_db) {
       }
     )
   }
+  contract_columns <- c(
+    contract_id = "VARCHAR",
+    stage = "VARCHAR",
+    stream = "VARCHAR",
+    sub_id = "VARCHAR",
+    ses_id = "VARCHAR",
+    job_role = "VARCHAR",
+    unit_key = "VARCHAR",
+    attempt = "INTEGER",
+    job_manifest_path = "TEXT",
+    job_manifest_checksum = "VARCHAR",
+    runtime_receipt_path = "TEXT",
+    runtime_receipt_checksum = "VARCHAR",
+    runtime_host = "VARCHAR",
+    contract_status = "VARCHAR",
+    scheduler_terminal_state = "VARCHAR",
+    exit_code = "INTEGER",
+    failure_category = "VARCHAR",
+    stdout_log = "TEXT",
+    stderr_log = "TEXT"
+  )
+  for (column in setdiff(names(contract_columns), col_names)) {
+    statement <- paste(
+      "ALTER TABLE job_tracking ADD COLUMN", column,
+      unname(contract_columns[[column]])
+    )
+    tryCatch(
+      dbExecute(con, statement),
+      error = function(e) {
+        if (!grepl("duplicate column name", conditionMessage(e), fixed = TRUE)) {
+          stop(format_tracking_db_error(
+            sqlite_db,
+            operation = paste("ALTER TABLE add", column), err = e
+          ), call. = FALSE)
+        }
+      }
+    )
+  }
   invisible(NULL)
 }
 
@@ -193,6 +231,25 @@ create_tracking_db = function(sqlite_db) {
       time_ended INTEGER,
       status VARCHAR(24),
       output_manifest TEXT,
+      contract_id VARCHAR,
+      stage VARCHAR,
+      stream VARCHAR,
+      sub_id VARCHAR,
+      ses_id VARCHAR,
+      job_role VARCHAR,
+      unit_key VARCHAR,
+      attempt INTEGER,
+      job_manifest_path TEXT,
+      job_manifest_checksum VARCHAR,
+      runtime_receipt_path TEXT,
+      runtime_receipt_checksum VARCHAR,
+      runtime_host VARCHAR,
+      contract_status VARCHAR,
+      scheduler_terminal_state VARCHAR,
+      exit_code INTEGER,
+      failure_category VARCHAR,
+      stdout_log TEXT,
+      stderr_log TEXT,
       FOREIGN KEY (parent_id) REFERENCES job_tracking (id)
     );
     "
@@ -217,6 +274,43 @@ insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
   if (is.null(sqlite_db) || is.null(job_id)) return(invisible(NULL)) # skip out if not using DB or if job_id is NULL
   if (is.numeric(job_id)) job_id <- as.character(job_id)
   if (is.null(tracking_args$status)) tracking_args$status <- "QUEUED" # default value of first status
+  if (checkmate::test_string(tracking_args$job_manifest_path) &&
+      file.exists(tracking_args$job_manifest_path)) {
+    manifest <- suppressWarnings(tryCatch(
+      jsonlite::read_json(
+        tracking_args$job_manifest_path, simplifyVector = TRUE
+      ),
+      error = function(e) NULL
+    ))
+    if (is.list(manifest)) {
+      manifest_values <- list(
+        contract_id = manifest$contract_id,
+        sequence_id = manifest$run_id,
+        stage = manifest$logical_work_unit$stage,
+        stream = manifest$logical_work_unit$stream,
+        sub_id = manifest$logical_work_unit$subject_id,
+        ses_id = manifest$logical_work_unit$session_id,
+        job_role = manifest$logical_work_unit$role,
+        unit_key = manifest$logical_work_unit$unit_key,
+        attempt = manifest$logical_work_unit$attempt,
+        stdout_log = manifest$execution$stdout_log,
+        stderr_log = manifest$execution$stderr_log
+      )
+      for (field in names(manifest_values)) {
+        if (is.null(tracking_args[[field]]) || is.na(tracking_args[[field]])) {
+          tracking_args[[field]] <- manifest_values[[field]]
+        }
+      }
+    }
+    if (!checkmate::test_string(tracking_args$contract_id)) {
+      tracking_args$contract_id <- basename(dirname(tracking_args$job_manifest_path))
+    }
+    if (!checkmate::test_string(tracking_args$job_manifest_checksum)) {
+      tracking_args$job_manifest_checksum <- unname(tools::md5sum(
+        tracking_args$job_manifest_path
+      ))
+    }
+  }
   
   insert_job_sql <- "INSERT INTO job_tracking
     (job_id, job_name, sequence_id, batch_directory,
@@ -224,8 +318,13 @@ insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
     n_nodes, n_cpus, wall_time,
     mem_per_cpu, mem_total,
     scheduler, scheduler_options, job_obj,
-    time_submitted, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    time_submitted, status, contract_id, stage, stream, sub_id, ses_id,
+    job_role, unit_key, attempt, job_manifest_path, job_manifest_checksum,
+    runtime_receipt_path, runtime_receipt_checksum, runtime_host,
+    contract_status, scheduler_terminal_state, exit_code, failure_category,
+    stdout_log, stderr_log)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   
   # gather tracking parameters into a list
   param <- list(job_id, tracking_args$job_name, tracking_args$sequence_id, 
@@ -234,7 +333,19 @@ insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
                 tracking_args$n_nodes, tracking_args$n_cpus, tracking_args$wall_time, 
                 tracking_args$mem_per_cpu, tracking_args$mem_total, tracking_args$scheduler,
                 tracking_args$scheduler_options, tracking_args$job_obj, 
-                as.character(Sys.time()), tracking_args$status)
+                as.character(Sys.time()), tracking_args$status,
+                tracking_args$contract_id, tracking_args$stage,
+                tracking_args$stream, tracking_args$sub_id,
+                tracking_args$ses_id, tracking_args$job_role,
+                tracking_args$unit_key, tracking_args$attempt,
+                tracking_args$job_manifest_path,
+                tracking_args$job_manifest_checksum,
+                tracking_args$runtime_receipt_path,
+                tracking_args$runtime_receipt_checksum,
+                tracking_args$runtime_host, tracking_args$contract_status,
+                tracking_args$scheduler_terminal_state,
+                tracking_args$exit_code, tracking_args$failure_category,
+                tracking_args$stdout_log, tracking_args$stderr_log)
   
   for (i in 1:length(param)) {
     param[[i]] <- ifelse(is.null(param[[i]]), NA, param[[i]]) # convert NULL values to NA for dbExecute
@@ -312,6 +423,11 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #'   \item \code{"STARTED"} -> updates \code{time_started}
 #'   \item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} -> updates \code{time_ended}
 #' }
+#' A `"STARTED"` update also writes a one-time runtime receipt when the
+#' tracking row has an associated job manifest. The receipt records the compute
+#' host and verifies that the sealed manifest and execution-driving files still
+#' match their submission-time checksums. A manifest configured with the default
+#' `"fail"` drift policy stops execution when verification fails.
 #'
 #' When \code{status} is \code{"COMPLETED"} and \code{output_manifest} is provided, the manifest
 #' is stored in the \code{output_manifest} column for later verification.
@@ -336,6 +452,8 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
   if (!checkmate::test_string(sqlite_db)) return(invisible(NULL))
   if (is.numeric(job_id)) job_id <- as.character(job_id)
   if (!checkmate::test_string(job_id)) return(invisible(NULL)) # quiet failure on invalid job id
+  resolved_job_id <- resolve_tracked_job_id(sqlite_db, job_id)
+  if (checkmate::test_string(resolved_job_id)) job_id <- resolved_job_id
 
   checkmate::assert_string(status)
   status <- toupper(status)
@@ -375,6 +493,12 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
       call. = FALSE
     )
     return(invisible(NULL))
+  }
+
+  if (status == "STARTED") {
+    record_job_runtime_receipt(
+      sqlite_db = sqlite_db, job_id = job_id
+    )
   }
   
   # Store (or clear) output manifest on COMPLETED status
@@ -433,6 +557,41 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
   
   return(invisible(NULL))
   
+}
+
+resolve_tracked_job_id <- function(sqlite_db, job_id) {
+  if (!checkmate::test_string(sqlite_db) || !file.exists(sqlite_db) ||
+      !checkmate::test_string(job_id)) {
+    return(NULL)
+  }
+  exact <- suppressWarnings(tryCatch(
+    submit_sqlite_query(
+      "SELECT job_id FROM job_tracking WHERE job_id = ? LIMIT 1",
+      sqlite_db = sqlite_db, param = list(job_id), return_result = TRUE
+    ),
+    error = function(e) NULL
+  ))
+  if (is.data.frame(exact) && nrow(exact) > 0L) {
+    return(as.character(exact$job_id[[1L]]))
+  }
+  if (!grepl("\\[[0-9]+\\]", job_id)) return(NULL)
+  candidates <- unique(c(
+    sub("\\[[0-9]+\\]", "[]", job_id),
+    sub("\\[[0-9]+\\]", "", job_id)
+  ))
+  for (candidate in candidates) {
+    match <- suppressWarnings(tryCatch(
+      submit_sqlite_query(
+        "SELECT job_id FROM job_tracking WHERE job_id = ? LIMIT 1",
+        sqlite_db = sqlite_db, param = list(candidate), return_result = TRUE
+      ),
+      error = function(e) NULL
+    ))
+    if (is.data.frame(match) && nrow(match) > 0L) {
+      return(as.character(match$job_id[[1L]]))
+    }
+  }
+  NULL
 }
 
 #' Query job status in tracking SQLite database

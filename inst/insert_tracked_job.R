@@ -28,6 +28,16 @@ print_help <- function() {
             "  --mem_total",
             "  --scheduler",
             "  --scheduler_options",
+            "  --stage",
+            "  --stream",
+            "  --sub_id",
+            "  --ses_id",
+            "  --job_role",
+            "  --unit_key",
+            "  --attempt",
+            "  --job_manifest_path",
+            "  --stdout_log",
+            "  --stderr_log",
             "\n\n",
             sep = "\n"
   ))
@@ -49,7 +59,17 @@ tracking_args <- list(
   mem_per_cpu = args$mem_per_cpu, 
   mem_total = args$mem_total, 
   scheduler = args$scheduler,
-  scheduler_options = args$scheduler_options
+  scheduler_options = args$scheduler_options,
+  stage = args$stage,
+  stream = args$stream,
+  sub_id = args$sub_id,
+  ses_id = args$ses_id,
+  job_role = args$job_role,
+  unit_key = args$unit_key,
+  attempt = args$attempt,
+  job_manifest_path = args$job_manifest_path,
+  stdout_log = args$stdout_log,
+  stderr_log = args$stderr_log
 )
 
 # convert string versions of NULL to regular NULL

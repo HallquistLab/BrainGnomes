@@ -106,6 +106,8 @@ log_message INFO Starting postprocessing for image $input_file in $out_dir with 
 
 if [[ $is_array_task -eq 0 ]]; then
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+elif [[ "$task_idx" == "0" ]]; then
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$task_array_job_id" --sqlite_db "$sqlite_db" --status "STARTED"
 fi
 
 rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postprocess_rscript" --input="$input_file" $postprocess_cli &

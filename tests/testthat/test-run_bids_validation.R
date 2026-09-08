@@ -29,6 +29,7 @@ test_that("run_bids_validation sets upd_job_status_path for scheduler script", {
   class(scfg) <- "bg_project_cfg"
 
   captured_env <- NULL
+  captured_tracking <- NULL
   local_mocked_bindings(
     get_job_script = function(...) "/fake/bids_validation.sbatch",
     get_job_sched_args = function(...) "--time=00:10:00",
@@ -36,6 +37,7 @@ test_that("run_bids_validation sets upd_job_status_path for scheduler script", {
                                       sched_args = NULL, parent_ids = NULL, lg = NULL,
                                       tracking_sqlite_db = NULL, tracking_args = NULL) {
       captured_env <<- env_variables
+      captured_tracking <<- tracking_args
       "12345"
     },
     .package = "BrainGnomes"
@@ -46,6 +48,14 @@ test_that("run_bids_validation sets upd_job_status_path for scheduler script", {
   expect_true("upd_job_status_path" %in% names(captured_env))
   expect_true(nzchar(captured_env[["upd_job_status_path"]]))
   expect_match(basename(captured_env[["upd_job_status_path"]]), "^upd_job_status\\.R$")
+  expect_true(nzchar(captured_tracking$sequence_id))
+  expect_identical(captured_tracking$stage, "bids_validation")
+  expect_identical(captured_tracking$job_role, "project")
+  expect_match(
+    captured_tracking$contract_directory,
+    file.path("runs", captured_tracking$sequence_id, "jobs"),
+    fixed = TRUE
+  )
 })
 
 test_that("submit_bids_validation handles failed submission without logging error", {

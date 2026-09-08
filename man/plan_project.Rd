@@ -37,11 +37,14 @@ optionally \code{ses_id}.}
 A serializable \code{bg_project_plan} object.
 }
 \description{
-\code{plan_project()} is optional inspection and automation tooling. It exposes the
-stages, streams, subject/session scope, resources, dependencies, and implicit
-setup work resolved for a request. \code{\link[=run_project]{run_project()}} resolves the same execution
-model internally, so creating or submitting a plan is not required for a
-direct run.
+\code{plan_project()} is optional inspection and automation tooling. It records a
+request: the stages, streams, known subject/session scope, resources,
+dependencies, and implicit setup work resolved at planning time. It is not a
+pre-rendered scheduler job list. When Flywheel synchronization can add data,
+the plan reports deferred scope and the run records the realized subjects
+after synchronization. Each actual scheduler submission is sealed separately
+in a job manifest. \code{\link[=run_project]{run_project()}} resolves the same request model internally,
+so creating or submitting a plan is not required for a direct run.
 }
 \seealso{
 \code{\link[=run_project]{run_project()}} for the standard direct execution path.

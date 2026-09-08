@@ -31,16 +31,20 @@ if [ -n "$R_HOME" ] && [ -x "$R_HOME/bin/Rscript" ]; then
   RSCRIPT_BIN="$R_HOME/bin/Rscript"
 fi
 
+"$RSCRIPT_BIN" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 "$RSCRIPT_BIN" --vanilla -e '
   snap <- readRDS(Sys.getenv("snapshot_rds"));
   if (!requireNamespace("BrainGnomes", quietly = TRUE)) stop("BrainGnomes package is required.");
+  snap$resolved_subjects <- BrainGnomes:::realize_deferred_subjects(snap);
   resolved_subjects <- do.call(BrainGnomes:::submit_subjects, snap);
   BrainGnomes:::update_run_provenance_submission(
     snap$scfg, snap$sequence_id, deferred = TRUE,
     resolved_subjects = resolved_subjects
-  );
-  try(unlink(Sys.getenv("snapshot_rds")), silent = TRUE)
+  )
 '
+
+"$RSCRIPT_BIN" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 
 log_message INFO "Finished submit_subjects controller"
 exit 0

@@ -93,6 +93,21 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   # Thus, arguments like '--mem=5g' and '-n 12' are not handled differently
   if (!is.null(sched_args)) { sched_args <- paste(sched_args, collapse=" ") }
 
+  if (is.null(tracking_args$attempt) &&
+      checkmate::test_string(tracking_args$unit_key)) {
+    tracking_args$attempt <- next_job_contract_attempt(
+      tracking_sqlite_db, tracking_args$unit_key,
+      tracking_args$sequence_id
+    )
+  }
+
+  contract <- allocate_job_contract(tracking_sqlite_db, tracking_args)
+  if (!is.null(contract)) {
+    env_variables["BG_JOB_MANIFEST"] <- contract$manifest_path
+    env_variables["BG_RUN_ID"] <- tracking_args$sequence_id
+    env_variables["BG_CONTRACT_DIRECTORY"] <- dirname(contract$directory)
+  }
+
   #subfunction to handle variable=value and variable combinations
   paste_args <- function(str_vec) {
     nms <- names(str_vec)
@@ -114,6 +129,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   } else {
     env_variables["sqlite_db"] <- NA
   }
+  contract_env_variables <- env_variables
   if (!is.null(env_variables)) {
     env_variables <- paste_args(env_variables) #convert to appropriate name-value pairs
     if (scheduler == "qsub") {
@@ -163,6 +179,36 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
     # for direct execution, need to pass environment variables by prepending
     cmd <- paste(env_variables, run_part)
+  } else if (script_exists) {
+    cmd <- paste(scheduler, sched_args, script)
+  } else if (scheduler == "sbatch") {
+    cmd <- paste(scheduler, sched_args, paste0("--wrap=", shQuote(script)))
+  } else if (scheduler == "qsub") {
+    cmd <- paste("echo", shQuote(script), "|", scheduler, sched_args)
+  } else {
+    cmd <- paste(scheduler, sched_args, script)
+  }
+
+  if (!is.null(contract)) {
+    manifest <- write_job_manifest(
+      contract = contract,
+      script = script,
+      scheduler = scheduler,
+      scheduler_executable = unname(Sys.which(scheduler)),
+      scheduler_args = sched_args,
+      env_variables = contract_env_variables,
+      export_all = export_all,
+      wait_jobs = wait_jobs,
+      wait_signal = wait_signal,
+      rendered_command = cmd,
+      tracking_args = tracking_args
+    )
+    tracking_args$contract_id <- manifest$contract_id
+    tracking_args$job_manifest_path <- manifest$path
+    tracking_args$job_manifest_checksum <- manifest$checksum
+  }
+
+  if (scheduler == "sh") {
     if (isTRUE(echo)) cat(cmd, "\n") # echo command to terminal
     # submit the job script and return the jobid by forking to background and returning PID
     jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
@@ -170,21 +216,17 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
     if (script_exists) {
-      cmd <- paste(scheduler, sched_args, script)
       if (isTRUE(echo)) cat(cmd, "\n")
       jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
     } else if (scheduler == "sbatch") {
       # one-liner command to sbatch using --wrap
-      cmd <- paste(scheduler, sched_args, paste0("--wrap=", shQuote(script)))
       if (isTRUE(echo)) cat(cmd, "\n")
       jobres <- system2(scheduler, args = paste0(sched_args, " --wrap=", shQuote(script)), stdout = sub_stdout, stderr = sub_stderr)
     } else if (scheduler == "qsub") {
       # one-liner command to qsub using echo <cmd> | qsub syntax
-      cmd <- paste("echo", shQuote(script), "|", scheduler, sched_args)
       if (isTRUE(echo)) cat(cmd, "\n")
       jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr))
     } else {
-      cmd <- paste(scheduler, sched_args, script)
       if (isTRUE(echo)) cat(cmd, "\n")
       jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
     }

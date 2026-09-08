@@ -42,6 +42,11 @@ The function updates both the job \code{status} and a timestamp corresponding to
 \item \code{"STARTED"} -> updates \code{time_started}
 \item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} -> updates \code{time_ended}
 }
+A \code{"STARTED"} update also writes a one-time runtime receipt when the
+tracking row has an associated job manifest. The receipt records the compute
+host and verifies that the sealed manifest and execution-driving files still
+match their submission-time checksums. A manifest configured with the default
+\code{"fail"} drift policy stops execution when verification fails.
 
 When \code{status} is \code{"COMPLETED"} and \code{output_manifest} is provided, the manifest
 is stored in the \code{output_manifest} column for later verification.

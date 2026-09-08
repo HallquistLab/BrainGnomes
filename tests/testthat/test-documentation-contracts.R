@@ -129,9 +129,12 @@ test_that("Quickstart renders CLI help from the installed command", {
   expect_match(quickstart_text, "## Plan: inspect or persist resolved work", fixed = TRUE)
   expect_match(
     quickstart_text,
-    "A plan is an optional view of the execution\nmodel that `run_project()` resolves internally.",
+    "A plan is an optional view of the request model\nthat `run_project()` resolves internally",
     fixed = TRUE
   )
+  expect_match(quickstart_text, "scope-realization.json", fixed = TRUE)
+  expect_match(quickstart_text, "immutable job\\s+manifest")
+  expect_match(quickstart_text, "runtime\\s+receipt")
   expect_match(quickstart_text, "get_run_provenance(scfg, run$run_id)", fixed = TRUE)
   expect_match(
     quickstart_text,
