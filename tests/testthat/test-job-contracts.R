@@ -16,6 +16,8 @@ make_contract_project <- function() {
 }
 
 test_that("tracked scheduler submissions seal a job manifest", {
+  skip_on_os("windows") # Slurm submission and its shell-script fixture are Unix-only.
+
   root <- tempfile("job-contract-")
   dir.create(root, recursive = TRUE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
