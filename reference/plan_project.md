@@ -1,11 +1,15 @@
 # Inspect or persist the resolved project execution model
 
 `plan_project()` is optional inspection and automation tooling. It
-exposes the stages, streams, subject/session scope, resources,
-dependencies, and implicit setup work resolved for a request.
+records a request: the stages, streams, known subject/session scope,
+resources, dependencies, and implicit setup work resolved at planning
+time. It is not a pre-rendered scheduler job list. When Flywheel
+synchronization can add data, the plan reports deferred scope and the
+run records the realized subjects after synchronization. Each actual
+scheduler submission is sealed separately in a job manifest.
 [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-resolves the same execution model internally, so creating or submitting
-a plan is not required for a direct run.
+resolves the same request model internally, so creating or submitting a
+plan is not required for a direct run.
 
 ## Usage
 

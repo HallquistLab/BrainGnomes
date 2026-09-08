@@ -1,6 +1,10 @@
-# Submit a saved or in-memory execution plan
+# Submit a saved or in-memory request plan
 
-Submit a saved or in-memory execution plan
+The saved configuration, requested stages and streams, and resolved
+subject scope are reused. Deferred scope is discovered after Flywheel
+synchronization. The plan itself is not the final scheduler contract:
+BrainGnomes writes an immutable manifest immediately before each job is
+submitted and a runtime receipt when that job starts.
 
 ## Usage
 

@@ -108,7 +108,7 @@
 - [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
   : Setup the processing pipeline for a new fMRI study
 - [`submit_project_plan()`](https://hallquistlab.github.io/BrainGnomes/reference/submit_project_plan.md)
-  : Submit a saved or in-memory execution plan
+  : Submit a saved or in-memory request plan
 - [`summary(`*`<bg_project_cfg>`*`)`](https://hallquistlab.github.io/BrainGnomes/reference/summary.bg_project_cfg.md)
   : summary method for project configuration object
 - [`summary(`*`<bg_status_df>`*`)`](https://hallquistlab.github.io/BrainGnomes/reference/summary.bg_status_df.md)

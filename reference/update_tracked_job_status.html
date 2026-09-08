@@ -100,7 +100,12 @@ the failure is recursively propagated to child jobs not listed in <code>exclude<
     <p>The function updates both the job <code>status</code> and a timestamp corresponding to the status type:</p><ul><li><p><code>"QUEUED"</code> -&gt; updates <code>time_submitted</code></p></li>
 <li><p><code>"STARTED"</code> -&gt; updates <code>time_started</code></p></li>
 <li><p><code>"FAILED"</code>, <code>"COMPLETED"</code>, or <code>"FAILED_BY_EXT"</code> -&gt; updates <code>time_ended</code></p></li>
-</ul><p>When <code>status</code> is <code>"COMPLETED"</code> and <code>output_manifest</code> is provided, the manifest
+</ul><p>A <code>"STARTED"</code> update also writes a one-time runtime receipt when the
+tracking row has an associated job manifest. The receipt records the compute
+host and verifies that the sealed manifest and execution-driving files still
+match their submission-time checksums. A manifest configured with the default
+<code>"fail"</code> drift policy stops execution when verification fails.</p>
+<p>When <code>status</code> is <code>"COMPLETED"</code> and <code>output_manifest</code> is provided, the manifest
 is stored in the <code>output_manifest</code> column for later verification.</p>
 <p>If <code>cascade = TRUE</code>, and the status is <code>"FAILED"</code> or <code>"FAILED_BY_EXT"</code>, any dependent jobs (as determined
 via <code><a href="get_tracked_job_status.html">get_tracked_job_status()</a></code>) will be recursively marked as <code>"FAILED_BY_EXT"</code>, unless their status is already

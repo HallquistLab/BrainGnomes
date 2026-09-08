@@ -67,7 +67,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">04 Sep 2026</h4>
+            <h4 data-toc-skip class="date">08 Sep 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/braingnomes_quickstart.Rmd" class="external-link"><code>vignettes/braingnomes_quickstart.Rmd</code></a></small>
       <div class="d-none name"><code>braingnomes_quickstart.Rmd</code></div>
@@ -808,12 +808,15 @@ project files and is not required before <code><a href="../reference/run_project
 <div class="section level3">
 <h3 id="plan-inspect-or-persist-resolved-work">Plan: inspect or persist resolved work<a class="anchor" aria-label="anchor" href="#plan-inspect-or-persist-resolved-work"></a>
 </h3>
-<p>Plans resolve enabled stages, subject/session scope, streams,
+<p>Plans record requested stages, known subject/session scope, streams,
 resources, dependencies, and implicit setup jobs before submission.
-Saved plans include their configuration and subject scope, making a
+Saved plans include their configuration and known scope, making a
 reviewed request reusable in an approval or automation workflow. A plan
-is an optional view of the execution model that
-<code><a href="../reference/run_project.html">run_project()</a></code> resolves internally.</p>
+is an optional view of the request model that <code><a href="../reference/run_project.html">run_project()</a></code>
+resolves internally; it is not an exact list of scheduler jobs. When
+Flywheel synchronization may add data, the plan reports deferred scope.
+BrainGnomes records the subjects and sessions found after
+synchronization before it submits their downstream work.</p>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plan_project.html">plan_project</a></span><span class="op">(</span></span>
 <span>  <span class="va">scfg</span>,</span>
@@ -822,6 +825,21 @@ is an optional view of the execution model that
 <span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/write_project_plan.html">write_project_plan</a></span><span class="op">(</span><span class="va">plan</span>, <span class="st">"/project/my_study/plans/analysis.yaml"</span><span class="op">)</span></span>
 <span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/submit_project_plan.html">submit_project_plan</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span></span></code></pre></div>
+<p>The final contract is recorded one job at a time. Immediately before
+each managed <code>sbatch</code> or <code>qsub</code> submission,
+BrainGnomes writes an immutable job manifest beneath the run’s
+<code>jobs</code> directory. The manifest records the exact command,
+resources, dependencies, relevant environment, logs, and checksums of
+files that control the job. When the scheduler starts that job, a
+runtime receipt records the compute host and verifies that the manifest,
+configuration, scripts, and containers have not changed. If the manifest
+or an execution-driving file changed or disappeared, the job stops and
+its receipt explains the mismatch.</p>
+<p>For a Flywheel run, <code>scope-realization.json</code> records the
+subjects and sessions found after synchronization. The downstream
+manifests are created from that realized scope. Editing the project’s
+live YAML after the run starts does not change the run-specific
+configuration snapshot.</p>
 </div>
 </div>
 <div class="section level2">

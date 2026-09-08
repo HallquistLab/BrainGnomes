@@ -67,6 +67,13 @@ to the status type:
 - `"FAILED"`, `"COMPLETED"`, or `"FAILED_BY_EXT"` -\> updates
   `time_ended`
 
+A `"STARTED"` update also writes a one-time runtime receipt when the
+tracking row has an associated job manifest. The receipt records the
+compute host and verifies that the sealed manifest and execution-driving
+files still match their submission-time checksums. A manifest configured
+with the default `"fail"` drift policy stops execution when verification
+fails.
+
 When `status` is `"COMPLETED"` and `output_manifest` is provided, the
 manifest is stored in the `output_manifest` column for later
 verification.

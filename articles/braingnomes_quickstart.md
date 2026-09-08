@@ -744,13 +744,16 @@ before
 
 ### Plan: inspect or persist resolved work
 
-Plans resolve enabled stages, subject/session scope, streams, resources,
-dependencies, and implicit setup jobs before submission. Saved plans
-include their configuration and subject scope, making a reviewed request
-reusable in an approval or automation workflow. A plan is an optional
-view of the execution model that
+Plans record requested stages, known subject/session scope, streams,
+resources, dependencies, and implicit setup jobs before submission.
+Saved plans include their configuration and known scope, making a
+reviewed request reusable in an approval or automation workflow. A plan
+is an optional view of the request model that
 [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-resolves internally.
+resolves internally; it is not an exact list of scheduler jobs. When
+Flywheel synchronization may add data, the plan reports deferred scope.
+BrainGnomes records the subjects and sessions found after
+synchronization before it submits their downstream work.
 
 ``` r
 
@@ -762,6 +765,21 @@ plan <- plan_project(
 write_project_plan(plan, "/project/my_study/plans/analysis.yaml")
 run <- submit_project_plan(plan)
 ```
+
+The final contract is recorded one job at a time. Immediately before
+each managed `sbatch` or `qsub` submission, BrainGnomes writes an
+immutable job manifest beneath the run’s `jobs` directory. The manifest
+records the exact command, resources, dependencies, relevant
+environment, logs, and checksums of files that control the job. When the
+scheduler starts that job, a runtime receipt records the compute host
+and verifies that the manifest, configuration, scripts, and containers
+have not changed. If the manifest or an execution-driving file changed
+or disappeared, the job stops and its receipt explains the mismatch.
+
+For a Flywheel run, `scope-realization.json` records the subjects and
+sessions found after synchronization. The downstream manifests are
+created from that realized scope. Editing the project’s live YAML after
+the run starts does not change the run-specific configuration snapshot.
 
 ## Optional run operations
 

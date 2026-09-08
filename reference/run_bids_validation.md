@@ -35,7 +35,9 @@ run_bids_validation(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL)
 
 - sequence_id:
 
-  Optional sequence ID used for job tracking.
+  Optional sequence ID used for job tracking. When omitted, BrainGnomes
+  creates one so that the validation job still receives a job manifest
+  and can be found as one tracked submission.
 
 ## Value
 

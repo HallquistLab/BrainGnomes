@@ -44,6 +44,10 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="braingnomes-development-version">BrainGnomes (development version)<a class="anchor" aria-label="anchor" href="#braingnomes-development-version"></a></h2>
+<ul><li>Distinguish optional request plans from final scheduler contracts. Plans now report whether their subject scope is resolved or deferred. Flywheel runs record the realized post-sync scope before downstream submission; every tracked scheduler job receives an immutable pre-submission manifest and a compute-host runtime receipt that verifies execution-driving files. Structured work-unit and contract fields are stored in the tracking database with an automatic migration for existing projects.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.9-2" id="braingnomes-09-2">BrainGnomes 0.9-2<a class="anchor" aria-label="anchor" href="#braingnomes-09-2"></a></h2>
 <p>Released 2026-09-02</p>
 <ul><li><p>Add opt-in nearest-neighbour atlas resampling to ROI extraction. Setting <code>allow_atlas_resampling: true</code> lets an atlas already in the BOLD coordinate space be placed onto a differing BOLD voxel grid. The atlas space is inferred from a formal BIDS <code>space-&lt;label&gt;</code> filename entity, with <code>atlas_space</code> as a fallback for legacy names. Exact grid matches remain untouched; conflicting or differing coordinate-space labels are rejected; resampled atlases must preserve every positive label and are cached by atlas content and target geometry for reuse across jobs.</p></li>
