@@ -77,6 +77,8 @@ test_that("empty projects produce typed inventories and retain explicit expectat
   expect_equal(nrow(result$inventory), 0L)
   expect_type(result$inventory$derivative_file, "character")
   expect_type(result$metrics$value, "double")
+  empty_scope <- collect_qc_inventory(fixture$cfg, subjects = data.frame(sub_id = character()))
+  expect_equal(nrow(empty_scope$workflow), 0L)
   result <- collect_qc_inventory(fixture$cfg, subjects = data.frame(sub_id = "007", ses_id = "baseline"))
   expect_equal(nrow(result$workflow), 4L)
   expect_true(all(result$workflow$status == "NOT_TRACKED"))

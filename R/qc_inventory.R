@@ -580,14 +580,14 @@ qc_workflow <- function(scfg, inspection, acquisitions, inventory, subjects, sta
   }
   if (!is.null(subjects)) {
     if (!"sub_id" %in% names(subjects)) stop("subjects must contain sub_id.", call. = FALSE)
-    if (!"ses_id" %in% names(subjects)) subjects$ses_id <- NA_character_
+    if (!"ses_id" %in% names(subjects)) subjects$ses_id <- rep(NA_character_, nrow(subjects))
     candidates[[length(candidates) + 1L]] <- subjects[, c("sub_id", "ses_id"), drop = FALSE]
   }
   # Include planned scopes even when subjects have not yet produced any files.
   for (path in qc_list_files(scfg$metadata$log_directory, "^subjects\\.tsv$")) {
     scope <- qc_read_tsv(path, state)
     if (is.data.frame(scope) && "sub_id" %in% names(scope)) {
-      if (!"ses_id" %in% names(scope)) scope$ses_id <- NA_character_
+      if (!"ses_id" %in% names(scope)) scope$ses_id <- rep(NA_character_, nrow(scope))
       candidates[[length(candidates) + 1L]] <- scope[, c("sub_id", "ses_id"), drop = FALSE]
     }
   }
