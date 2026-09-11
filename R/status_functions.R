@@ -53,7 +53,9 @@ empty_project_status <- function(scfg) {
 
 #' Get processing status for a single subject
 #'
-#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
+#' @param scfg A `bg_project_cfg` object, YAML configuration file, or project
+#'   directory containing `project_config.yaml`. Defaults to the current working
+#'   directory.
 #' @param sub_id Subject identifier.
 #' @param ses_id Optional session identifier. When `NULL`, all sessions found in the
 #'   subject's directory are returned.
@@ -67,7 +69,8 @@ empty_project_status <- function(scfg) {
 #' @seealso [inspect_project()] for scheduler-lifecycle status.
 #' @export
 #' @importFrom checkmate assert_class assert_string
-get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
+get_subject_status <- function(scfg = getwd(), sub_id, ses_id = NULL) {
+  scfg <- project_config_from_input(scfg)
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_string(sub_id)
   checkmate::assert_string(ses_id, null.ok = TRUE)
@@ -137,7 +140,9 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
 
 #' Get processing status for all subjects
 #'
-#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
+#' @param scfg A `bg_project_cfg` object, YAML configuration file, or project
+#'   directory containing `project_config.yaml`. Defaults to the current working
+#'   directory.
 #' @return A data.frame with one row per subject/session containing completion
 #'   status columns for every configured stage and stream. When no subjects are
 #'   present, returns a zero-row `bg_status_df` with the same typed columns,
@@ -149,7 +154,8 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
 #' @seealso [inspect_project()] for scheduler-lifecycle status.
 #' @export
 #' @importFrom checkmate assert_class
-get_project_status <- function(scfg) {
+get_project_status <- function(scfg = getwd()) {
+  scfg <- project_config_from_input(scfg)
   checkmate::assert_class(scfg, "bg_project_cfg")
   log_dir <- scfg$metadata$log_directory
   sub_dirs <- list.dirs(log_dir, recursive = FALSE, full.names = FALSE)
@@ -178,7 +184,7 @@ get_project_status <- function(scfg) {
 #'
 #' @param object A data.frame produced by `get_project_status()`.
 #' @param ... Additional arguments (unused)
-#' @description Provides a tabular summary of completion counts for each step in the pipeline.
+#' @description Provides a tabular summary of completion counts for each project step.
 #' @return data.frame summarizing number of subjects completed for each step.
 #' @export
 summary.bg_status_df <- function(object, ...) {

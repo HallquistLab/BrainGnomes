@@ -1,6 +1,10 @@
 make_lifecycle_project <- function() {
   root <- tempfile("lifecycle-project-")
-  cfg <- initialize_project("lifecycle", root, interactive = FALSE)
+  cfg <- setup_project(
+    project_name = "lifecycle",
+    project_directory = root,
+    interactive = FALSE
+  )
   dir.create(file.path(cfg$metadata$bids_directory, "sub-01"), recursive = TRUE)
   container <- file.path(root, "fmriprep.sif")
   license <- file.path(root, "license.txt")
@@ -20,7 +24,7 @@ make_lifecycle_project <- function() {
   list(root = root, cfg = cfg, config_file = attr(cfg, "yaml_file"))
 }
 
-test_that("non-interactive initialization creates a valid portable project", {
+test_that("non-interactive setup creates a valid portable project", {
   fixture <- make_lifecycle_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
 
@@ -30,6 +34,59 @@ test_that("non-interactive initialization creates a valid portable project", {
   expect_true(validation$valid)
   expect_s3_class(validation, "bg_project_validation")
   expect_identical(names(validation$issues), c("severity", "code", "field", "message"))
+})
+
+test_that("setup_project is the only exported project-creation entry point", {
+  exports <- getNamespaceExports("BrainGnomes")
+
+  expect_true("setup_project" %in% exports)
+  expect_false("initialize_project" %in% exports)
+  expect_false(exists(
+    "initialize_project",
+    envir = asNamespace("BrainGnomes"),
+    inherits = FALSE
+  ))
+})
+
+test_that("non-interactive setup supports templates and guarded overwrite", {
+  template_root <- tempfile("setup-template-")
+  project_root <- tempfile("setup-from-template-")
+  on.exit(unlink(template_root, recursive = TRUE, force = TRUE), add = TRUE)
+  on.exit(unlink(project_root, recursive = TRUE, force = TRUE), add = TRUE)
+  template <- setup_project(
+    project_name = "template",
+    project_directory = template_root,
+    interactive = FALSE
+  )
+  template$custom_setting <- "preserved"
+
+  cfg <- setup_project(
+    project_name = "derived",
+    project_directory = project_root,
+    template = template,
+    interactive = FALSE
+  )
+
+  expect_identical(cfg$metadata$project_name, "derived")
+  expect_identical(cfg$metadata$project_directory, normalizePath(project_root))
+  expect_identical(cfg$custom_setting, "preserved")
+  expect_error(
+    setup_project(
+      project_name = "derived",
+      project_directory = project_root,
+      interactive = FALSE
+    ),
+    "Configuration file already exists"
+  )
+  expect_s3_class(
+    setup_project(
+      project_name = "derived",
+      project_directory = project_root,
+      interactive = FALSE,
+      overwrite = TRUE
+    ),
+    "bg_project_cfg"
+  )
 })
 
 test_that("load_project validation never repairs or rewrites configuration", {
@@ -50,22 +107,30 @@ test_that("load_project validation never repairs or rewrites configuration", {
   expect_true("metadata/scratch_directory" %in% validation$issues$field)
 })
 
-test_that("doctor returns structured non-mutating preflight checks", {
+test_that("doctor_project returns structured non-mutating preflight checks", {
   fixture <- make_lifecycle_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
 
-  report <- doctor(fixture$cfg, steps = "fmriprep", quiet = TRUE)
+  report <- doctor_project(fixture$cfg, steps = "fmriprep", quiet = TRUE)
   expect_s3_class(report, "bg_project_doctor")
   expect_identical(names(report$checks), c("category", "check", "status", "detail", "remedy"))
   expect_true(any(report$checks$check == "project_config" & report$checks$status == "pass"))
   expect_true(all(report$checks$status %in% c("pass", "warn", "fail")))
 
-  disabled <- doctor(fixture$cfg, steps = "mriqc", quiet = TRUE)
+  disabled <- doctor_project(fixture$cfg, steps = "mriqc", quiet = TRUE)
   expect_false(disabled$ok)
   expect_true(any(
     disabled$checks$check == "requested_steps" &
       disabled$checks$status == "fail"
   ))
+})
+
+test_that("doctor_project is the only exported R preflight entry point", {
+  exports <- getNamespaceExports("BrainGnomes")
+
+  expect_true("doctor_project" %in% exports)
+  expect_false("doctor" %in% exports)
+  expect_false(exists("doctor", envir = asNamespace("BrainGnomes"), inherits = FALSE))
 })
 
 test_that("plans include implicit setup jobs and round-trip through YAML", {

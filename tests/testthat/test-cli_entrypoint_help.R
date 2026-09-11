@@ -175,17 +175,24 @@ test_that("BrainGnomes rejects unknown options before project access", {
 })
 
 test_that("BrainGnomes init and config validate support a headless first project", {
-  installed_export <- suppressWarnings(system2(
+  init_help <- run_brain_gnomes_cli(c("init", "--help"))
+  expect_equal(init_help$status, 0L)
+  expect_false(any(grepl("--non-interactive", init_help$output, fixed = TRUE)))
+
+  installed_interface <- suppressWarnings(system2(
     file.path(R.home("bin"), "Rscript"),
-    c("-e", shQuote("cat('initialize_project' %in% getNamespaceExports('BrainGnomes'))")),
+    c("-e", shQuote(paste0(
+      "cat(all(c('project_name', 'project_directory', 'interactive') %in% ",
+      "names(formals(BrainGnomes::setup_project))))"
+    ))),
     stdout = TRUE, stderr = FALSE
   ))
-  skip_if_not(identical(installed_export, "TRUE"),
-    "installed package predates lifecycle CLI exports")
+  skip_if_not(identical(installed_interface, "TRUE"),
+    "installed package predates non-interactive setup_project")
   root <- tempfile("cli-init-")
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
 
-  init <- run_brain_gnomes_cli(c("init", "cli_demo", root, "--non-interactive"))
+  init <- run_brain_gnomes_cli(c("init", "cli_demo", root))
   expect_equal(init$status, 0L, info = paste(init$output, collapse = "\n"))
   expect_true(file.exists(file.path(root, "project_config.yaml")))
   expect_true(any(grepl("Saved project configuration to:", init$output, fixed = TRUE)))

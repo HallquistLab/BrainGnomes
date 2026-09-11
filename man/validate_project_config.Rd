@@ -4,10 +4,11 @@
 \alias{validate_project_config}
 \title{Validate a BrainGnomes project configuration without changing it}
 \usage{
-validate_project_config(input, quiet = FALSE)
+validate_project_config(input = getwd(), quiet = FALSE)
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{quiet}{Suppress the printed validation summary.}
 }

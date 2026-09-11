@@ -1,5 +1,7 @@
 #' Load a project configuration from a file
-#' @param input A path to a YAML file, or a project directory containing \code{project_config.yaml}.
+#' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
+#'   directory containing \code{project_config.yaml}. Defaults to the current
+#'   working directory.
 #' @param validate Logical indicating whether to validate the configuration after loading. Validation is
 #'   non-interactive and never changes or saves the configuration. The structured validation result is
 #'   attached as the `validation` attribute. Default: TRUE.
@@ -7,15 +9,24 @@
 #'   the returned object has a `validation` attribute produced by [validate_project_config()].
 #' @importFrom yaml read_yaml
 #' @export
-load_project <- function(input = NULL, validate = TRUE) {
+load_project <- function(input = getwd(), validate = TRUE) {
+  checkmate::assert_flag(validate)
+  if (is.null(input)) input <- getwd()
+  if (inherits(input, "bg_project_cfg")) {
+    scfg <- input
+    if (validate) {
+      validation <- validate_project_config(scfg, quiet = TRUE)
+      attr(scfg, "validation") <- validation[c("valid", "issues", "messages")]
+    }
+    return(scfg)
+  }
   if (checkmate::test_directory_exists(input) && checkmate::test_file_exists(file.path(input, "project_config.yaml"))) {
     input <- file.path(input, "project_config.yaml") # if input is directory, look for project_config.yaml in it.
   }
   if (!checkmate::test_file_exists(input)) stop("Cannot find file: ", input)
-  checkmate::test_flag(validate)
   yaml_path <- normalizePath(input, winslash = "/", mustWork = TRUE)
   scfg <- read_yaml(yaml_path)
-  class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
+  class(scfg) <- unique(c("bg_project_cfg", class(scfg)))
   attr(scfg, "yaml_file") <- yaml_path
   if (validate) {
     validation <- validate_project_config(scfg, quiet = TRUE)
@@ -64,27 +75,81 @@ get_scfg_from_input <- function(input = NULL) {
   return(scfg)
 }
 
-#' Setup the processing pipeline for a new fMRI study
+#' Set up a BrainGnomes project workflow for a new fMRI study
+#'
+#' By default, this function opens the guided project-configuration workflow.
+#' Set `interactive = FALSE` to create a portable project from deterministic
+#' defaults without prompting. Non-interactive setup creates the project and
+#' standard data directories, disables all processing stages, and writes
+#' `project_config.yaml`.
+#'
 #' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
 #'   directory containing \code{project_config.yaml}. If a directory is supplied
 #'   but the file is missing, \code{setup_project} starts from an empty list with
-#'   a warning. For \code{setup_project} only, this argument may also be
-#'   \code{NULL} to create a new configuration from scratch.
-#' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return A `bg_project_cfg` list containing the project configuration. New fields are added based on user input,
-#'   and missing entries are filled with defaults. The configuration is written
-#'   to `project_config.yaml` in the project directory unless the user declines
-#'   to overwrite an existing file.
+#'   a warning. This argument may also be \code{NULL} to create a new
+#'   configuration from scratch. In non-interactive mode, `input` can be used as
+#'   the starting template.
+#' @param fields A character vector of fields to be prompted for. If `NULL`, all
+#'   fields will be prompted for. Only available in interactive mode.
+#' @param project_name Project label. Required in non-interactive mode. When
+#'   supplied in interactive mode, it is used as the initial project name.
+#' @param project_directory Project root directory. Required in non-interactive
+#'   mode. When supplied in interactive mode, it is used as the initial project
+#'   directory.
+#' @param template Optional configuration object, YAML file, or project
+#'   directory to use as a base. Supply either `input` or `template`, not both.
+#' @param interactive Whether to use the guided configuration workflow. Defaults
+#'   to `TRUE` to preserve the standard interactive R workflow.
+#' @param overwrite Replace an existing `project_config.yaml` in non-interactive
+#'   mode.
+#' @return A `bg_project_cfg` list containing the project configuration. New
+#'   fields are added based on user input or portable defaults. The configuration
+#'   is written to `project_config.yaml` in the project directory. Interactive
+#'   setup asks before replacing a changed file; non-interactive setup requires
+#'   `overwrite = TRUE`.
 #' @importFrom yaml read_yaml
 #' @importFrom checkmate test_file_exists
 #' @export
-setup_project <- function(input = NULL, fields = NULL) {
-  scfg <- get_scfg_from_input(input)
+setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
+                          project_directory = NULL, template = NULL,
+                          interactive = TRUE, overwrite = FALSE) {
+  checkmate::assert_flag(interactive)
+  checkmate::assert_flag(overwrite)
+  if (!is.null(input) && !is.null(template)) {
+    stop("Supply either input or template, not both.", call. = FALSE)
+  }
+  starting_config <- if (is.null(template)) input else template
+
+  if (!interactive) {
+    if (!is.null(fields)) {
+      stop("fields is only available when interactive = TRUE.", call. = FALSE)
+    }
+    return(create_project_from_defaults(
+      project_name = project_name,
+      project_directory = project_directory,
+      template = starting_config,
+      overwrite = overwrite
+    ))
+  }
+
+  scfg <- get_scfg_from_input(starting_config)
 
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     class(scfg) <- c(class(scfg), "bg_project_cfg")
   }
   if (is.null(scfg$schema_version)) scfg$schema_version <- 1L
+  if (!is.null(project_name)) {
+    checkmate::assert_string(project_name)
+    if (is.null(scfg$metadata)) scfg$metadata <- list()
+    scfg$metadata$project_name <- project_name
+  }
+  if (!is.null(project_directory)) {
+    checkmate::assert_string(project_directory)
+    if (is.null(scfg$metadata)) scfg$metadata <- list()
+    scfg$metadata$project_directory <- normalizePath(
+      path.expand(project_directory), winslash = "/", mustWork = FALSE
+    )
+  }
 
   if (is.null(fields)) {
     cli::cli_h1("BrainGnomes project setup")
@@ -110,6 +175,86 @@ setup_project <- function(input = NULL, fields = NULL) {
   scfg <- save_project_config(scfg)
 
   return(scfg)
+}
+
+#' Create a project configuration from portable defaults without prompts
+#'
+#' @param project_name Project label.
+#' @param project_directory Project root directory.
+#' @param template Optional project configuration object, YAML file, or project
+#'   directory to use as a base.
+#' @param overwrite Replace an existing `project_config.yaml`.
+#' @return A `bg_project_cfg` object with its YAML path attached.
+#' @noRd
+create_project_from_defaults <- function(project_name, project_directory,
+                                         template = NULL, overwrite = FALSE) {
+  checkmate::assert_string(project_name)
+  checkmate::assert_string(project_directory)
+  checkmate::assert_flag(overwrite)
+  project_directory <- normalizePath(
+    path.expand(project_directory), winslash = "/", mustWork = FALSE
+  )
+
+  dir.create(project_directory, recursive = TRUE, showWarnings = FALSE)
+  if (!dir.exists(project_directory)) {
+    stop("Failed to create project directory: ", project_directory, call. = FALSE)
+  }
+
+  scfg <- if (is.null(template)) {
+    list()
+  } else {
+    as.list(project_config_from_input(template))
+  }
+  scfg$schema_version <- value_or_default(scfg$schema_version, 1L)
+  if (is.null(scfg$metadata)) scfg$metadata <- list()
+  scfg$metadata$project_name <- project_name
+  scfg$metadata$project_directory <- project_directory
+
+  default_dirs <- c(
+    dicom_directory = "data_dicoms",
+    bids_directory = "data_bids",
+    fmriprep_directory = "data_fmriprep",
+    mriqc_directory = "data_mriqc",
+    postproc_directory = "data_postproc",
+    rois_directory = "data_rois",
+    log_directory = "logs",
+    scratch_directory = "scratch",
+    templateflow_home = "templateflow"
+  )
+  for (field in names(default_dirs)) {
+    if (!checkmate::test_string(scfg$metadata[[field]])) {
+      scfg$metadata[[field]] <- file.path(
+        project_directory, default_dirs[[field]]
+      )
+    }
+    dir.create(
+      scfg$metadata[[field]], recursive = TRUE, showWarnings = FALSE
+    )
+  }
+
+  scfg$metadata$sqlite_db <- value_or_default(
+    scfg$metadata$sqlite_db,
+    file.path(project_directory, paste0(project_name, ".sqlite"))
+  )
+  if (is.null(scfg$compute_environment)) scfg$compute_environment <- list()
+  if (!checkmate::test_string(scfg$compute_environment$scheduler)) {
+    scfg$compute_environment$scheduler <- if (
+      nzchar(Sys.which("qsub")) && !nzchar(Sys.which("sbatch"))
+    ) {
+      "torque"
+    } else {
+      "slurm"
+    }
+  }
+  for (stage in c(supported_project_steps(), "bids_validation")) {
+    if (is.null(scfg[[stage]])) scfg[[stage]] <- list()
+    if (!checkmate::test_flag(scfg[[stage]]$enable)) {
+      scfg[[stage]]$enable <- FALSE
+    }
+  }
+
+  class(scfg) <- unique(c("bg_project_cfg", class(scfg)))
+  write_project_config(scfg, overwrite = overwrite)
 }
 
 #' Set up project metadata for an fMRI preprocessing study
