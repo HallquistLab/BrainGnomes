@@ -18,6 +18,8 @@
   using a scheduler (Slurm or TORQUE). It accepts a vector of arguments
   to be passed to the scheduler and a vector of environment variables
   that should be passed to the compute node at job execution.
+- [`collect_qc_inventory()`](https://hallquistlab.github.io/BrainGnomes/reference/collect_qc_inventory.md)
+  : Collect a study QC inventory from existing diagnostics
 - [`construct_bids_filename()`](https://hallquistlab.github.io/BrainGnomes/reference/construct_bids_filename.md)
   : Construct BIDS-Compatible Filenames from Extracted Entity Data
 - [`construct_bids_regex()`](https://hallquistlab.github.io/BrainGnomes/reference/construct_bids_regex.md)
@@ -85,10 +87,14 @@
   : Inspect or persist the resolved project execution model
 - [`postprocess_subject()`](https://hallquistlab.github.io/BrainGnomes/reference/postprocess_subject.md)
   : Postprocess a single fMRI BOLD image using a configured pipeline
+- [`print(`*`<bg_qc_inventory>`*`)`](https://hallquistlab.github.io/BrainGnomes/reference/print.bg_qc_inventory.md)
+  : Print a compact QC snapshot summary
 - [`read_project_plan()`](https://hallquistlab.github.io/BrainGnomes/reference/read_project_plan.md)
   : Read a saved execution plan
 - [`remove_nifti_volumes()`](https://hallquistlab.github.io/BrainGnomes/reference/remove_nifti_volumes.md)
   : Remove Specified Timepoints from a 4D NIfTI Image
+- [`render_qc_dashboard()`](https://hallquistlab.github.io/BrainGnomes/reference/render_qc_dashboard.md)
+  : Render a Quarto dashboard for a study QC snapshot
 - [`resample_template_to_img()`](https://hallquistlab.github.io/BrainGnomes/reference/resample_template_to_img.md)
   : Resample TemplateFlow Mask to fMRIPrep Image Using Python
 - [`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
@@ -119,3 +125,5 @@
   : Write a project configuration without interactive prompts
 - [`write_project_plan()`](https://hallquistlab.github.io/BrainGnomes/reference/write_project_plan.md)
   : Save an execution plan to YAML
+- [`write_qc_inventory()`](https://hallquistlab.github.io/BrainGnomes/reference/write_qc_inventory.md)
+  : Export a QC inventory as RDS, TSV tables, and a snapshot description

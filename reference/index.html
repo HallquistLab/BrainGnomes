@@ -26,6 +26,7 @@
     <li><a class="dropdown-item" href="../articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="../articles/motion_qc.html">Motion Quality Control and Framewise Displacement Summaries</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
+    <li><a class="dropdown-item" href="../articles/study_qc.html">Study QC inventory and dashboard</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -93,6 +94,13 @@
 
         </dt>
         <dd>This function submits a single script to a high-performance cluster using a scheduler (Slurm or TORQUE). It accepts a vector of arguments to be passed to the scheduler and a vector of environment variables that should be passed to the compute node at job execution.</dd>
+
+        <dt>
+
+          <code><a href="collect_qc_inventory.html">collect_qc_inventory()</a></code>
+
+        </dt>
+        <dd>Collect a study QC inventory from existing diagnostics</dd>
 
         <dt>
 
@@ -313,6 +321,13 @@
 
         <dt>
 
+          <code><a href="print.bg_qc_inventory.html">print(<i>&lt;bg_qc_inventory&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Print a compact QC snapshot summary</dd>
+
+        <dt>
+
           <code><a href="read_project_plan.html">read_project_plan()</a></code>
 
         </dt>
@@ -324,6 +339,13 @@
 
         </dt>
         <dd>Remove Specified Timepoints from a 4D NIfTI Image</dd>
+
+        <dt>
+
+          <code><a href="render_qc_dashboard.html">render_qc_dashboard()</a></code>
+
+        </dt>
+        <dd>Render a Quarto dashboard for a study QC snapshot</dd>
 
         <dt>
 
@@ -422,6 +444,13 @@
 
         </dt>
         <dd>Save an execution plan to YAML</dd>
+
+        <dt>
+
+          <code><a href="write_qc_inventory.html">write_qc_inventory()</a></code>
+
+        </dt>
+        <dd>Export a QC inventory as RDS, TSV tables, and a snapshot description</dd>
       </dl></div>
   </main></div>
 

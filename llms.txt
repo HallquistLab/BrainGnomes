@@ -39,6 +39,8 @@ stages. Requirements are stage-specific:
 | ICA-AROMA | Singularity-compatible fMRIPost-AROMA image |
 | Postprocessing | Singularity-compatible FSL image; Python 3 with `nibabel`, `nilearn`, and `templateflow` when template-mask resampling is used |
 | ROI extraction | Postprocessed BOLD inputs and compatible atlas/mask NIfTI files; direct [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md) calls can run locally, while project-managed extraction uses the scheduler |
+| QC inventory and TSV/RDS export | Existing project records; no scheduler or container |
+| Interactive QC dashboard | Quarto \>= 1.4 and optional R packages `reactable`, `plotly`, `htmltools`, `htmlwidgets`, `knitr`, and `rmarkdown` |
 
 BrainGnomes scripts invoke `singularity`; an Apptainer installation is
 suitable when it provides that compatibility command.
@@ -282,6 +284,33 @@ or `BrainGnomes validate-bids`. The
 [Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
 shows the primary workflow and these optional tools.
 
+## Study QC dashboard
+
+Collect existing workflow records and diagnostic files into a study
+snapshot:
+
+``` r
+
+qc <- collect_qc_inventory(scfg)
+qc$inventory  # derivative availability and QC summaries
+qc$workflow  # expected work and recorded execution states
+write_qc_inventory(qc, "reports/qc-tables-2026-09-11")
+render_qc_dashboard(qc, "reports/qc-dashboard-2026-09-11")
+```
+
+The Quarto dashboard includes searchable React tables, interactive
+metric plots, regional coverage, and links to existing reports and logs.
+Each output directory contains one snapshot; use a new directory to
+refresh it. Collection does not change workflow state or make inclusion
+decisions. See the [study QC
+vignette](https://hallquistlab.github.io/BrainGnomes/vignettes/study_qc.Rmd)
+for dependencies and interpretation.
+
+![Study QC dashboard showing synthetic
+data](reference/figures/qc-dashboard.png)
+
+Study QC dashboard showing synthetic data
+
 ## Documentation
 
 The [package website](https://hallquistlab.github.io/BrainGnomes/)
@@ -346,6 +375,8 @@ for the development workflow.
   using a scheduler (Slurm or TORQUE). It accepts a vector of arguments
   to be passed to the scheduler and a vector of environment variables
   that should be passed to the compute node at job execution.
+- [`collect_qc_inventory()`](https://hallquistlab.github.io/BrainGnomes/reference/collect_qc_inventory.md)
+  : Collect a study QC inventory from existing diagnostics
 - [`construct_bids_filename()`](https://hallquistlab.github.io/BrainGnomes/reference/construct_bids_filename.md)
   : Construct BIDS-Compatible Filenames from Extracted Entity Data
 - [`construct_bids_regex()`](https://hallquistlab.github.io/BrainGnomes/reference/construct_bids_regex.md)
@@ -413,10 +444,14 @@ for the development workflow.
   : Inspect or persist the resolved project execution model
 - [`postprocess_subject()`](https://hallquistlab.github.io/BrainGnomes/reference/postprocess_subject.md)
   : Postprocess a single fMRI BOLD image using a configured pipeline
+- [`print(`*`<bg_qc_inventory>`*`)`](https://hallquistlab.github.io/BrainGnomes/reference/print.bg_qc_inventory.md)
+  : Print a compact QC snapshot summary
 - [`read_project_plan()`](https://hallquistlab.github.io/BrainGnomes/reference/read_project_plan.md)
   : Read a saved execution plan
 - [`remove_nifti_volumes()`](https://hallquistlab.github.io/BrainGnomes/reference/remove_nifti_volumes.md)
   : Remove Specified Timepoints from a 4D NIfTI Image
+- [`render_qc_dashboard()`](https://hallquistlab.github.io/BrainGnomes/reference/render_qc_dashboard.md)
+  : Render a Quarto dashboard for a study QC snapshot
 - [`resample_template_to_img()`](https://hallquistlab.github.io/BrainGnomes/reference/resample_template_to_img.md)
   : Resample TemplateFlow Mask to fMRIPrep Image Using Python
 - [`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
@@ -447,6 +482,8 @@ for the development workflow.
   : Write a project configuration without interactive prompts
 - [`write_project_plan()`](https://hallquistlab.github.io/BrainGnomes/reference/write_project_plan.md)
   : Save an execution plan to YAML
+- [`write_qc_inventory()`](https://hallquistlab.github.io/BrainGnomes/reference/write_qc_inventory.md)
+  : Export a QC inventory as RDS, TSV tables, and a snapshot description
 
 # Articles
 
@@ -468,3 +505,5 @@ for the development workflow.
   Summaries](https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.md):
 - [Postprocessing
   Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.md):
+- [Study QC inventory and
+  dashboard](https://hallquistlab.github.io/BrainGnomes/articles/study_qc.md):

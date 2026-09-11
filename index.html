@@ -43,6 +43,7 @@
     <li><a class="dropdown-item" href="articles/local_onboarding.html">Local onboarding and prerequisites</a></li>
     <li><a class="dropdown-item" href="articles/motion_qc.html">Motion Quality Control and Framewise Displacement Summaries</a></li>
     <li><a class="dropdown-item" href="articles/postprocessing.html">Postprocessing Walkthrough</a></li>
+    <li><a class="dropdown-item" href="articles/study_qc.html">Study QC inventory and dashboard</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -121,6 +122,15 @@
 <tr>
 <td>ROI extraction</td>
 <td>Postprocessed BOLD inputs and compatible atlas/mask NIfTI files; direct <code><a href="reference/extract_rois.html">extract_rois()</a></code> calls can run locally, while project-managed extraction uses the scheduler</td>
+</tr>
+<tr>
+<td>QC inventory and TSV/RDS export</td>
+<td>Existing project records; no scheduler or container</td>
+</tr>
+<tr>
+<td>Interactive QC dashboard</td>
+<td>Quarto &gt;= 1.4 and optional R packages <code>reactable</code>, <code>plotly</code>, <code>htmltools</code>, <code>htmlwidgets</code>, <code>knitr</code>, and <code>rmarkdown</code>
+</td>
 </tr>
 </tbody>
 </table>
@@ -233,6 +243,21 @@
 <div class="sourceCode" id="cb12"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
 <span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
 <p>Cancellation follows the same preview-first pattern and affects only queued or running scheduler jobs; it does not delete project data or outputs. BIDS validation remains independently schedulable with <code><a href="reference/run_bids_validation.html">run_bids_validation()</a></code> or <code>BrainGnomes validate-bids</code>. The <a href="https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> shows the primary workflow and these optional tools.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="study-qc-dashboard">Study QC dashboard<a class="anchor" aria-label="anchor" href="#study-qc-dashboard"></a>
+</h2>
+<p>Collect existing workflow records and diagnostic files into a study snapshot:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">qc</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/collect_qc_inventory.html">collect_qc_inventory</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<span><span class="va">qc</span><span class="op">$</span><span class="va">inventory</span>  <span class="co"># derivative availability and QC summaries</span></span>
+<span><span class="va">qc</span><span class="op">$</span><span class="va">workflow</span>  <span class="co"># expected work and recorded execution states</span></span>
+<span><span class="fu"><a href="reference/write_qc_inventory.html">write_qc_inventory</a></span><span class="op">(</span><span class="va">qc</span>, <span class="st">"reports/qc-tables-2026-09-11"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/render_qc_dashboard.html">render_qc_dashboard</a></span><span class="op">(</span><span class="va">qc</span>, <span class="st">"reports/qc-dashboard-2026-09-11"</span><span class="op">)</span></span></code></pre></div>
+<p>The Quarto dashboard includes searchable React tables, interactive metric plots, regional coverage, and links to existing reports and logs. Each output directory contains one snapshot; use a new directory to refresh it. Collection does not change workflow state or make inclusion decisions. See the <a href="vignettes/study_qc.Rmd">study QC vignette</a> for dependencies and interpretation.</p>
+<div class="float">
+<img src="reference/figures/qc-dashboard.png" alt="Study QC dashboard showing synthetic data"><div class="figcaption">Study QC dashboard showing synthetic data</div>
 </div>
 </div>
 <div class="section level2">

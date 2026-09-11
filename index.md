@@ -39,6 +39,8 @@ stages. Requirements are stage-specific:
 | ICA-AROMA | Singularity-compatible fMRIPost-AROMA image |
 | Postprocessing | Singularity-compatible FSL image; Python 3 with `nibabel`, `nilearn`, and `templateflow` when template-mask resampling is used |
 | ROI extraction | Postprocessed BOLD inputs and compatible atlas/mask NIfTI files; direct [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md) calls can run locally, while project-managed extraction uses the scheduler |
+| QC inventory and TSV/RDS export | Existing project records; no scheduler or container |
+| Interactive QC dashboard | Quarto \>= 1.4 and optional R packages `reactable`, `plotly`, `htmltools`, `htmlwidgets`, `knitr`, and `rmarkdown` |
 
 BrainGnomes scripts invoke `singularity`; an Apptainer installation is
 suitable when it provides that compatibility command.
@@ -281,6 +283,33 @@ outputs. BIDS validation remains independently schedulable with
 or `BrainGnomes validate-bids`. The
 [Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html)
 shows the primary workflow and these optional tools.
+
+## Study QC dashboard
+
+Collect existing workflow records and diagnostic files into a study
+snapshot:
+
+``` r
+
+qc <- collect_qc_inventory(scfg)
+qc$inventory  # derivative availability and QC summaries
+qc$workflow  # expected work and recorded execution states
+write_qc_inventory(qc, "reports/qc-tables-2026-09-11")
+render_qc_dashboard(qc, "reports/qc-dashboard-2026-09-11")
+```
+
+The Quarto dashboard includes searchable React tables, interactive
+metric plots, regional coverage, and links to existing reports and logs.
+Each output directory contains one snapshot; use a new directory to
+refresh it. Collection does not change workflow state or make inclusion
+decisions. See the [study QC
+vignette](https://hallquistlab.github.io/BrainGnomes/vignettes/study_qc.Rmd)
+for dependencies and interpretation.
+
+![Study QC dashboard showing synthetic
+data](reference/figures/qc-dashboard.png)
+
+Study QC dashboard showing synthetic data
 
 ## Documentation
 

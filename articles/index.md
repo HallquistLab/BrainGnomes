@@ -18,3 +18,5 @@
   Summaries](https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.md):
 - [Postprocessing
   Walkthrough](https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.md):
+- [Study QC inventory and
+  dashboard](https://hallquistlab.github.io/BrainGnomes/articles/study_qc.md):

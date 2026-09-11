@@ -13,6 +13,7 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/articles/local_onboarding.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/articles/motion_qc.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/articles/postprocessing.html</loc></url>
+<url><loc>https://hallquistlab.github.io/BrainGnomes/articles/study_qc.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/authors.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/index.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/news/index.html</loc></url>
@@ -31,6 +32,7 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/capture_output_manifest.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/check_status_reconciliation.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/cluster_job_submit.html</loc></url>
+<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/collect_qc_inventory.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/compare_lists.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/compute_brain_mask.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/compute_spike_regressors.html</loc></url>
@@ -95,6 +97,7 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/postprocess_confounds.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/postprocess_subject.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/prepare_intensity_reference.html</loc></url>
+<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/print.bg_qc_inventory.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/process_subject.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/prompt_directory.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/prompt_input.html</loc></url>
@@ -102,6 +105,7 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/read_multiline_input.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/read_project_plan.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/remove_nifti_volumes.html</loc></url>
+<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/render_qc_dashboard.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/resample_template_to_img.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/reset_tracking_sqlite_db.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/resolve_intensity_normalization_mode.html</loc></url>
@@ -165,5 +169,6 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/wait_for_job.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/write_project_config.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/write_project_plan.html</loc></url>
+<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/write_qc_inventory.html</loc></url>
 </urlset>
 

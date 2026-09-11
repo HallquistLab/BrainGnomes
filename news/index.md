@@ -2,16 +2,31 @@
 
 ## BrainGnomes (development version)
 
+- Add
+  [`collect_qc_inventory()`](https://hallquistlab.github.io/BrainGnomes/reference/collect_qc_inventory.md),
+  [`write_qc_inventory()`](https://hallquistlab.github.io/BrainGnomes/reference/write_qc_inventory.md),
+  and
+  [`render_qc_dashboard()`](https://hallquistlab.github.io/BrainGnomes/reference/render_qc_dashboard.md)
+  for study QC snapshots. R objects and TSV tables join configured
+  workflow expectations, job history, derivative availability,
+  postprocessing audits, original fMRIPrep motion summaries, MRIQC IQMs,
+  censor masks, and regional voxel retention. The optional Quarto
+  dashboard includes searchable React tables, interactive plots,
+  expandable evidence, and snapshot downloads. Collection is read-only;
+  no human review or inclusion decisions are implemented.
+
 - Consolidate project creation in
   [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
   It now supports portable, prompt-free creation with
   `interactive = FALSE`, including templates and overwrite control. The
   headless `BrainGnomes init` command uses this pathway, and the
   redundant `initialize_project()` entry point has been removed.
+
 - Remove the redundant `doctor()` R alias before 1.0. Use
   [`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md)
   for R preflight checks; the `BrainGnomes doctor` CLI command remains
   available.
+
 - Harmonize project inputs across the R lifecycle API.
   [`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md),
   [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md),
@@ -24,6 +39,7 @@
   now default to the current working directory and accept project
   configuration objects, YAML files, or project directories where
   applicable.
+
 - Distinguish optional request plans from final scheduler contracts.
   Plans now report whether their subject scope is resolved or deferred.
   Flywheel runs record the realized post-sync scope before downstream
