@@ -1,6 +1,10 @@
 make_provenance_project <- function() {
   root <- tempfile("run-provenance-")
-  cfg <- initialize_project("provenance", root, interactive = FALSE)
+  cfg <- setup_project(
+    project_name = "provenance",
+    project_directory = root,
+    interactive = FALSE
+  )
   dir.create(file.path(cfg$metadata$bids_directory, "sub-01"), recursive = TRUE)
   container <- file.path(root, "fmriprep.sif")
   license <- file.path(root, "license.txt")

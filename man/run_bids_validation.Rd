@@ -4,11 +4,17 @@
 \alias{run_bids_validation}
 \title{Run BIDS validation on the project BIDS directory}
 \usage{
-run_bids_validation(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL)
+run_bids_validation(
+  scfg = getwd(),
+  outfile = NULL,
+  wait_jobs = NULL,
+  sequence_id = NULL
+)
 }
 \arguments{
-\item{scfg}{A \code{bg_project_cfg} object returned by \code{setup_project()} or
-\code{load_project()}.}
+\item{scfg}{A \code{bg_project_cfg} object, YAML configuration file, or project
+directory containing \code{project_config.yaml}. Defaults to the current working
+directory.}
 
 \item{outfile}{The output HTML report path for bids-validator. Relative paths are
 written under \code{scfg$metadata$log_directory} (to avoid contaminating the BIDS

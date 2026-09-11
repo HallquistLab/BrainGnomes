@@ -80,14 +80,16 @@ print_extract_dry_run_plan <- function(scfg, streams) {
   invisible(NULL)
 }
 
-#' Run the processing pipeline
+#' Run the project workflow
 #'
 #' This remains the standard execution path after [setup_project()]. It resolves
 #' the same stages, streams, subject/session scope, and force setting exposed by
 #' [plan_project()] before submission; calling `plan_project()` first is optional.
 #'
-#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
-#' @param steps Character vector of pipeline stages to execute. Supported stages
+#' @param scfg A `bg_project_cfg` object, YAML configuration file, or project
+#'   directory containing `project_config.yaml`. Defaults to the current working
+#'   directory.
+#' @param steps Character vector of project stages to execute. Supported stages
 #'   are `"flywheel_sync"`, `"bids_conversion"`, `"mriqc"`, `"fmriprep"`,
 #'   `"aroma"`, `"postprocess"`, and `"extract_rois"`. Use `"all"` to run all
 #'   enabled stages. If `NULL`, the user will be prompted for which stages to run.
@@ -138,10 +140,11 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
-run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL, 
+run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, postprocess_streams = NULL,
   extract_streams = NULL, debug = FALSE, force = FALSE, dry_run = FALSE,
   log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")) {
 
+  scfg <- project_config_from_input(scfg)
   checkmate::assert_class(scfg, "bg_project_cfg")
   provenance_context <- attr(scfg, "provenance_context", exact = TRUE)
   checkmate::assert_character(steps, null.ok = TRUE)
@@ -173,7 +176,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
 
   cat(glue("
-    \nRunning processing pipeline for: {scfg$metadata$project_name}
+    \nRunning project workflow for: {scfg$metadata$project_name}
       Project directory:   {pretty_arg(scfg$metadata$project_directory)}
       DICOM directory:     {pretty_arg(scfg$metadata$dicom_directory)}
       BIDS directory:      {pretty_arg(scfg$metadata$bids_directory)}
@@ -272,7 +275,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     }
 
     # check whether to run in debug mode
-    scfg$debug <- prompt_input(instruct = "Run pipeline in debug mode? This will echo commands to logs, but not run them.", type = "flag")
+    scfg$debug <- prompt_input(instruct = "Run the project workflow in debug mode? This will echo commands to logs, but not run them.", type = "flag")
     scfg$force <- prompt_input(instruct = "Force (re-run) each processing step, even if it appears to be complete?", type = "flag")
     scfg$dry_run <- prompt_input(
       instruct = "Run as dry run? This validates configuration and reports planned jobs without submitting them.",

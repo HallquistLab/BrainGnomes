@@ -4,8 +4,9 @@
 #' through this function. It is not a \code{run_project()} stage and can be
 #' invoked whenever validation of the project BIDS directory is desired.
 #'
-#' @param scfg A \code{bg_project_cfg} object returned by \code{setup_project()} or
-#'   \code{load_project()}.
+#' @param scfg A `bg_project_cfg` object, YAML configuration file, or project
+#'   directory containing `project_config.yaml`. Defaults to the current working
+#'   directory.
 #' @param outfile The output HTML report path for bids-validator. Relative paths are
 #'   written under \code{scfg$metadata$log_directory} (to avoid contaminating the BIDS
 #'   dataset); absolute paths are used as provided. If \code{NULL}, the value stored in
@@ -21,7 +22,8 @@
 #' \dontrun{
 #'   run_bids_validation(study_config, outfile = "bids_validator_output.html")
 #' }
-run_bids_validation <- function(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL) {
+run_bids_validation <- function(scfg = getwd(), outfile = NULL, wait_jobs = NULL, sequence_id = NULL) {
+  scfg <- project_config_from_input(scfg)
   checkmate::assert_class(scfg, "bg_project_cfg")
   if (is.null(sequence_id)) sequence_id <- uuid::UUIDgenerate()
   checkmate::assert_string(sequence_id)

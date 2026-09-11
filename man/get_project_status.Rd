@@ -4,10 +4,12 @@
 \alias{get_project_status}
 \title{Get processing status for all subjects}
 \usage{
-get_project_status(scfg)
+get_project_status(scfg = getwd())
 }
 \arguments{
-\item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
+\item{scfg}{A \code{bg_project_cfg} object, YAML configuration file, or project
+directory containing \code{project_config.yaml}. Defaults to the current working
+directory.}
 }
 \value{
 A data.frame with one row per subject/session containing completion

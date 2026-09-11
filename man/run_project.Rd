@@ -2,10 +2,10 @@
 % Please edit documentation in R/run_project.R
 \name{run_project}
 \alias{run_project}
-\title{Run the processing pipeline}
+\title{Run the project workflow}
 \usage{
 run_project(
-  scfg,
+  scfg = getwd(),
   steps = NULL,
   subject_filter = NULL,
   postprocess_streams = NULL,
@@ -17,9 +17,11 @@ run_project(
 )
 }
 \arguments{
-\item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
+\item{scfg}{A \code{bg_project_cfg} object, YAML configuration file, or project
+directory containing \code{project_config.yaml}. Defaults to the current working
+directory.}
 
-\item{steps}{Character vector of pipeline stages to execute. Supported stages
+\item{steps}{Character vector of project stages to execute. Supported stages
 are \code{"flywheel_sync"}, \code{"bids_conversion"}, \code{"mriqc"}, \code{"fmriprep"},
 \code{"aroma"}, \code{"postprocess"}, and \code{"extract_rois"}. Use \code{"all"} to run all
 enabled stages. If \code{NULL}, the user will be prompted for which stages to run.

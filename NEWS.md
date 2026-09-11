@@ -9,6 +9,19 @@
   downloads. Collection is read-only; no human review or inclusion decisions
   are implemented.
 
+* Consolidate project creation in `setup_project()`. It now supports portable,
+  prompt-free creation with `interactive = FALSE`, including templates and
+  overwrite control. The headless `BrainGnomes init` command uses this pathway,
+  and the redundant `initialize_project()` entry point has been removed.
+* Remove the redundant `doctor()` R alias before 1.0. Use
+  `doctor_project()` for R preflight checks; the `BrainGnomes doctor` CLI
+  command remains available.
+* Harmonize project inputs across the R lifecycle API. `load_project()`,
+  `edit_project()`, `validate_project_config()`, `doctor_project()`,
+  `plan_project()`, `run_project()`, `run_bids_validation()`, status and log
+  helpers, provenance inspection, retry, and cancellation now default to the
+  current working directory and accept project configuration objects, YAML
+  files, or project directories where applicable.
 * Distinguish optional request plans from final scheduler contracts. Plans now
   report whether their subject scope is resolved or deferred. Flywheel runs
   record the realized post-sync scope before downstream submission; every
@@ -70,7 +83,7 @@ Released 2026-09-02
 * Extend the established `setup_project()` -> `run_project()` workflow across the
   complete R and command-line lifecycle without adding required setup steps.
   Optional inspection tooling now provides non-mutating configuration validation,
-  `doctor()` preflight checks, and serializable execution plans; direct runs
+  `doctor_project()` preflight checks, and serializable execution plans; direct runs
   resolve the same execution model exposed by plans. Run handles, tracked-run
   views, log discovery, non-interactive diagnosis, failed-job retry planning, and
   guarded scheduler cancellation support observation and recovery. Flywheel
@@ -103,8 +116,8 @@ Released 2026-09-02
 * Make guided project setup easier to scan with terminal-width section rules,
   wrapped instruction paragraphs, consistently indented lists, and prompts on
   their own lines. The shared prompt renderer retains the TTY-safe input path
-  used by `Rscript`. Headless setup through
-  `BrainGnomes setup_project --non-interactive` remains fully argument-driven.
+  used by `Rscript`. Headless setup through `BrainGnomes setup_project` remains
+  fully argument-driven.
 * Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
   distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask conditions.
   Validation now enforces the selected detrending-plus-MAD estimator, uses up

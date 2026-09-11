@@ -4,13 +4,13 @@
 \alias{edit_project}
 \title{Interactively edit a project configuration by field (field-guided)}
 \usage{
-edit_project(input = NULL)
+edit_project(input = getwd())
 }
 \arguments{
 \item{input}{A \code{bg_project_cfg} object, a YAML file path, or a project
-directory containing \code{project_config.yaml}. If a directory is provided
-but the file is absent, \code{edit_project} will stop. This argument cannot
-be \code{NULL}.}
+directory containing \code{project_config.yaml}. Defaults to the current
+working directory. If a directory is provided but the file is absent,
+\code{edit_project} will stop.}
 }
 \value{
 An updated \code{bg_project_cfg} object. The updated configuration is

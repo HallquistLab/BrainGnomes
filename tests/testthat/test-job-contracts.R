@@ -1,6 +1,10 @@
 make_contract_project <- function() {
   root <- tempfile("contract-project-")
-  cfg <- initialize_project("contract", root, interactive = FALSE)
+  cfg <- setup_project(
+    project_name = "contract",
+    project_directory = root,
+    interactive = FALSE
+  )
   dir.create(file.path(cfg$metadata$bids_directory, "sub-01"), recursive = TRUE)
   container <- file.path(root, "fmriprep.sif")
   license <- file.path(root, "license.txt")

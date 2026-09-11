@@ -2,25 +2,56 @@
 % Please edit documentation in R/setup_project.R
 \name{setup_project}
 \alias{setup_project}
-\title{Setup the processing pipeline for a new fMRI study}
+\title{Set up a BrainGnomes project workflow for a new fMRI study}
 \usage{
-setup_project(input = NULL, fields = NULL)
+setup_project(
+  input = NULL,
+  fields = NULL,
+  project_name = NULL,
+  project_directory = NULL,
+  template = NULL,
+  interactive = TRUE,
+  overwrite = FALSE
+)
 }
 \arguments{
 \item{input}{A \code{bg_project_cfg} object, a path to a YAML file, or a project
 directory containing \code{project_config.yaml}. If a directory is supplied
 but the file is missing, \code{setup_project} starts from an empty list with
-a warning. For \code{setup_project} only, this argument may also be
-\code{NULL} to create a new configuration from scratch.}
+a warning. This argument may also be \code{NULL} to create a new
+configuration from scratch. In non-interactive mode, \code{input} can be used as
+the starting template.}
 
-\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all
+fields will be prompted for. Only available in interactive mode.}
+
+\item{project_name}{Project label. Required in non-interactive mode. When
+supplied in interactive mode, it is used as the initial project name.}
+
+\item{project_directory}{Project root directory. Required in non-interactive
+mode. When supplied in interactive mode, it is used as the initial project
+directory.}
+
+\item{template}{Optional configuration object, YAML file, or project
+directory to use as a base. Supply either \code{input} or \code{template}, not both.}
+
+\item{interactive}{Whether to use the guided configuration workflow. Defaults
+to \code{TRUE} to preserve the standard interactive R workflow.}
+
+\item{overwrite}{Replace an existing \code{project_config.yaml} in non-interactive
+mode.}
 }
 \value{
-A \code{bg_project_cfg} list containing the project configuration. New fields are added based on user input,
-and missing entries are filled with defaults. The configuration is written
-to \code{project_config.yaml} in the project directory unless the user declines
-to overwrite an existing file.
+A \code{bg_project_cfg} list containing the project configuration. New
+fields are added based on user input or portable defaults. The configuration
+is written to \code{project_config.yaml} in the project directory. Interactive
+setup asks before replacing a changed file; non-interactive setup requires
+\code{overwrite = TRUE}.
 }
 \description{
-Setup the processing pipeline for a new fMRI study
+By default, this function opens the guided project-configuration workflow.
+Set \code{interactive = FALSE} to create a portable project from deterministic
+defaults without prompting. Non-interactive setup creates the project and
+standard data directories, disables all processing stages, and writes
+\code{project_config.yaml}.
 }
