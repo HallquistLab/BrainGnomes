@@ -6,6 +6,8 @@
   Quickstart](https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.md):
 - [Building Singularity containers for
   BrainGnomes](https://hallquistlab.github.io/BrainGnomes/articles/building_containers.md):
+- [Portable derivative provenance and methods
+  text](https://hallquistlab.github.io/BrainGnomes/articles/derivative_provenance.md):
 - [Inspecting and Diagnosing Pipeline
   Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md):
 - [Extracting ROI Timeseries and

@@ -34,6 +34,8 @@
   : Run non-mutating project and runtime preflight checks
 - [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
   : Interactively edit a project configuration by field (field-guided)
+- [`export_derivative_provenance()`](https://hallquistlab.github.io/BrainGnomes/reference/export_derivative_provenance.md)
+  : Export a derivative with its portable processing record
 - [`extract_bids_info()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_bids_info.md)
   : Extract fields from BIDS filenames
 - [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
@@ -89,6 +91,8 @@
   : Postprocess a single fMRI BOLD image using a configured pipeline
 - [`print(`*`<bg_qc_inventory>`*`)`](https://hallquistlab.github.io/BrainGnomes/reference/print.bg_qc_inventory.md)
   : Print a compact QC snapshot summary
+- [`read_derivative_provenance()`](https://hallquistlab.github.io/BrainGnomes/reference/read_derivative_provenance.md)
+  : Read the portable record associated with a derivative
 - [`read_project_plan()`](https://hallquistlab.github.io/BrainGnomes/reference/read_project_plan.md)
   : Read a saved execution plan
 - [`remove_nifti_volumes()`](https://hallquistlab.github.io/BrainGnomes/reference/remove_nifti_volumes.md)

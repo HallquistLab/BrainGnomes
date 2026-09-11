@@ -48,6 +48,7 @@ a filtered confounds file for downstream analyses."></head><body>
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a></li>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/derivative_provenance.html">Portable derivative provenance and methods text</a></li>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Inspecting and Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
@@ -117,7 +118,10 @@ intensity-reference provenance, the reference-core mask, a PSC multiplier
 map when requested, and logging to a subject-level log file. When
 postprocessing validation is enabled, a machine-readable JSON audit is
 written beside the subject log. Newly computed final images remain in the
-scratch workspace until their last-step validation has completed.</p>
+scratch workspace until their last-step validation has completed.
+A portable JSON sidecar and a <code>.provenance</code> companion directory contain
+resolved processing details, methods text requiring human review,
+bibliography, available upstream reports, and separate attempt records.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

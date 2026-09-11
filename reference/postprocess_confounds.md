@@ -14,7 +14,8 @@ postprocess_confounds(
   processing_sequence,
   output_bids_info,
   fsl_img = NULL,
-  lg = NULL
+  lg = NULL,
+  provenance = NULL
 )
 ```
 
@@ -44,6 +45,10 @@ postprocess_confounds(
 - lg:
 
   Logger object for messages.
+
+- provenance:
+
+  Optional internal derivative-record collector.
 
 ## Value
 

@@ -124,7 +124,9 @@ the written timeseries (`timeseries`) and correlation matrix
 (`correlation`, or `NULL` if not computed), plus the voxel-retention
 table (`diagnostics`) when requested. Output ROI columns and
 connectivity dimensions include every positive atlas label, including
-labels with no usable voxels.
+labels with no usable voxels. Each written derivative also receives a
+portable provenance sidecar and methods/bibliography companions. Their
+paths are returned in `provenance`.
 
 ## Details
 

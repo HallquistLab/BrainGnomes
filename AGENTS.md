@@ -25,11 +25,14 @@
 
 ## Coding Style & Naming Conventions
 
-- R: 2-space indent, no tabs; prefer `snake_case` for functions/objects.
-  Do not introduce helper functions whose names begin with a period
-  (`.`); internal helpers also use ordinary `snake_case` names.
-- Give all new functions clear documentation headers and include inline
-  comments explaining non-obvious logic, assumptions, and data handling.
+- R: 2-space indent, no tabs; prefer descriptive `snake_case` names for
+  functions/objects. Do not prefix new helper functions with a period
+  (`.`), including internal helpers.
+- Give all new functions clear headers describing their purpose, inputs,
+  and outputs. Use roxygen2 for top-level R function headers (`@noRd`
+  for internal helpers) and ordinary comment headers for nested
+  functions. Add inline documentation for non-obvious logic,
+  assumptions, and state transitions.
 - C++ (`src/`): follow tidy, minimal-include style; expose via Rcpp
   attributes; keep headers local.
 - Roxygen2 for docs; include `@export`, `@param`, `@return`, and
