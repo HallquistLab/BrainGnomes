@@ -1,0 +1,45 @@
+/* Shared visual language: calm surfaces, strong hierarchy, and readable evidence. */
+:root {
+  --qc-ink: #183044;
+  --qc-muted: #647789;
+  --qc-teal: #168b80;
+}
+body { color: var(--qc-ink); background: #edf2f6; }
+.navbar { background: #183044 !important; border-bottom: 3px solid #168b80; }
+.navbar-brand { font-weight: 650; letter-spacing: -.02em; }
+.navbar .navbar-brand, .navbar .nav-link { color: #e7f1f6 !important; }
+.navbar .navbar-title, .navbar .navbar-title a { color: #e7f1f6 !important; }
+.navbar .nav-link.active { color: #155e71 !important; background: #e9f5f4; }
+.card { border: 1px solid #e0e7ec; border-radius: 12px; box-shadow: 0 3px 14px #18304406; }
+.card-header { background: white; border-bottom-color: #edf2f6; font-weight: 650; padding: 1rem 1.2rem; }
+.card-body { padding: 1.1rem 1.2rem; }
+.card-body > p { color: #52687a; font-size: .92rem; max-width: 105ch; }
+.valuebox { border-radius: 12px; color: white !important; }
+.valuebox .value-box-title, .valuebox .value-box-value, .valuebox i { color: white !important; }
+.qc-about p { font-size: .86rem; line-height: 1.4; margin-bottom: .7rem; }
+.qc-about h3 { font-size: 1.2rem; margin-top: .7rem; }
+.qc-eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .15em; color: var(--qc-teal); }
+.qc-note { padding: .85rem 1rem; background: #edf6f5; border-left: 3px solid var(--qc-teal); border-radius: 0 8px 8px 0; }
+.qc-muted { color: var(--qc-muted); }
+.qc-downloads { display: flex; flex-wrap: wrap; gap: .6rem; }
+.qc-downloads a { padding: .45rem .75rem; background: #edf2f6; border-radius: 7px; font-size: .85rem; text-decoration: none; font-weight: 600; }
+.qc-detail { padding: 1.2rem 1.5rem; background: #f7fafb; border-left: 3px solid var(--qc-teal); overflow-wrap: anywhere; }
+.qc-detail h4 { font-size: 1rem; }
+.qc-detail p { margin-bottom: .35rem; font-size: .85rem; }
+.qc-evidence { padding-left: 1.2rem; }
+.qc-evidence li { margin-bottom: .65rem; }
+.qc-path { display: block; color: var(--qc-muted); font-family: monospace; font-size: .72rem; overflow-wrap: anywhere; }
+.qc-badge { display: inline-block; padding: .15rem .5rem; border-radius: 5px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.qc-teal { color: #16695f; background: #e4f4ef; }
+.qc-red { color: #a63341; background: #fcecef; }
+.qc-neutral { color: #566778; background: #edf1f5; }
+.reactable { font-size: .82rem; }
+.reactable .rt-tbody { max-height: 420px; overflow-y: auto; }
+.qc-detail { white-space: normal; }
+.rt-search { min-width: 240px; margin-bottom: .8rem; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #468acf; outline-offset: 2px; }
+@media (max-width: 768px) {
+  .card-body { padding: .8rem; }
+  .qc-detail { padding: .8rem; }
+  .reactable .rt-tbody { max-height: 320px; }
+}

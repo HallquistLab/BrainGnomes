@@ -1,0 +1,4 @@
+/*-- scss:defaults --*/
+// Use local system fonts so rendering and viewing never require a font service.
+$web-font-path: false;
+$font-family-sans-serif: system-ui, -apple-system, "Segoe UI", sans-serif;

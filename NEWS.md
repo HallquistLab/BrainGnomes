@@ -1,5 +1,14 @@
 # BrainGnomes (development version)
 
+* Add `collect_qc_inventory()`, `write_qc_inventory()`, and
+  `render_qc_dashboard()` for study QC snapshots. R objects and TSV tables join
+  configured workflow expectations, job history, derivative availability,
+  postprocessing audits, original fMRIPrep motion summaries, MRIQC IQMs, censor
+  masks, and regional voxel retention. The optional Quarto dashboard includes
+  searchable React tables, interactive plots, expandable evidence, and snapshot
+  downloads. Collection is read-only; no human review or inclusion decisions
+  are implemented.
+
 * Consolidate project creation in `setup_project()`. It now supports portable,
   prompt-free creation with `interactive = FALSE`, including templates and
   overwrite control. The headless `BrainGnomes init` command uses this pathway,

@@ -1,0 +1,264 @@
+
+```{r}
+#| include: false
+# Load the exported snapshot and prebuilt widgets. Rendering does not query
+# project files, the tracking database, or a scheduler.
+library(htmltools)
+library(reactable)
+library(plotly)
+qc <- readRDS(params$snapshot)
+widgets <- readRDS(params$widgets)
+```
+
+# Overview
+
+## Row {height=140}
+
+```{r}
+#| content: valuebox
+list(icon = "people", color = "#183044", title = "Participants in workflow scope",
+     value = length(unique(na.omit(qc$workflow$sub_id))))
+```
+
+```{r}
+#| content: valuebox
+list(icon = "layers", color = "#127a70", title = "Available derivative records",
+     value = paste(sum(qc$inventory$output_status == "available"), "/", nrow(qc$inventory)))
+```
+
+```{r}
+#| content: valuebox
+list(icon = "exclamation-circle", color = "#b84653", title = "Missing derivative records",
+     value = sum(qc$inventory$output_status == "missing"))
+```
+
+```{r}
+#| content: valuebox
+list(icon = "activity", color = "#326eac", title = "Workflow units completed",
+     value = paste(sum(qc$workflow$status == "COMPLETED"), "/", nrow(qc$workflow)))
+```
+
+## Row {height=440}
+
+### Column {width=65%}
+
+```{r}
+#| title: Workflow progress
+widgets$workflow_plot
+```
+
+### Column {width=35%}
+
+```{r}
+#| title: About this snapshot
+tags$div(class = "qc-about",
+  tags$p(class = "qc-eyebrow", "BRAINGNOMES / QC SNAPSHOT"),
+  tags$h3(qc$metadata$project),
+  tags$p(tags$strong("Collected: "), qc$metadata$created_at),
+  tags$p(if (qc$metadata$scheduler_refreshed) "Active jobs compared with the scheduler at collection time."
+    else "Database snapshot; the scheduler was not queried."),
+  tags$p("Collect a new snapshot to refresh this dashboard."),
+  tags$p(class = "qc-note", "Workflow completion, file availability, and computational QC checks answer different questions. None establishes that an image is scientifically acceptable."),
+  tags$div(class = "qc-downloads",
+    tags$a(href = "inventory.tsv", download = "inventory.tsv", "Derivative TSV"),
+    tags$a(href = "workflow.tsv", download = "workflow.tsv", "Workflow TSV"),
+    tags$a(href = "inventory.rds", download = "inventory.rds", "Complete R object"))
+)
+```
+
+## Row {height=410}
+
+::: {.card title="Workflow inventory"}
+
+Recorded states are shown alongside configured work with no tracking record.
+Units can cover a whole participant/session and several acquisitions. Missing
+upstream inputs remain in this table before derivative paths can be resolved.
+
+```{r}
+widgets$workflow
+```
+
+:::
+
+# Derivatives
+
+## Row {height=620}
+
+::: {.card title="Explore outputs and evidence"}
+
+Search or filter any column, then expand a row for source files, diagnostics,
+validation messages, and exact output-manifest associations. “Available” means
+a nonempty file exists. “Attention” marks missing/empty outputs, failed or
+invalid audits, recorded ROI loss, shared destinations, and failed workflow
+context; it is not an exclusion recommendation.
+
+```{r}
+widgets$inventory
+```
+
+:::
+
+## Row {height=350}
+
+::: {.card title="Raw BOLD acquisitions"}
+
+Raw files are listed separately from derivative records; echoes and acquisition
+labels are retained. One acquisition can produce multiple spaces, streams, and
+atlas outputs. Derivative counts therefore are not scan counts.
+
+```{r}
+widgets$acquisitions
+```
+
+:::
+
+# QC metrics
+
+## Row {height=530}
+
+::: {.card title="Motion and retained data"}
+
+Choose a metric/stage/stream/task/atlas group from the plot menu. Hover for
+values, units, and observed/missing denominators. Each evidence source appears
+once within its group. Values are descriptive; no dashboard cutoff is applied.
+
+```{r}
+widgets$metric_plot
+```
+
+:::
+
+## Row {height=400}
+
+::: {.card title="Metric definitions and sources"}
+
+FD comes from the original fMRIPrep confounds. Censor retention describes the
+saved mask and does not establish whether volumes were removed. ROI retention
+uses the extraction rule saved in the diagnostics. Missing diagnostics remain
+unavailable, rather than being interpreted as a passing result.
+MRIQC metrics retain their upstream names and definitions in a separate group.
+
+```{r}
+widgets$metrics
+```
+
+:::
+
+## Row {height=320}
+
+::: {.card title="Postprocessing validation checks"}
+
+Audits test computational operations. Their timestamps and source files are
+retained in the evidence table; an older audit may outlive its derivative.
+
+```{r}
+widgets$checks
+```
+
+:::
+
+## Row {height=350}
+
+::: {.card title="Regional voxel coverage"}
+
+Filter by participant, stream, atlas, or retained status to locate individual
+ROIs with limited usable voxels. The saved reason explains whether a label
+fell outside the mask, contained unusable BOLD signal, or missed its threshold.
+
+```{r}
+widgets$regions
+```
+
+:::
+
+# Workflow & evidence
+
+## Row {.tabset height=520}
+
+::: {.card title="Job attempts"}
+
+Expand a job for stdout/stderr, its submission manifest, and runtime receipt.
+Historical attempts are retained. A newer attempt does not establish the origin
+of an existing derivative.
+
+```{r}
+widgets$jobs
+```
+
+:::
+
+::: {.card title="Active jobs"}
+
+```{r}
+widgets$active
+```
+
+:::
+
+::: {.card title="Scheduler comparison"}
+
+```{r}
+widgets$reconciliation
+```
+
+:::
+
+::: {.card title="Output manifest checks"}
+
+These checks compare exact paths, sizes, and modification times against saved
+job manifests. They do not verify file contents or scientific quality.
+
+```{r}
+widgets$manifests
+```
+
+:::
+
+## Row {.tabset height=440}
+
+::: {.card title="Evidence library"}
+
+Links open original reports and files. Keep the source project accessible;
+moving this dashboard alone does not copy upstream evidence or its assets.
+
+```{r}
+widgets$evidence
+```
+
+:::
+
+::: {.card title="Collection issues"}
+
+Malformed diagnostics and unresolved associations appear here. Other available
+evidence remains accessible; a collection problem does not imply a QC pass.
+
+```{r}
+widgets$issues
+```
+
+:::
+
+::: {.card title="Downloads & interpretation"}
+
+- [Raw acquisitions](acquisitions.tsv)
+- [Derivative inventory](inventory.tsv)
+- [Workflow inventory](workflow.tsv)
+- [Metric values, definitions, and sources](metrics.tsv)
+- [Regional voxel coverage](regions.tsv)
+- [Validation checks](checks.tsv)
+- [Evidence paths and timestamps](evidence.tsv)
+- [Job history](jobs.tsv) and [logical attempts](attempts.tsv)
+- [Output manifest checks](manifest_files.tsv)
+- [Collection issues](issues.tsv)
+- [Complete R object](inventory.rds) and [snapshot metadata](snapshot.json)
+
+All downloads describe the same snapshot. Expected native outputs are resolved
+from the **current configuration and discovered upstream inputs**. Until inputs
+exist, workflow expectations provide the denominator; output spaces and echo
+combinations are not guessed. Configurations may have changed since a historical
+attempt. Consult its saved manifest and receipt for its execution settings.
+
+This dashboard supports inspection and discussion. It does not collect human
+ratings, make inclusion decisions, or modify the pipeline.
+
+:::
