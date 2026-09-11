@@ -28,6 +28,10 @@
   expandable evidence, and snapshot downloads. Collection is read-only;
   no human review or inclusion decisions are implemented.
 
+- Treat platform-equivalent filesystem spellings as one QC path
+  identity, preventing duplicate derivative rows from Windows short/long
+  path aliases.
+
 - Consolidate project creation in
   [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
   It now supports portable, prompt-free creation with
