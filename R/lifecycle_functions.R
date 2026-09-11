@@ -7,7 +7,8 @@ supported_project_steps <- function() {
   )
 }
 
-project_config_from_input <- function(input) {
+project_config_from_input <- function(input = getwd()) {
+  if (is.null(input)) input <- getwd()
   if (inherits(input, "bg_project_cfg")) return(input)
   if (checkmate::test_string(input)) {
     if (checkmate::test_directory_exists(input)) {
@@ -45,11 +46,12 @@ empty_issue_df <- function() {
 #' and never writes the configuration.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param quiet Suppress the printed validation summary.
 #' @return A `bg_project_validation` object containing `valid`, `issues`,
 #'   `messages`, and the parsed `config`.
 #' @export
-validate_project_config <- function(input, quiet = FALSE) {
+validate_project_config <- function(input = getwd(), quiet = FALSE) {
   checkmate::assert_flag(quiet)
 
   config_error <- NULL
@@ -144,12 +146,13 @@ doctor_check_df <- function() {
 #' the configuration.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param steps Optional stages to check. By default all enabled stages are used.
 #' @param deep Also initialize Python and check optional postprocessing modules.
 #' @param quiet Suppress the printed report.
 #' @return A `bg_project_doctor` object with an `ok` flag and a checks data frame.
 #' @export
-doctor_project <- function(input, steps = NULL, deep = FALSE, quiet = FALSE) {
+doctor_project <- function(input = getwd(), steps = NULL, deep = FALSE, quiet = FALSE) {
   checkmate::assert_character(steps, null.ok = TRUE)
   checkmate::assert_flag(deep)
   checkmate::assert_flag(quiet)
@@ -327,15 +330,6 @@ doctor_project <- function(input, steps = NULL, deep = FALSE, quiet = FALSE) {
   result
 }
 
-#' Project preflight shorthand
-#'
-#' @inheritParams doctor_project
-#' @return A `bg_project_doctor` object.
-#' @export
-doctor <- function(input, steps = NULL, deep = FALSE, quiet = FALSE) {
-  doctor_project(input = input, steps = steps, deep = deep, quiet = quiet)
-}
-
 #' @export
 print.bg_project_doctor <- function(x, ...) {
   print(x$checks, row.names = FALSE)
@@ -350,70 +344,6 @@ print.bg_project_doctor <- function(x, ...) {
 
 value_or_default <- function(x, y) {
   if (is.null(x) || length(x) == 0L || is.na(x[1L]) || !nzchar(as.character(x[1L]))) y else x
-}
-
-#' Initialize a BrainGnomes project interactively or from portable defaults
-#'
-#' @param project_name Project label.
-#' @param project_directory Project root directory.
-#' @param template Optional configuration object or YAML file to use as a base.
-#' @param interactive Launch the existing guided setup. When false, missing paths
-#'   are populated beneath `project_directory` and all pipeline stages default to
-#'   disabled.
-#' @param overwrite Replace an existing `project_config.yaml` in non-interactive mode.
-#' @return A `bg_project_cfg` object.
-#' @export
-initialize_project <- function(project_name, project_directory, template = NULL,
-                               interactive = base::interactive(), overwrite = FALSE) {
-  checkmate::assert_string(project_name)
-  checkmate::assert_string(project_directory)
-  checkmate::assert_flag(interactive)
-  checkmate::assert_flag(overwrite)
-  project_directory <- normalizePath(path.expand(project_directory), winslash = "/", mustWork = FALSE)
-
-  if (interactive) {
-    scfg <- if (is.null(template)) list(metadata = list()) else project_config_from_input(template)
-    scfg$metadata$project_name <- project_name
-    scfg$metadata$project_directory <- project_directory
-    class(scfg) <- unique(c("bg_project_cfg", class(scfg)))
-    return(setup_project(scfg))
-  }
-
-  dir.create(project_directory, recursive = TRUE, showWarnings = FALSE)
-  if (!dir.exists(project_directory)) stop("Failed to create project directory: ", project_directory, call. = FALSE)
-  scfg <- if (is.null(template)) list() else as.list(project_config_from_input(template))
-  scfg$schema_version <- value_or_default(scfg$schema_version, 1L)
-  if (is.null(scfg$metadata)) scfg$metadata <- list()
-  scfg$metadata$project_name <- project_name
-  scfg$metadata$project_directory <- project_directory
-  default_dirs <- c(
-    dicom_directory = "data_dicoms", bids_directory = "data_bids",
-    fmriprep_directory = "data_fmriprep", mriqc_directory = "data_mriqc",
-    postproc_directory = "data_postproc", rois_directory = "data_rois",
-    log_directory = "logs", scratch_directory = "scratch",
-    templateflow_home = "templateflow"
-  )
-  for (field in names(default_dirs)) {
-    if (!checkmate::test_string(scfg$metadata[[field]])) {
-      scfg$metadata[[field]] <- file.path(project_directory, default_dirs[[field]])
-    }
-    dir.create(scfg$metadata[[field]], recursive = TRUE, showWarnings = FALSE)
-  }
-  scfg$metadata$sqlite_db <- value_or_default(
-    scfg$metadata$sqlite_db,
-    file.path(project_directory, paste0(project_name, ".sqlite"))
-  )
-  if (is.null(scfg$compute_environment)) scfg$compute_environment <- list()
-  if (!checkmate::test_string(scfg$compute_environment$scheduler)) {
-    scfg$compute_environment$scheduler <- if (nzchar(Sys.which("qsub")) && !nzchar(Sys.which("sbatch"))) "torque" else "slurm"
-  }
-  for (stage in c(supported_project_steps(), "bids_validation")) {
-    if (is.null(scfg[[stage]])) scfg[[stage]] <- list()
-    if (!checkmate::test_flag(scfg[[stage]]$enable)) scfg[[stage]]$enable <- FALSE
-  }
-  class(scfg) <- unique(c("bg_project_cfg", class(scfg)))
-  scfg <- write_project_config(scfg, overwrite = overwrite)
-  scfg
 }
 
 #' Write a project configuration without interactive prompts
@@ -741,6 +671,7 @@ build_project_jobs <- function(scfg, execution) {
 #' so creating or submitting a plan is not required for a direct run.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param steps Pipeline stages or `"all"`.
 #' @param subject_filter Optional subject IDs or a data frame with `sub_id` and
 #'   optionally `ses_id`.
@@ -752,7 +683,7 @@ build_project_jobs <- function(scfg, execution) {
 #' @return A serializable `bg_project_plan` object.
 #' @seealso [run_project()] for the standard direct execution path.
 #' @export
-plan_project <- function(input, steps = "all", subject_filter = NULL,
+plan_project <- function(input = getwd(), steps = "all", subject_filter = NULL,
                          postprocess_streams = NULL, extract_streams = NULL,
                          force = FALSE, allow_invalid = FALSE, quiet = FALSE) {
   checkmate::assert_flag(force)
@@ -977,6 +908,7 @@ resolve_run_id <- function(scfg, run_id = "latest") {
 #' available as a compatibility wrapper for code that needs only the run table.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @return A data frame with one row per run, including its ID, submission and
 #'   end times, number of tracked jobs, and overall status.
 #' @examples
@@ -986,7 +918,7 @@ resolve_run_id <- function(scfg, run_id = "latest") {
 #' }
 #' @seealso [inspect_project()] for project and run-level progress.
 #' @export
-get_project_runs <- function(input) {
+get_project_runs <- function(input = getwd()) {
   .Deprecated("inspect_project", package = "BrainGnomes")
   .get_project_runs_data(input)
 }
@@ -998,6 +930,7 @@ get_project_runs <- function(input) {
 #' subclass with compact printing.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param run_id Run ID returned by [run_project()] or listed in
 #'   `inspect_project(input)$runs`. Use `"latest"` for the most recently
 #'   recorded run.
@@ -1010,7 +943,7 @@ get_project_runs <- function(input) {
 #' @seealso [inspect_project()] for summarized progress, [diagnose_project()] for a failure-focused summary, and
 #'   [find_run_logs()] for log-file locations.
 #' @export
-get_run_jobs <- function(input, run_id = "latest") {
+get_run_jobs <- function(input = getwd(), run_id = "latest") {
   .Deprecated("inspect_project", package = "BrainGnomes")
   .get_run_jobs_data(input, run_id)
 }
@@ -1022,6 +955,7 @@ get_run_jobs <- function(input, run_id = "latest") {
 #' opening or changing the logs.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param run_id Run ID returned by [run_project()] or listed in
 #'   `inspect_project(input)$runs`. Use `"latest"` for the most recently
 #'   recorded run.
@@ -1035,7 +969,7 @@ get_run_jobs <- function(input, run_id = "latest") {
 #' }
 #' @seealso [diagnose_project()] for a run summary that includes these logs.
 #' @export
-find_run_logs <- function(input, run_id = "latest", failed_only = FALSE) {
+find_run_logs <- function(input = getwd(), run_id = "latest", failed_only = FALSE) {
   checkmate::assert_flag(failed_only)
   scfg <- project_config_from_input(input)
   jobs <- .get_run_jobs_data(scfg, run_id)
@@ -1237,6 +1171,7 @@ print.bg_project_diagnosis <- function(x, ...) {
 #' the configured scheduler, so preview the commands first.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param run_id Run ID returned by [run_project()] or listed in
 #'   `inspect_project(input)$runs`. An explicit ID is recommended for
 #'   cancellation.
@@ -1251,7 +1186,7 @@ print.bg_project_diagnosis <- function(x, ...) {
 #' @seealso [inspect_project()] to inspect current job states before
 #'   cancellation.
 #' @export
-cancel_project_run <- function(input, run_id = "latest", dry_run = TRUE) {
+cancel_project_run <- function(input = getwd(), run_id = "latest", dry_run = TRUE) {
   checkmate::assert_flag(dry_run)
   scfg <- project_config_from_input(input)
   resolved <- resolve_run_id(scfg, run_id)
@@ -1337,6 +1272,7 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
 #' immediately and the function returns the new run handle.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param run_id Source run ID returned by [run_project()] or listed in
 #'   `inspect_project(input)$runs`. An explicit ID is recommended for retry.
 #' @param include_blocked Also include downstream jobs marked `FAILED_BY_EXT`.
@@ -1361,7 +1297,7 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
 #' @seealso [diagnose_project()] to inspect the source failure and
 #'   [get_run_provenance()] to compare the original and retry runs.
 #' @export
-retry_project_run <- function(input, run_id = "latest", include_blocked = FALSE,
+retry_project_run <- function(input = getwd(), run_id = "latest", include_blocked = FALSE,
                               dry_run = TRUE) {
   checkmate::assert_flag(include_blocked)
   checkmate::assert_flag(dry_run)

@@ -15,7 +15,8 @@ SystemRequirements: Full scheduled workflows: SLURM or TORQUE/PBS, Bash,
     Singularity (or Apptainer providing a Singularity-compatible command), and
     stage-specific container images. Optional stages may additionally require
     the Flywheel CLI, a BIDS validator, a HeuDiConv heuristic, a FreeSurfer
-    license, and Python 3 with nibabel, nilearn, and templateflow.
+    license, and Python 3 with nibabel, nilearn, and templateflow. Optional QC
+    dashboards require Quarto (>= 1.4).
 License: GPL-3
 BugReports: https://github.com/HallquistLab/BrainGnomes/issues
 Depends:
@@ -50,7 +51,11 @@ Suggests:
     withr,
     knitr,
     rmarkdown,
-    MASS
+    MASS,
+    reactable,
+    htmltools,
+    htmlwidgets,
+    plotly
 Config/testthat/edition: 3
 LinkingTo: Rcpp, RNifti, RcppArmadillo
 URL: https://hallquistlab.github.io/BrainGnomes/

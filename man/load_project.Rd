@@ -4,10 +4,12 @@
 \alias{load_project}
 \title{Load a project configuration from a file}
 \usage{
-load_project(input = NULL, validate = TRUE)
+load_project(input = getwd(), validate = TRUE)
 }
 \arguments{
-\item{input}{A path to a YAML file, or a project directory containing \code{project_config.yaml}.}
+\item{input}{A \code{bg_project_cfg} object, a path to a YAML file, or a project
+directory containing \code{project_config.yaml}. Defaults to the current
+working directory.}
 
 \item{validate}{Logical indicating whether to validate the configuration after loading. Validation is
 non-interactive and never changes or saves the configuration. The structured validation result is

@@ -4,10 +4,11 @@
 \alias{find_run_logs}
 \title{Find output and error logs for one run}
 \usage{
-find_run_logs(input, run_id = "latest", failed_only = FALSE)
+find_run_logs(input = getwd(), run_id = "latest", failed_only = FALSE)
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or listed in
 \code{inspect_project(input)$runs}. Use \code{"latest"} for the most recently

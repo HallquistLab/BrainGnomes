@@ -4,10 +4,11 @@
 \alias{cancel_project_run}
 \title{Cancel queued or running jobs from one run}
 \usage{
-cancel_project_run(input, run_id = "latest", dry_run = TRUE)
+cancel_project_run(input = getwd(), run_id = "latest", dry_run = TRUE)
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or listed in
 \code{inspect_project(input)$runs}. An explicit ID is recommended for

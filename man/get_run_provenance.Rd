@@ -4,10 +4,11 @@
 \alias{get_run_provenance}
 \title{Read the complete provenance record for a project run}
 \usage{
-get_run_provenance(input, run_id = "latest")
+get_run_provenance(input = getwd(), run_id = "latest")
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{run_id}{Run ID returned by \code{\link[=run_project]{run_project()}} or listed in
 \code{inspect_project(input)$runs}. Use \code{"latest"} for the most recently

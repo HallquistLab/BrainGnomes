@@ -4,10 +4,12 @@
 \alias{get_subject_status}
 \title{Get processing status for a single subject}
 \usage{
-get_subject_status(scfg, sub_id, ses_id = NULL)
+get_subject_status(scfg = getwd(), sub_id, ses_id = NULL)
 }
 \arguments{
-\item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
+\item{scfg}{A \code{bg_project_cfg} object, YAML configuration file, or project
+directory containing \code{project_config.yaml}. Defaults to the current working
+directory.}
 
 \item{sub_id}{Subject identifier.}
 

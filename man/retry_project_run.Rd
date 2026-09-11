@@ -5,14 +5,15 @@
 \title{Create a new run for failed work}
 \usage{
 retry_project_run(
-  input,
+  input = getwd(),
   run_id = "latest",
   include_blocked = FALSE,
   dry_run = TRUE
 )
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{run_id}{Source run ID returned by \code{\link[=run_project]{run_project()}} or listed in
 \code{inspect_project(input)$runs}. An explicit ID is recommended for retry.}

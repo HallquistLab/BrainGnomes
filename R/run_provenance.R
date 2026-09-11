@@ -721,6 +721,7 @@ latest_run_provenance_id <- function(scfg) {
 #' to compare an original run with a later retry.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
+#'   Defaults to the current working directory.
 #' @param run_id Run ID returned by [run_project()] or listed in
 #'   `inspect_project(input)$runs`. Use `"latest"` for the most recently
 #'   recorded run.
@@ -735,7 +736,7 @@ latest_run_provenance_id <- function(scfg) {
 #' @seealso [diagnose_project()] to inspect failures and [retry_project_run()]
 #'   to create a new run from failed work.
 #' @export
-get_run_provenance <- function(input, run_id = "latest") {
+get_run_provenance <- function(input = getwd(), run_id = "latest") {
   scfg <- project_config_from_input(input)
   resolved <- if (identical(run_id, "latest")) {
     value_or_default(latest_run_provenance_id(scfg), resolve_run_id(scfg, run_id))
