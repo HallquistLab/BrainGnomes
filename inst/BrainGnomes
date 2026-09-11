@@ -81,7 +81,7 @@ print_global_help <- function(status = 0L) {
   cat(
     "Usage: BrainGnomes <command> [options]\n\n",
     "Typical workflow:\n",
-    "  setup_project <project_name> <project_directory> [--non-interactive]\n",
+    "  setup_project <project_name> <project_directory>\n",
     "  run_project <project_directory|config.yaml> [run options]\n",
     "  status <project_directory|config.yaml> [--run=<id|latest>] [--watch]\n",
     "  diagnose <project_directory|config.yaml> [--interactive]\n\n",
@@ -117,7 +117,6 @@ print_command_help <- function(command, status = 0L) {
       "Alias: BrainGnomes init <project_name> <project_directory> [options]\n\n",
       "Options:\n",
       "  --template=<config.yaml>       Start from an existing configuration.\n",
-      "  --non-interactive              Create portable disabled-stage defaults without prompting.\n",
       "  --overwrite                    Replace an existing project_config.yaml.\n"
     ),
     config = paste0(
@@ -258,10 +257,13 @@ command_init <- function(values) {
   positional <- values[!startsWith(values, "-")]
   option_values <- values[startsWith(values, "-")]
   if (length(positional) < 2L) usage_error("init requires <project_name> and <project_directory>.")
-  opts <- normalize_options(option_values, c("template", "non_interactive", "overwrite"))
-  cfg <- BrainGnomes::initialize_project(
-    positional[[1L]], positional[[2L]], template = opts$template,
-    interactive = !is_flag(opts$non_interactive), overwrite = is_flag(opts$overwrite)
+  opts <- normalize_options(option_values, c("template", "overwrite"))
+  cfg <- BrainGnomes::setup_project(
+    project_name = positional[[1L]],
+    project_directory = positional[[2L]],
+    template = opts$template,
+    interactive = FALSE,
+    overwrite = is_flag(opts$overwrite)
   )
   cat("Saved project configuration to:", or_else(attr(cfg, "yaml_file"), file.path(cfg$metadata$project_directory, "project_config.yaml")), "\n")
   0L

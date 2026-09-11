@@ -4,10 +4,11 @@
 \alias{doctor_project}
 \title{Run non-mutating project and runtime preflight checks}
 \usage{
-doctor_project(input, steps = NULL, deep = FALSE, quiet = FALSE)
+doctor_project(input = getwd(), steps = NULL, deep = FALSE, quiet = FALSE)
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{steps}{Optional stages to check. By default all enabled stages are used.}
 

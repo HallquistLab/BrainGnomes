@@ -1,7 +1,7 @@
 ---
 title: "BrainGnomes Quickstart"
 author: "Michael Hallquist"
-date: "08 Sep 2026"
+date: "11 Sep 2026"
 output: 
   rmarkdown::html_vignette:
     toc: true
@@ -326,7 +326,9 @@ scfg <- setup_project()
 ```
 
 This saves `project_config.yaml` in the project directory. In later R sessions,
-use `load_project("/path/to/my/project")` to reload it.
+you may pass the saved configuration object, its YAML file, or the project
+directory to every project lifecycle helper. When the project root is the
+current working directory, omit the input entirely.
 
 ## Step 2: Run the project
 
@@ -336,6 +338,11 @@ log level.
 
 ```{r eval = FALSE}
 run <- run_project(scfg)
+
+# Equivalent forms in a later session:
+run <- run_project("/path/to/my/project")
+setwd("/path/to/my/project")
+run <- run_project()
 ```
 
 For unattended use, pass explicit selections. A direct run resolves its stages,
@@ -432,13 +439,13 @@ review, environment inspection, and automation around the direct workflow.
 
 `validate_project_config()` reports malformed or incomplete configuration
 without opening the setup wizard or writing files. This is useful in scripts,
-continuous integration, or configuration review. `initialize_project()` is also
-available when automation needs to create a portable disabled-stage starting
-configuration without prompts.
+continuous integration, or configuration review. `setup_project()` can also
+create a portable disabled-stage starting configuration without prompts.
 
 ```{r eval = FALSE}
-scfg <- initialize_project(
-  "my_study", "/project/my_study",
+scfg <- setup_project(
+  project_name = "my_study",
+  project_directory = "/project/my_study",
   interactive = FALSE
 )
 validation <- validate_project_config(scfg)
@@ -450,13 +457,13 @@ stages; separate config validation is optional.
 
 ## Doctor: inspect the submission environment
 
-`doctor()` performs a broader, non-mutating preflight covering scheduler
+`doctor_project()` performs a broader, non-mutating preflight covering scheduler
 commands, container compatibility, storage permissions, stage-specific files,
 and the job-tracking database. It is valuable on a new cluster, after modules,
 containers, or storage have changed, or before an expensive submission.
 
 ```{r eval = FALSE}
-preflight <- doctor(scfg)
+preflight <- doctor_project(scfg)
 stopifnot(preflight$ok)
 ```
 

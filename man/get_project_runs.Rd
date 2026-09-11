@@ -4,10 +4,11 @@
 \alias{get_project_runs}
 \title{List submitted runs for a project}
 \usage{
-get_project_runs(input)
+get_project_runs(input = getwd())
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 }
 \value{
 A data frame with one row per run, including its ID, submission and

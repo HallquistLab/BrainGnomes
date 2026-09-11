@@ -5,18 +5,16 @@
 #' to avoid relying on a complete `scfg` structure.
 #'
 #' @param input A `bg_project_cfg` object, a YAML file path, or a project
-#'   directory containing \code{project_config.yaml}. If a directory is provided
-#'   but the file is absent, \code{edit_project} will stop. This argument cannot
-#'   be \code{NULL}.
+#'   directory containing \code{project_config.yaml}. Defaults to the current
+#'   working directory. If a directory is provided but the file is absent,
+#'   \code{edit_project} will stop.
 #' @return An updated `bg_project_cfg` object. The updated configuration is
 #'   written to `project_config.yaml` in the project directory unless the user
 #'   chooses not to overwrite an existing file.
 #' @importFrom utils select.list
 #' @export
-edit_project <- function(input = NULL) {
-  scfg <- get_scfg_from_input(input)
-  # a valid list must be returned for editing
-  if (length(scfg) == 0L) stop("input must be a bg_project_cfg object, YAML file, or project directory")
+edit_project <- function(input = getwd()) {
+  scfg <- project_config_from_input(input)
 
   # Helper: after enabling a step, validate and prompt for missing fields specific to that step
   validate_after_enable <- function(scfg, step_name, setup_fn) {

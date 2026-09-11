@@ -89,7 +89,11 @@ test_that("headless initialization never enters the interactive prompt layer", {
     .package = "BrainGnomes"
   )
 
-  cfg <- initialize_project("headless", root, interactive = FALSE)
+  cfg <- setup_project(
+    project_name = "headless",
+    project_directory = root,
+    interactive = FALSE
+  )
   expect_true(file.exists(file.path(root, "project_config.yaml")))
   expect_false(any(vapply(
     supported_project_steps(),

@@ -5,7 +5,7 @@
 \title{Inspect or persist the resolved project execution model}
 \usage{
 plan_project(
-  input,
+  input = getwd(),
   steps = "all",
   subject_filter = NULL,
   postprocess_streams = NULL,
@@ -16,7 +16,8 @@ plan_project(
 )
 }
 \arguments{
-\item{input}{A project configuration object, YAML file, or project directory.}
+\item{input}{A project configuration object, YAML file, or project directory.
+Defaults to the current working directory.}
 
 \item{steps}{Pipeline stages or \code{"all"}.}
 
