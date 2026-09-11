@@ -10,7 +10,8 @@ postprocess_confounds(
   processing_sequence,
   output_bids_info,
   fsl_img = NULL,
-  lg = NULL
+  lg = NULL,
+  provenance = NULL
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ postprocess_confounds(
 \item{fsl_img}{Optional path to a Singularity image with FSL installed.}
 
 \item{lg}{Logger object for messages.}
+
+\item{provenance}{Optional internal derivative-record collector.}
 }
 \value{
 Path to the nuisance regressor file or \code{NULL} if not created.

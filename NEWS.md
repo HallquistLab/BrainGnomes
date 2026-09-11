@@ -1,5 +1,15 @@
 # BrainGnomes (development version)
 
+* Native postprocessing and ROI outputs now carry versioned JSON provenance,
+  draft methods text, BibTeX, and available upstream citations and reports.
+  Records distinguish executed, skipped, failed, and reused operations, retain
+  actual confound columns and censor indices, and identify source files,
+  atlas geometry, software, and applicable run/job records. Use
+  `read_derivative_provenance()` to inspect a derivative without SQLite and
+  `export_derivative_provenance()` to copy it with verified companions into a
+  portable bundle. Generated methods always require human review. Existing
+  derivatives without producer records are explicitly marked unknown.
+
 * Distinguish optional request plans from final scheduler contracts. Plans now
   report whether their subject scope is resolved or deferred. Flywheel runs
   record the realized post-sync scope before downstream submission; every

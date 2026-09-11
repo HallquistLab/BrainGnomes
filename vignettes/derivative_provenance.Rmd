@@ -1,0 +1,170 @@
+---
+title: "Portable derivative provenance and methods text"
+author: "Michael Hallquist"
+date: "11 Sep 2026"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Portable derivative provenance and methods text}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+Native `postprocess_subject()` and `extract_rois()` outputs receive portable
+records automatically. A NIfTI or TSV derivative has an adjacent JSON sidecar
+and a companion directory with the same stem and a `.provenance` suffix:
+
+```text
+sub-01_task-rest_desc-clean_bold.nii.gz
+sub-01_task-rest_desc-clean_bold.json
+sub-01_task-rest_desc-clean_bold.provenance/
+  methods.md
+  bibliography.bib
+  attempt-<record-id>.json
+  upstream/...
+```
+
+The JSON describes the derivative's producer. Each attempt has a separate
+record, so requesting different settings while reusing a file cannot rewrite
+its generating history. ROI time series, connectivity matrices, and optional
+voxel-retention diagnostics each have their own sidecar and companions.
+`extract_rois()` returns companion paths in its `provenance` element; extraction
+job output manifests include those paths as well as the TSV outputs.
+
+## Inspect and share a derivative
+
+```{r inspect, eval=FALSE}
+library(BrainGnomes)
+
+# Use the file returned by postprocess_subject(), or an ROI TSV from extract_rois().
+derivative <- "/study/postproc/sub-01/func/sub-01_task-rest_desc-clean_bold.nii.gz"
+metadata <- read_derivative_provenance(derivative)
+record <- metadata$BrainGnomes
+record$Resolved
+record$Operations
+record$Execution
+cat(record$MethodsText)
+
+# The destination must be new. The export validates the derivative and saved
+# companions, copies them, and adds a derivative dataset description.
+bundle <- export_derivative_provenance(derivative, "/shared/sub-01-clean-export")
+read_derivative_provenance(bundle$derivative)
+```
+
+Copy the whole exported directory to a collaborator. Reading its JSON requires
+neither SQLite nor the original study directory. The record includes original
+source paths, MD5 checksums, sizes, selected upstream metadata, and available
+execution identities; these remain interpretable when source paths are offline.
+Original images, container images, and atlas voxel arrays are identified rather
+than copied. Source paths and subject identifiers are retained, so the bundle
+is not an anonymization tool.
+
+`read_derivative_provenance()` verifies the derivative checksum and schema. It
+can read a sidecar even when its companion directory is unavailable.
+`export_derivative_provenance()` additionally checks the presence, confinement,
+and checksums of saved report/citation assets and generated prose. An incomplete
+or modified companion directory is an error. It publishes the new directory only
+after these checks succeed and refuses to overwrite an existing export.
+Only declared companions and derivative-attempt JSON files are included;
+unrelated additions to the companion directory are excluded.
+
+Optional external identifiers can supplement the portable record:
+
+```{r external-identifiers, eval=FALSE}
+export_derivative_provenance(
+  derivative, "/shared/sub-01-clean-with-datalad",
+  datalad = list(dataset_id = "<existing-dataset-id>",
+                 commit = "<existing-commit>", annex_key = "<existing-annex-key>")
+)
+```
+
+These identifiers are explicitly marked `user_supplied_not_verified`.
+BrainGnomes neither invokes DataLad nor creates or verifies a dataset or commit.
+
+## Version 1 record contract
+
+`BrainGnomes.SchemaVersion` is `brain-gnomes-derivative-v1`. The extension is
+BrainGnomes metadata, not a claim to implement a standardized processing-history
+schema. Readers reject unsupported schema versions. Arrays remain arrays when
+empty or when they contain a single element. Missing optional records are null
+or explicitly marked unavailable, rather than inferred from a filename.
+
+| Field within `BrainGnomes` | Meaning |
+| --- | --- |
+| `RecordID`, `RecordedAt`, `Stage`, `Status` | Unique derivative-attempt identity, UTC recording time, native stage, and overall outcome. |
+| `Derivative` | Output identity and checksum; paths describe the original publication location. |
+| `Requested`, `RequestedSequence` | Selected submitted configuration and enabled sequence before execution-time omissions. |
+| `Resolved.ProcessingSequence`, `Operations` | Resolved image sequence and ordered operation states, parameters, and evidence. Repeated operations have separate entries. |
+| `Resolved.Confounds` | Expanded processed/unprocessed selections, constant-column exclusions, written regression design columns in order, calculated columns, motion-filter settings, and transformations actually applied to processed confounds. |
+| `Resolved.CensorPolicy`, `Resolved.Censor` | Requested censor rule and resolved retained/excluded indices. Indices are one-based; 1 retains a volume and 0 censors it. ROI records distinguish applying censoring from recognizing an already-censored input. |
+| `Resolved.TR`, `Resolved.Space`, `InputGeometry`, `OutputGeometry` | Repetition time, BIDS space label, and NIfTI dimensions, spacing, units, and transform fields when available. |
+| `Resolved.IntensityConvention`, `Resolved.IntensityReference` | Input-scale convention and normalization calibration when normalization ran. ROI records describe the inherited scale and PCA convention. |
+| `Resolved.Atlas`, `Resolved.RegionDiagnostics` | Original and resolved atlas identities, label values, grid and resampling details, and regional retention decisions. The atlas file itself is not archived. |
+| `SourceFiles`, `SourceMetadata`, `SourceDataset` | Source identities and supplied metadata, including a parent BrainGnomes record when present. |
+| `Software`, `Execution` | BrainGnomes/R/loaded-package identities, configured container identities, and available run, work-unit attempt, manifest, receipt, and scheduler-task records. |
+| `AttemptFile`, `ReusedRecordID` | Relative attempt link for a producer and producer identity for a reuse attempt, respectively. |
+| `Validation`, `Error` | Available validation results and attempt failures. Completion and validation are separate outcomes. |
+| `MethodsText`, `BibliographyParts`, `HumanReviewRequired` | Draft methods, bibliography blocks, and an always-true human-review requirement. |
+| `Assets`, `Companions`, `ExportedAttempts`, `ExternalReferences` | Relative saved-asset links and checksums, generated-text identities, attempts included in an export, and optional external references. |
+
+A job's `Execution.Receipt` is the startup runtime-verification receipt defined
+by the job contract. It is not proof of successful processing. Array jobs may
+share a contract/receipt; the current scheduler task is recorded separately.
+Calls outside a scheduled run still produce derivative provenance, with missing
+run/contract/receipt fields left null. Available records are embedded so their
+meaning does not depend on reopening the database or original logs.
+
+The sidecar preserves applicable `SpatialReference` and postprocessing
+`RepetitionTime` metadata. Exports add `dataset_description.json` with
+`DatasetType` and `GeneratedBy`. When original dataset roots can be identified,
+`Sources` contains BIDS URIs whose keys resolve through `DatasetLinks`; original
+absolute paths remain in the extension regardless of source accessibility.
+These fields follow the [BIDS derivative metadata guidance](https://bids-specification.readthedocs.io/en/v1.11.1/derivatives/common-data-types.html)
+and [dataset description specification](https://bids-specification.readthedocs.io/en/v1.11.1/modality-agnostic-files/dataset-description.html).
+The bundle is a transport layout for an individual derivative; these fields do
+not establish that its layout or every ROI suffix forms a complete,
+validator-compliant BIDS dataset.
+
+## Interpret execution and reuse
+
+- A `requested` record contains an intended configuration. `running` is a
+  transient operation state; it becomes `executed` after the operation returns.
+- A `completed` producer describes a written derivative. Validation results may
+  still indicate failure when the configured policy allows processing to continue.
+- A `failed` attempt records its error and marks in-flight operations failed.
+  Previously executed operations retain their state. An old sidecar whose image
+  was removed or changed during replacement cannot pass checksum validation.
+- A `skipped` operation or attempt is not described as successful processing.
+  Examples include unavailable mask/regressor selection and connectivity with
+  fewer than 20 retained timepoints.
+- Reusing a final derivative retains its verified producer sidecar and writes a
+  new `reused` attempt. Reused intermediates carry their file identity and mark
+  current parameters `requested_only`; they do not establish the intermediate's
+  original settings. Inspect those origins before accepting generated prose.
+- An existing derivative with no BrainGnomes producer record receives `unknown`
+  provenance, with generating settings and original sources left unknown. The
+  current request is retained only in the separate reuse attempt.
+
+## Review generated methods and citations
+
+The paragraph is generated from resolved records and executed operations, with
+explicit qualifications for reuse and unsuccessful validation. Review it against
+the sidecar and study protocol before using it in a publication. Add scientific
+rationale, acquisition details, quality-control decisions, atlas citations, and
+any externally performed processing that these records cannot establish.
+
+Available upstream `CITATION.bib`, `CITATION.md`, `CITATION.html`, and
+`CITATION.tex` files are retained verbatim, along with the participant HTML
+report and locally referenced resources. Externally hosted report assets are
+not downloaded. Parent BrainGnomes methods and bibliography are retained through
+ROI extraction. Missing upstream citations/reports cannot be reconstructed; check
+that the expected assets are present before sharing.
+
+The bibliography includes the BrainGnomes package citation and relevant native
+operation citations, such as [FSL](https://doi.org/10.1016/j.neuroimage.2011.09.015)
+and [ICA-AROMA](https://doi.org/10.1016/j.neuroimage.2015.02.064), plus supplied
+upstream BibTeX. When dataset metadata identifies fMRIPrep and its core paper is
+absent from supplied BibTeX, the exporter adds the
+[fMRIPrep methods paper](https://doi.org/10.1038/s41592-018-0235-4).
+Upstream bibliography blocks are preserved rather than rewritten, so human
+review should also resolve duplicate citation keys or entries and add any
+missing tool-, atlas-, or version-specific references.

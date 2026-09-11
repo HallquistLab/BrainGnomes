@@ -224,7 +224,7 @@ test_that("extraction helper writes and manifests requested ROI diagnostics", {
     config$output_manifest_file,
     simplifyVector = FALSE
   )
-  expect_equal(manifest$file_count, 3L)
+  expect_equal(manifest$file_count, 15L) # Three TSVs, each with four provenance companions.
   expect_true(any(grepl(
     "_roidiagnostics\\.tsv$",
     vapply(manifest$files, `[[`, character(1), "path")
@@ -278,9 +278,10 @@ test_that("extraction helper preserves paired inputs from multiple streams", {
     config$output_manifest_file,
     simplifyVector = FALSE
   )
-  expect_equal(manifest$file_count, 2L)
+  expect_equal(manifest$file_count, 10L) # Two TSVs plus their provenance companions.
   expect_setequal(
-    vapply(manifest$files, `[[`, character(1), "path"),
+    Filter(function(path) grepl("\\.tsv$", path),
+      vapply(manifest$files, `[[`, character(1), "path")),
     file.path("DemoAtlas", basename(timeseries_files))
   )
 })
@@ -311,9 +312,9 @@ test_that("extraction helper writes a manifest containing only its exact outputs
   manifest_paths <- vapply(manifest$files, `[[`, character(1), "path")
 
   expect_identical(manifest$scope, "explicit")
-  expect_equal(manifest$file_count, 2L)
+  expect_equal(manifest$file_count, 10L) # Two TSVs plus their provenance companions.
   expect_setequal(
-    basename(manifest_paths),
+    basename(manifest_paths[grepl("\\.tsv$", manifest_paths)]),
     c(
       "sub-01_task-rest_desc-clean_rois-DemoAtlas_timeseries.tsv",
       "sub-01_task-rest_desc-clean_rois-DemoAtlas_cor-pearson_connectivity.tsv"
