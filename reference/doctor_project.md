@@ -12,7 +12,7 @@ configuration.
 ## Usage
 
 ``` r
-doctor_project(input, steps = NULL, deep = FALSE, quiet = FALSE)
+doctor_project(input = getwd(), steps = NULL, deep = FALSE, quiet = FALSE)
 ```
 
 ## Arguments
@@ -20,6 +20,7 @@ doctor_project(input, steps = NULL, deep = FALSE, quiet = FALSE)
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - steps:
 

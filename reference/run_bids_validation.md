@@ -9,17 +9,21 @@ directory is desired.
 ## Usage
 
 ``` r
-run_bids_validation(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL)
+run_bids_validation(
+  scfg = getwd(),
+  outfile = NULL,
+  wait_jobs = NULL,
+  sequence_id = NULL
+)
 ```
 
 ## Arguments
 
 - scfg:
 
-  A `bg_project_cfg` object returned by
-  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
-  or
-  [`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md).
+  A `bg_project_cfg` object, YAML configuration file, or project
+  directory containing `project_config.yaml`. Defaults to the current
+  working directory.
 
 - outfile:
 

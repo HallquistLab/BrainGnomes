@@ -5,15 +5,16 @@ Load a project configuration from a file
 ## Usage
 
 ``` r
-load_project(input = NULL, validate = TRUE)
+load_project(input = getwd(), validate = TRUE)
 ```
 
 ## Arguments
 
 - input:
 
-  A path to a YAML file, or a project directory containing
-  `project_config.yaml`.
+  A `bg_project_cfg` object, a path to a YAML file, or a project
+  directory containing `project_config.yaml`. Defaults to the current
+  working directory.
 
 - validate:
 

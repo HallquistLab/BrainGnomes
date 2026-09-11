@@ -1,7 +1,6 @@
 # Summarize project status
 
-Provides a tabular summary of completion counts for each step in the
-pipeline.
+Provides a tabular summary of completion counts for each project step.
 
 ## Usage
 

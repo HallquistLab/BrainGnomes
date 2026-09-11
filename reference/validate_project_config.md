@@ -12,7 +12,7 @@ configuration.
 ## Usage
 
 ``` r
-validate_project_config(input, quiet = FALSE)
+validate_project_config(input = getwd(), quiet = FALSE)
 ```
 
 ## Arguments
@@ -20,6 +20,7 @@ validate_project_config(input, quiet = FALSE)
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - quiet:
 

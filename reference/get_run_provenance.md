@@ -12,7 +12,7 @@ with a later retry.
 ## Usage
 
 ``` r
-get_run_provenance(input, run_id = "latest")
+get_run_provenance(input = getwd(), run_id = "latest")
 ```
 
 ## Arguments
@@ -20,6 +20,7 @@ get_run_provenance(input, run_id = "latest")
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - run_id:
 

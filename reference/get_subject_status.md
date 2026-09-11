@@ -5,15 +5,16 @@ Get processing status for a single subject
 ## Usage
 
 ``` r
-get_subject_status(scfg, sub_id, ses_id = NULL)
+get_subject_status(scfg = getwd(), sub_id, ses_id = NULL)
 ```
 
 ## Arguments
 
 - scfg:
 
-  a project configuration object as produced by `load_project` or
-  `setup_project`
+  A `bg_project_cfg` object, YAML configuration file, or project
+  directory containing `project_config.yaml`. Defaults to the current
+  working directory.
 
 - sub_id:
 

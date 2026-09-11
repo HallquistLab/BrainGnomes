@@ -28,8 +28,6 @@
   : Deprecated interactive pipeline diagnosis
 - [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
   : Diagnose failed project work
-- [`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
-  : Project preflight shorthand
 - [`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md)
   : Run non-mutating project and runtime preflight checks
 - [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
@@ -63,9 +61,6 @@
   Non-Interactive Sessions
 - [`image_quantile()`](https://hallquistlab.github.io/BrainGnomes/reference/image_quantile.md)
   : Compute Quantiles from a 3D or 4D NIfTI Image
-- [`initialize_project()`](https://hallquistlab.github.io/BrainGnomes/reference/initialize_project.md)
-  : Initialize a BrainGnomes project interactively or from portable
-  defaults
 - [`insert_df_sqlite()`](https://hallquistlab.github.io/BrainGnomes/reference/insert_df_sqlite.md)
   : helper function to insert a keyed data.frame into the sqlite storage
   database
@@ -104,9 +99,9 @@
   : Run an FSL command with optional Singularity container support and
   structured logging
 - [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
-  : Run the processing pipeline
+  : Run the project workflow
 - [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
-  : Setup the processing pipeline for a new fMRI study
+  : Set up a BrainGnomes project workflow for a new fMRI study
 - [`submit_project_plan()`](https://hallquistlab.github.io/BrainGnomes/reference/submit_project_plan.md)
   : Submit a saved or in-memory request plan
 - [`summary(`*`<bg_project_cfg>`*`)`](https://hallquistlab.github.io/BrainGnomes/reference/summary.bg_project_cfg.md)

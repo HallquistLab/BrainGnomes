@@ -7,7 +7,7 @@ without opening or changing the logs.
 ## Usage
 
 ``` r
-find_run_logs(input, run_id = "latest", failed_only = FALSE)
+find_run_logs(input = getwd(), run_id = "latest", failed_only = FALSE)
 ```
 
 ## Arguments
@@ -15,6 +15,7 @@ find_run_logs(input, run_id = "latest", failed_only = FALSE)
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - run_id:
 

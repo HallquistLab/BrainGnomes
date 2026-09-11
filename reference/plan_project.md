@@ -15,7 +15,7 @@ plan is not required for a direct run.
 
 ``` r
 plan_project(
-  input,
+  input = getwd(),
   steps = "all",
   subject_filter = NULL,
   postprocess_streams = NULL,
@@ -31,6 +31,7 @@ plan_project(
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - steps:
 

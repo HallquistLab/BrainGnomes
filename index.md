@@ -93,25 +93,47 @@ status <- inspect_project(scfg)
 diagnose_project(scfg)
 ```
 
-For later sessions, reload the saved configuration and run it in the
-same way:
+For automation or a headless starting configuration, provide the project
+name and directory explicitly. This creates the standard directories,
+writes `project_config.yaml`, and leaves processing stages disabled
+until configured:
 
 ``` r
 
-scfg <- load_project("/project/my_study")
-run <- run_project(scfg)
+scfg <- setup_project(
+  project_name = "my_study",
+  project_directory = "/project/my_study",
+  interactive = FALSE
+)
 ```
 
-The inspection and diagnosis helpers also accept a project directory
-directly. When the current working directory is the project root, omit
-it entirely:
+The equivalent command-line entry point is
+`BrainGnomes init my_study /project/my_study`.
+
+For later sessions, pass the project directory or configuration YAML
+directly:
+
+``` r
+
+run <- run_project("/project/my_study")
+```
+
+All project lifecycle helpers accept a configuration object,
+configuration YAML, or project directory. When the current working
+directory is the project root, omit the project input entirely:
 
 ``` r
 
 setwd("/project/my_study")
+run <- run_project()
 inspect_project()
 diagnose_project()  # guided browser in an interactive R session
 ```
+
+Use
+[`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md)
+when you want to inspect or modify the configuration object itself; it
+accepts the same inputs and also defaults to the current directory.
 
 The command-line interface preserves the same workflow. The shorter
 `init` and `run` command names are also accepted.
@@ -136,7 +158,7 @@ None of the following is a prerequisite for
   validate, or edit YAML. It is useful in scripts, CI, and configuration
   review. Direct runs retain their existing selected-stage checks.
 - **Doctor**
-  ([`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
+  ([`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md)
   or `BrainGnomes doctor`) performs a broader, non-mutating
   submission-host preflight. It is valuable on a new cluster, after
   modules, containers, or storage have changed, or before an expensive
@@ -159,7 +181,7 @@ For example, an optional review-and-submit workflow is:
 ``` r
 
 validation <- validate_project_config(scfg)
-preflight <- doctor(scfg)
+preflight <- doctor_project(scfg)
 plan <- plan_project(scfg, steps = "all")
 write_project_plan(plan, "run.yaml")
 run <- submit_project_plan(plan)

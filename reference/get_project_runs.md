@@ -7,7 +7,7 @@ the run table.
 ## Usage
 
 ``` r
-get_project_runs(input)
+get_project_runs(input = getwd())
 ```
 
 ## Arguments
@@ -15,6 +15,7 @@ get_project_runs(input)
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 ## Value
 

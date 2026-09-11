@@ -8,7 +8,7 @@ requests to the configured scheduler, so preview the commands first.
 ## Usage
 
 ``` r
-cancel_project_run(input, run_id = "latest", dry_run = TRUE)
+cancel_project_run(input = getwd(), run_id = "latest", dry_run = TRUE)
 ```
 
 ## Arguments
@@ -16,6 +16,7 @@ cancel_project_run(input, run_id = "latest", dry_run = TRUE)
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - run_id:
 

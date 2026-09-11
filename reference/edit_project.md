@@ -8,7 +8,7 @@ structure.
 ## Usage
 
 ``` r
-edit_project(input = NULL)
+edit_project(input = getwd())
 ```
 
 ## Arguments
@@ -16,9 +16,9 @@ edit_project(input = NULL)
 - input:
 
   A `bg_project_cfg` object, a YAML file path, or a project directory
-  containing `project_config.yaml`. If a directory is provided but the
-  file is absent, `edit_project` will stop. This argument cannot be
-  `NULL`.
+  containing `project_config.yaml`. Defaults to the current working
+  directory. If a directory is provided but the file is absent,
+  `edit_project` will stop.
 
 ## Value
 

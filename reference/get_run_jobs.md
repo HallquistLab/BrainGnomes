@@ -7,7 +7,7 @@ subclass with compact printing.
 ## Usage
 
 ``` r
-get_run_jobs(input, run_id = "latest")
+get_run_jobs(input = getwd(), run_id = "latest")
 ```
 
 ## Arguments
@@ -15,6 +15,7 @@ get_run_jobs(input, run_id = "latest")
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - run_id:
 

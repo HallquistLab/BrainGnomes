@@ -50,7 +50,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">get_subject_status</span><span class="op">(</span><span class="va">scfg</span>, <span class="va">sub_id</span>, ses_id <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">get_subject_status</span><span class="op">(</span>scfg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">getwd</a></span><span class="op">(</span><span class="op">)</span>, <span class="va">sub_id</span>, ses_id <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -58,7 +58,9 @@
 
 
 <dl><dt id="arg-scfg">scfg<a class="anchor" aria-label="anchor" href="#arg-scfg"></a></dt>
-<dd><p>a project configuration object as produced by <code>load_project</code> or <code>setup_project</code></p></dd>
+<dd><p>A <code>bg_project_cfg</code> object, YAML configuration file, or project
+directory containing <code>project_config.yaml</code>. Defaults to the current working
+directory.</p></dd>
 
 
 <dt id="arg-sub-id">sub_id<a class="anchor" aria-label="anchor" href="#arg-sub-id"></a></dt>

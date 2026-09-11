@@ -67,7 +67,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">31 Aug 2026</h4>
+            <h4 data-toc-skip class="date">11 Sep 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/local_onboarding.Rmd" class="external-link"><code>vignettes/local_onboarding.Rmd</code></a></small>
       <div class="d-none name"><code>local_onboarding.Rmd</code></div>
@@ -178,12 +178,14 @@ NIfTI image:</p>
 paths and selected stage resources, resolves stream settings, and
 reports planned subject/session work without submitting jobs:</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_project.html">load_project</a></span><span class="op">(</span><span class="st">"/real/project/project_config.yaml"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span></span>
-<span>  <span class="va">scfg</span>,</span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span></span>
+<span>  <span class="st">"/real/project"</span>,</span>
 <span>  steps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"postprocess"</span>, <span class="st">"extract_rois"</span><span class="op">)</span>,</span>
 <span>  dry_run <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<p>The same call accepts <code>project_config.yaml</code> or a loaded
+<code>bg_project_cfg</code> object. If the project root is the current
+working directory, the first argument can be omitted.</p>
 <p>A dry run is submission-free, but it is not a substitute for
 configuration: the selected stages still need real directories, inputs,
 containers, and other required files so that validation can describe a

@@ -133,13 +133,16 @@ planned subject/session work without submitting jobs:
 
 ``` r
 
-scfg <- load_project("/real/project/project_config.yaml")
 run_project(
-  scfg,
+  "/real/project",
   steps = c("postprocess", "extract_rois"),
   dry_run = TRUE
 )
 ```
+
+The same call accepts `project_config.yaml` or a loaded `bg_project_cfg`
+object. If the project root is the current working directory, the first
+argument can be omitted.
 
 A dry run is submission-free, but it is not a substitute for
 configuration: the selected stages still need real directories, inputs,

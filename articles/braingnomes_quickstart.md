@@ -575,7 +575,9 @@ scfg <- setup_project()
 ```
 
 This saves `project_config.yaml` in the project directory. In later R
-sessions, use `load_project("/path/to/my/project")` to reload it.
+sessions, you may pass the saved configuration object, its YAML file, or
+the project directory to every project lifecycle helper. When the
+project root is the current working directory, omit the input entirely.
 
 ### Step 2: Run the project
 
@@ -587,6 +589,11 @@ streams, debug/force behavior, and log level.
 ``` r
 
 run <- run_project(scfg)
+
+# Equivalent forms in a later session:
+run <- run_project("/path/to/my/project")
+setwd("/path/to/my/project")
+run <- run_project()
 ```
 
 For unattended use, pass explicit selections. A direct run resolves its
@@ -702,14 +709,15 @@ direct workflow.
 reports malformed or incomplete configuration without opening the setup
 wizard or writing files. This is useful in scripts, continuous
 integration, or configuration review.
-[`initialize_project()`](https://hallquistlab.github.io/BrainGnomes/reference/initialize_project.md)
-is also available when automation needs to create a portable
-disabled-stage starting configuration without prompts.
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
+can also create a portable disabled-stage starting configuration without
+prompts.
 
 ``` r
 
-scfg <- initialize_project(
-  "my_study", "/project/my_study",
+scfg <- setup_project(
+  project_name = "my_study",
+  project_directory = "/project/my_study",
   interactive = FALSE
 )
 validation <- validate_project_config(scfg)
@@ -723,7 +731,7 @@ config validation is optional.
 
 ### Doctor: inspect the submission environment
 
-[`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
+[`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md)
 performs a broader, non-mutating preflight covering scheduler commands,
 container compatibility, storage permissions, stage-specific files, and
 the job-tracking database. It is valuable on a new cluster, after
@@ -732,7 +740,7 @@ submission.
 
 ``` r
 
-preflight <- doctor(scfg)
+preflight <- doctor_project(scfg)
 stopifnot(preflight$ok)
 ```
 
@@ -901,7 +909,7 @@ stays synchronized with `inst/BrainGnomes`:
     Usage: BrainGnomes <command> [options]
 
     Typical workflow:
-      setup_project <project_name> <project_directory> [--non-interactive]
+      setup_project <project_name> <project_directory>
       run_project <project_directory|config.yaml> [run options]
       status <project_directory|config.yaml> [--run=<id|latest>] [--watch]
       diagnose <project_directory|config.yaml> [--interactive]

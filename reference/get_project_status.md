@@ -5,15 +5,16 @@ Get processing status for all subjects
 ## Usage
 
 ``` r
-get_project_status(scfg)
+get_project_status(scfg = getwd())
 ```
 
 ## Arguments
 
 - scfg:
 
-  a project configuration object as produced by `load_project` or
-  `setup_project`
+  A `bg_project_cfg` object, YAML configuration file, or project
+  directory containing `project_config.yaml`. Defaults to the current
+  working directory.
 
 ## Value
 

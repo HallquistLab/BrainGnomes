@@ -1,4 +1,4 @@
-# Run the processing pipeline
+# Run the project workflow
 
 This remains the standard execution path after
 [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
@@ -13,7 +13,7 @@ first is optional.
 
 ``` r
 run_project(
-  scfg,
+  scfg = getwd(),
   steps = NULL,
   subject_filter = NULL,
   postprocess_streams = NULL,
@@ -29,12 +29,13 @@ run_project(
 
 - scfg:
 
-  a project configuration object as produced by `load_project` or
-  `setup_project`
+  A `bg_project_cfg` object, YAML configuration file, or project
+  directory containing `project_config.yaml`. Defaults to the current
+  working directory.
 
 - steps:
 
-  Character vector of pipeline stages to execute. Supported stages are
+  Character vector of project stages to execute. Supported stages are
   `"flywheel_sync"`, `"bids_conversion"`, `"mriqc"`, `"fmriprep"`,
   `"aroma"`, `"postprocess"`, and `"extract_rois"`. Use `"all"` to run
   all enabled stages. If `NULL`, the user will be prompted for which

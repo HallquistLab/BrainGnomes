@@ -12,7 +12,7 @@ the source run.
 
 ``` r
 retry_project_run(
-  input,
+  input = getwd(),
   run_id = "latest",
   include_blocked = FALSE,
   dry_run = TRUE
@@ -24,6 +24,7 @@ retry_project_run(
 - input:
 
   A project configuration object, YAML file, or project directory.
+  Defaults to the current working directory.
 
 - run_id:
 

@@ -67,7 +67,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">08 Sep 2026</h4>
+            <h4 data-toc-skip class="date">11 Sep 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/braingnomes_quickstart.Rmd" class="external-link"><code>vignettes/braingnomes_quickstart.Rmd</code></a></small>
       <div class="d-none name"><code>braingnomes_quickstart.Rmd</code></div>
@@ -675,8 +675,10 @@ configuration entries:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>This saves <code>project_config.yaml</code> in the project directory.
-In later R sessions, use
-<code>load_project("/path/to/my/project")</code> to reload it.</p>
+In later R sessions, you may pass the saved configuration object, its
+YAML file, or the project directory to every project lifecycle helper.
+When the project root is the current working directory, omit the input
+entirely.</p>
 </div>
 <div class="section level3">
 <h3 id="step-2-run-the-project">Step 2: Run the project<a class="anchor" aria-label="anchor" href="#step-2-run-the-project"></a>
@@ -685,7 +687,12 @@ In later R sessions, use
 no <code>steps</code> argument, the familiar prompts select subjects,
 stages, streams, debug/force behavior, and log level.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Equivalent forms in a later session:</span></span>
+<span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="st">"/path/to/my/project"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="st">"/path/to/my/project"</span><span class="op">)</span></span>
+<span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>For unattended use, pass explicit selections. A direct run resolves
 its stages, streams, subject/session scope, and force setting
 internally; no separate inspection step is required.</p>
@@ -776,12 +783,12 @@ direct workflow.</p>
 <p><code><a href="../reference/validate_project_config.html">validate_project_config()</a></code> reports malformed or
 incomplete configuration without opening the setup wizard or writing
 files. This is useful in scripts, continuous integration, or
-configuration review. <code><a href="../reference/initialize_project.html">initialize_project()</a></code> is also
-available when automation needs to create a portable disabled-stage
-starting configuration without prompts.</p>
+configuration review. <code><a href="../reference/setup_project.html">setup_project()</a></code> can also create a
+portable disabled-stage starting configuration without prompts.</p>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/initialize_project.html">initialize_project</a></span><span class="op">(</span></span>
-<span>  <span class="st">"my_study"</span>, <span class="st">"/project/my_study"</span>,</span>
+<code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span></span>
+<span>  project_name <span class="op">=</span> <span class="st">"my_study"</span>,</span>
+<span>  project_directory <span class="op">=</span> <span class="st">"/project/my_study"</span>,</span>
 <span>  interactive <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">validation</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/validate_project_config.html">validate_project_config</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
@@ -792,13 +799,13 @@ for the selected stages; separate config validation is optional.</p>
 <div class="section level3">
 <h3 id="doctor-inspect-the-submission-environment">Doctor: inspect the submission environment<a class="anchor" aria-label="anchor" href="#doctor-inspect-the-submission-environment"></a>
 </h3>
-<p><code><a href="../reference/doctor.html">doctor()</a></code> performs a broader, non-mutating preflight
-covering scheduler commands, container compatibility, storage
+<p><code><a href="../reference/doctor_project.html">doctor_project()</a></code> performs a broader, non-mutating
+preflight covering scheduler commands, container compatibility, storage
 permissions, stage-specific files, and the job-tracking database. It is
 valuable on a new cluster, after modules, containers, or storage have
 changed, or before an expensive submission.</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">preflight</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/doctor.html">doctor</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">preflight</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/doctor_project.html">doctor_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot</a></span><span class="op">(</span><span class="va">preflight</span><span class="op">$</span><span class="va">ok</span><span class="op">)</span></span></code></pre></div>
 <p>Pass <code>deep = TRUE</code> to also initialize the active
 reticulate Python and inspect optional modules used by
@@ -937,7 +944,7 @@ built, so it stays synchronized with <code>inst/BrainGnomes</code>:</p>
 <pre><code>Usage: BrainGnomes &lt;command&gt; [options]
 
 Typical workflow:
-  setup_project &lt;project_name&gt; &lt;project_directory&gt; [--non-interactive]
+  setup_project &lt;project_name&gt; &lt;project_directory&gt;
   run_project &lt;project_directory|config.yaml&gt; [run options]
   status &lt;project_directory|config.yaml&gt; [--run=&lt;id|latest&gt;] [--watch]
   diagnose &lt;project_directory|config.yaml&gt; [--interactive]

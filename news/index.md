@@ -2,6 +2,28 @@
 
 ## BrainGnomes (development version)
 
+- Consolidate project creation in
+  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
+  It now supports portable, prompt-free creation with
+  `interactive = FALSE`, including templates and overwrite control. The
+  headless `BrainGnomes init` command uses this pathway, and the
+  redundant `initialize_project()` entry point has been removed.
+- Remove the redundant `doctor()` R alias before 1.0. Use
+  [`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md)
+  for R preflight checks; the `BrainGnomes doctor` CLI command remains
+  available.
+- Harmonize project inputs across the R lifecycle API.
+  [`load_project()`](https://hallquistlab.github.io/BrainGnomes/reference/load_project.md),
+  [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md),
+  [`validate_project_config()`](https://hallquistlab.github.io/BrainGnomes/reference/validate_project_config.md),
+  [`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md),
+  [`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md),
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md),
+  [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md),
+  status and log helpers, provenance inspection, retry, and cancellation
+  now default to the current working directory and accept project
+  configuration objects, YAML files, or project directories where
+  applicable.
 - Distinguish optional request plans from final scheduler contracts.
   Plans now report whether their subject scope is resolved or deferred.
   Flywheel runs record the realized post-sync scope before downstream
@@ -88,7 +110,7 @@ Released 2026-09-02
   workflow across the complete R and command-line lifecycle without
   adding required setup steps. Optional inspection tooling now provides
   non-mutating configuration validation,
-  [`doctor()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor.md)
+  [`doctor_project()`](https://hallquistlab.github.io/BrainGnomes/reference/doctor_project.md)
   preflight checks, and serializable execution plans; direct runs
   resolve the same execution model exposed by plans. Run handles,
   tracked-run views, log discovery, non-interactive diagnosis,
@@ -140,8 +162,7 @@ Released 2026-09-02
   rules, wrapped instruction paragraphs, consistently indented lists,
   and prompts on their own lines. The shared prompt renderer retains the
   TTY-safe input path used by `Rscript`. Headless setup through
-  `BrainGnomes setup_project --non-interactive` remains fully
-  argument-driven.
+  `BrainGnomes setup_project` remains fully argument-driven.
 
 - Recalibrate masked-SUSAN validation on real fMRIPrep BOLD data for the
   distinct no-input-mask, fMRIPrep-mask, and TemplateFlow-mask
