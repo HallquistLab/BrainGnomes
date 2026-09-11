@@ -25,6 +25,18 @@ write_qc_fixture_file <- function(path, text = "placeholder image") {
   normalizePath(path, winslash = "/")
 }
 
+test_that("QC path identities normalize filesystem aliases", {
+  root <- tempfile("qc-path-identity-")
+  path <- write_qc_fixture_file(file.path(root, "nested", "artifact.txt"))
+  on.exit(unlink(root, recursive = TRUE))
+  alias <- file.path(root, "nested", ".", "artifact.txt")
+
+  expect_identical(
+    BrainGnomes:::qc_path_key(path),
+    BrainGnomes:::qc_path_key(alias)
+  )
+})
+
 # Add one acquisition, matching derivative evidence, and an optional failed job.
 populate_qc_fixture <- function(fixture, subject = "001", run = "01", failed = FALSE) {
   cfg <- fixture$cfg
@@ -159,7 +171,7 @@ test_that("TSV and RDS exports retain the same snapshot and protect prior snapsh
   populate_qc_fixture(fixture)
   result <- collect_qc_inventory(fixture$cfg)
   directory <- file.path(fixture$root, "export")
-  expect_equal(write_qc_inventory(result, directory), directory)
+  expect_path_identical(write_qc_inventory(result, directory), directory)
   expect_identical(readRDS(file.path(directory, "inventory.rds")), result)
   observed <- data.table::fread(file.path(directory, "inventory.tsv"), colClasses = "character")
   expect_setequal(observed$record_id, result$inventory$record_id)
@@ -211,8 +223,8 @@ test_that("existing native products remain visible when upstream data are absent
   paths <- populate_qc_fixture(fixture)
   unlink(paths$preproc)
   result <- collect_qc_inventory(fixture$cfg)
-  expect_true(paths$pp %in% result$inventory$derivative_file)
-  expect_true(all(paths$rois %in% result$inventory$derivative_file))
+  expect_true(norm_path(paths$pp) %in% norm_path(result$inventory$derivative_file))
+  expect_true(all(norm_path(paths$rois) %in% norm_path(result$inventory$derivative_file)))
   expect_true(all(is.na(result$inventory$source_file)))
   expect_true(all(result$inventory$expectation_basis == "discovered"))
 })

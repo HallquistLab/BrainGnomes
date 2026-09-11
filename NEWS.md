@@ -18,6 +18,8 @@
   searchable React tables, interactive plots, expandable evidence, and snapshot
   downloads. Collection is read-only; no human review or inclusion decisions
   are implemented.
+* Treat platform-equivalent filesystem spellings as one QC path identity,
+  preventing duplicate derivative rows from Windows short/long path aliases.
 
 * Consolidate project creation in `setup_project()`. It now supports portable,
   prompt-free creation with `interactive = FALSE`, including templates and

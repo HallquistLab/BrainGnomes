@@ -79,7 +79,8 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
   inventory$attention <- inventory$output_status != "available"
   # Shared destination paths can result from colliding stream configurations.
   # Preserve both expectations and expose the ambiguity instead of merging them.
-  shared <- duplicated(inventory$derivative_file) | duplicated(inventory$derivative_file, fromLast = TRUE)
+  derivative_keys <- qc_path_key(inventory$derivative_file)
+  shared <- duplicated(derivative_keys) | duplicated(derivative_keys, fromLast = TRUE)
   inventory$association_status <- ifelse(shared, "shared_destination", "unique_destination")
   inventory$attention <- inventory$attention | shared
   for (path in unique(inventory$derivative_file[shared])) {
@@ -184,6 +185,24 @@ qc_list_files <- function(directory, pattern) {
   if (!checkmate::test_string(directory) || !dir.exists(directory)) return(character())
   normalizePath(sort(list.files(directory, pattern, recursive = TRUE,
     full.names = TRUE)), winslash = "/", mustWork = FALSE)
+}
+
+#' Normalize filesystem paths for identity comparisons
+#'
+#' @param path Character vector of filesystem paths.
+#' @return Character vector with platform aliases and separators normalized.
+#' @keywords internal
+#' @noRd
+qc_path_key <- function(path) {
+  if (!length(path)) return(character())
+  result <- as.character(path)
+  valid <- !is.na(result) & nzchar(result)
+  result[valid] <- normalizePath(
+    path.expand(result[valid]), winslash = "/", mustWork = FALSE
+  )
+  # Windows paths are case-insensitive even though string comparisons are not.
+  if (.Platform$OS.type == "windows") result[valid] <- tolower(result[valid])
+  result
 }
 
 #' Parse delimited BIDS identities without collapsing echo or acquisition labels
@@ -368,8 +387,9 @@ qc_expected_derivatives <- function(scfg, preproc, state) {
   # Retain existing native outputs even when upstream images were archived or
   # streams were disabled. Unknown stream attribution remains explicit.
   known <- unlist(lapply(rows, `[[`, "derivative_file"), use.names = FALSE)
-  observed_pp <- setdiff(qc_list_files(scfg$metadata$postproc_directory,
-    "_bold\\.nii(\\.gz)?$"), known)
+  observed_pp <- qc_list_files(scfg$metadata$postproc_directory,
+    "_bold\\.nii(\\.gz)?$")
+  observed_pp <- observed_pp[!qc_path_key(observed_pp) %in% qc_path_key(known)]
   for (path in observed_pp) {
     desc <- qc_entities(path)$description
     streams <- get_postprocess_stream_names(scfg)
@@ -380,8 +400,9 @@ qc_expected_derivatives <- function(scfg, preproc, state) {
     for (stream in streams) rows[[length(rows) + 1L]] <- qc_derivative_row(path,
       "postprocess", stream, NA_character_, NA_character_, NA_character_, "discovered")
   }
-  observed_roi <- setdiff(qc_list_files(scfg$metadata$rois_directory,
-    "_(timeseries|connectivity)\\.tsv$"), known)
+  observed_roi <- qc_list_files(scfg$metadata$rois_directory,
+    "_(timeseries|connectivity)\\.tsv$")
+  observed_roi <- observed_roi[!qc_path_key(observed_roi) %in% qc_path_key(known)]
   for (path in observed_roi) rows[[length(rows) + 1L]] <- qc_derivative_row(path,
     "extract_rois", NA_character_, NA_character_, NA_character_, NA_character_, "discovered")
   empty <- qc_derivative_row(character(), character(), character(), character(),
@@ -507,8 +528,8 @@ qc_collect_audit <- function(state, record, candidates, target) {
       next
     }
     intended <- qc_scalar(audit$intended_final_file)
-    if (!is.na(intended) && identical(normalizePath(intended, mustWork = FALSE),
-        normalizePath(target, mustWork = FALSE))) matches[[path]] <- audit
+    if (!is.na(intended) && identical(
+        qc_path_key(intended), qc_path_key(target))) matches[[path]] <- audit
   }
   if (length(matches) != 1L) {
     qc_issue(state, target, "Validation audit does not identify exactly one matching target.")
