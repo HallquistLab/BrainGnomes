@@ -229,6 +229,11 @@ qc_metrics_plot <- function(metrics, inventory) {
   joined <- joined[is.finite(joined$value), , drop = FALSE]
   if (!nrow(joined)) return(htmltools::tags$p("Metric files were found, but all values are unavailable."))
   group_fields <- joined[group_columns]
+  # Archived upstream inputs can leave observed ROI products without a known
+  # atlas path. Keep their diagnostic directories separate instead of pooling
+  # every unknown atlas into one distribution.
+  unknown_atlas <- joined$stage == "extract_rois" & is.na(joined$atlas)
+  group_fields$atlas[unknown_atlas] <- dirname(joined$source_file[unknown_atlas])
   group_fields[] <- lapply(group_fields, function(x) ifelse(is.na(x), "", x))
   groups <- do.call(paste, c(group_fields, sep = " / "))
   labels <- unique(groups)

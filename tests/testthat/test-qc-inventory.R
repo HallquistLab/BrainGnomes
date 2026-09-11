@@ -245,3 +245,16 @@ test_that("Quarto can render a snapshot without a project or running R server", 
   expect_true(file.exists(file.path(dirname(html), "inventory.tsv")))
   expect_identical(readRDS(file.path(dirname(html), "inventory.rds")), result)
 })
+
+test_that("unknown atlas identities do not pool different diagnostic directories", {
+  skip_if_not_installed("plotly")
+  inventory <- data.frame(record_id = c("a", "b"), sub_id = c("001", "002"),
+    ses_id = NA_character_, run = "01", stage = "extract_rois", stream = NA_character_,
+    input_stream = NA_character_, atlas = NA_character_, task = "rest",
+    space = "MNI", resolution = NA_character_)
+  metrics <- data.frame(record_id = c("a", "b"), metric = "roi_retained_percent",
+    source_file = c("/rois/atlasA/sub-001_roidiagnostics.tsv", "/rois/atlasB/sub-002_roidiagnostics.tsv"),
+    value = c(90, 95), unit = "%", n_observations = 10L, n_missing = 0L)
+  plot <- plotly::plotly_build(qc_metrics_plot(metrics, inventory))
+  expect_length(plot$x$data, 2L)
+})
