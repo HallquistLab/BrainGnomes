@@ -1,5 +1,14 @@
 # BrainGnomes (development version)
 
+* Add `collect_qc_inventory()`, `write_qc_inventory()`, and
+  `render_qc_dashboard()` for study QC snapshots. R objects and TSV tables join
+  configured workflow expectations, job history, derivative availability,
+  postprocessing audits, original fMRIPrep motion summaries, MRIQC IQMs, censor
+  masks, and regional voxel retention. The optional Quarto dashboard includes
+  searchable React tables, interactive plots, expandable evidence, and snapshot
+  downloads. Collection is read-only; no human review or inclusion decisions
+  are implemented.
+
 * Distinguish optional request plans from final scheduler contracts. Plans now
   report whether their subject scope is resolved or deferred. Flywheel runs
   record the realized post-sync scope before downstream submission; every

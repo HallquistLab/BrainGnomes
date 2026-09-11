@@ -16,7 +16,8 @@
 - Site/docs: `Rscript -e 'pkgdown::build_site()'` (optional).
 
 ## Coding Style & Naming Conventions
-- R: 2-space indent, no tabs; prefer `snake_case` for functions/objects; internal helpers start with `.`.
+- R: 2-space indent, no tabs; prefer `snake_case` for functions/objects. Do not introduce helper functions whose names begin with a period (`.`); internal helpers also use ordinary `snake_case` names.
+- Give all new functions clear documentation headers and include inline comments explaining non-obvious logic, assumptions, and data handling.
 - C++ (`src/`): follow tidy, minimal-include style; expose via Rcpp attributes; keep headers local.
 - Roxygen2 for docs; include `@export`, `@param`, `@return`, and examples where practical.
 - File names: group by feature (e.g., `utils_misc.R`, `extract_rois.R`).
