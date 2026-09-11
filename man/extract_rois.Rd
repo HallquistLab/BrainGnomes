@@ -88,6 +88,8 @@ matrix (\code{correlation}, or \code{NULL} if not computed), plus the
 voxel-retention table (\code{diagnostics}) when requested. Output ROI
 columns and connectivity dimensions include every positive atlas label,
 including labels with no usable voxels.
+Each written derivative also receives a portable provenance sidecar and
+methods/bibliography companions. Their paths are returned in \code{provenance}.
 }
 \description{
 Given a postprocessed BOLD NIfTI file and one or more atlas images,

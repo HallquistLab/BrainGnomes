@@ -215,6 +215,9 @@ write_postproc_validation_summary <- function(path, summary) {
 #'   postprocessing validation is enabled, a machine-readable JSON audit is
 #'   written beside the subject log. Newly computed final images remain in the
 #'   scratch workspace until their last-step validation has completed.
+#'   A portable JSON sidecar and a `.provenance` companion directory contain
+#'   resolved processing details, methods text requiring human review,
+#'   bibliography, available upstream reports, and separate attempt records.
 #'
 #' @details
 #' Required `cfg` entries:
@@ -235,6 +238,50 @@ write_postproc_validation_summary <- function(path, summary) {
 #' @importFrom checkmate assert_list assert_file_exists test_character test_number
 #' @export
 postprocess_subject <- function(in_file, cfg=NULL) {
+  checkmate::assert_file_exists(in_file)
+  checkmate::assert_list(cfg)
+  checkmate::assert_string(cfg$bids_desc)
+  info <- as.list(extract_bids_info(in_file))
+  output <- construct_bids_filename(modifyList(info, list(
+    description = cfg$bids_desc,
+    directory = value_or_default(cfg$output_dir, info$directory)
+  )), full.names = TRUE)
+  requested <- cfg[intersect(names(cfg), c(
+    "bids_desc", "tr", "processing_steps", "force_processing_order",
+    "apply_mask", "spatial_smooth", "intensity_normalize", "apply_aroma",
+    "temporal_filter", "confound_regression", "confound_calculate",
+    "scrubbing", "motion_filter", "validate_postproc_steps", "stop_on_failed_validation"
+  ))]
+  provenance <- derivative_provenance_new(output, in_file, "postprocessing", requested)
+  # Publish only after processing returns. Errors preserve a separate attempt
+  # record and propagate to the caller with their original condition intact.
+  withCallingHandlers({
+    result <- postprocess_subject_impl(in_file, cfg, provenance)
+    if (identical(result, in_file)) {
+      derivative_provenance_attempt(provenance, "skipped")
+    } else if (isTRUE(provenance$reused)) {
+      derivative_provenance_reuse(provenance)
+    } else {
+      provenance$file <- result
+      derivative_provenance_publish(provenance)
+      derivative_provenance_attempt(provenance, "completed")
+    }
+    result
+  }, error = function(e) {
+    tryCatch(derivative_provenance_attempt(provenance, "failed", conditionMessage(e)),
+             error = function(export_error) warning(conditionMessage(export_error), call. = FALSE))
+  })
+}
+
+#' Execute native postprocessing while collecting resolved provenance
+#'
+#' @param in_file Existing fMRIPrep BOLD input.
+#' @param cfg Requested native postprocessing configuration.
+#' @param provenance Mutable derivative collector populated at resolution and
+#'   execution boundaries, including failures and intermediate reuse.
+#' @return Final derivative path, or the input path if processing is skipped.
+#' @noRd
+postprocess_subject_impl <- function(in_file, cfg, provenance) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_list(cfg)
   if (!checkmate::test_character(cfg$bids_desc)) {
@@ -436,7 +483,11 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     if (isTRUE(cfg$overwrite)) {
       to_log(lg, "info", "Removing {final_filename} because overwrite is TRUE")
       file.remove(final_filename)
+      # A replacement may have identical bytes but different processing history.
+      # Invalidate the previous sidecar before any replacement is published.
+      unlink(derivative_provenance_paths(final_filename)$json)
     } else {
+      provenance$reused <- TRUE
       to_log(lg, "info", "Skipping postprocessing for {in_file} because postprocessed file already exists")
       if (isTRUE(cfg$validate_postproc_steps)) {
         prior_summary <- if (file.exists(validation_summary_file)) {
@@ -495,6 +546,17 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   if (!checkmate::test_number(cfg$tr, lower = 0.01, upper = 30)) {
     stop("YAML config must contain a tr field specifying the repetition time in seconds")
   }
+  provenance$record$Resolved$TR <- cfg$tr
+  provenance$record$Resolved$Space <- input_bids_info$space
+  provenance$record$Resolved$IntensityConvention <-
+    "Input intensity scale is retained except for explicitly recorded normalization; regression preserves temporal means."
+  if (checkmate::test_file_exists(fsl_img)) {
+    # Share the established checksum cache within this R process. Container
+    # identity denotes configuration; operation records establish actual use.
+    provenance$record$Software$ConfiguredContainers <- list(derivative_provenance_fingerprint(
+      fsl_img, "fsl_container", file.path(tempdir(), "derivative-container-checksums.json")
+    ))
+  }
 
   # default to not enforcing user-specified order of processing steps
   if (!checkmate::test_flag(cfg$force_processing_order)) cfg$force_processing_order <- FALSE
@@ -552,10 +614,23 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$apply)) processing_sequence <- c(processing_sequence, "scrub_timepoints")
   }
 
+  provenance$record$RequestedSequence <- derivative_provenance_array(processing_sequence)
   if (is.null(apply_mask_file)) {
+    if ("apply_mask" %in% processing_sequence) {
+      derivative_provenance_operation(provenance, "apply_mask", "skipped", message = "No usable mask was resolved.")
+    }
     processing_sequence <- processing_sequence[processing_sequence != "apply_mask"]
   }
   validate_intensity_normalization_order(processing_sequence)
+  derivative_provenance_sources(provenance, list(spatial_mask = apply_mask_file))
+  if (any(vapply(cfg[c("confound_regression", "confound_calculate", "scrubbing",
+                        "motion_filter", "intensity_normalize")], function(x) isTRUE(x$enable), logical(1)))) {
+    derivative_provenance_sources(provenance, list(confounds = proc_files$confounds))
+  }
+  if ("apply_aroma" %in% processing_sequence) {
+    derivative_provenance_sources(provenance, list(melodic_mix = proc_files$melodic_mix,
+      aroma_metrics = proc_files$aroma_metrics))
+  }
 
   to_log(lg, "info", "Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
 
@@ -615,10 +690,12 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     processing_sequence = processing_sequence,
     output_bids_info = workspace_bids_info,
     fsl_img = fsl_img,
-    lg = lg
+    lg = lg,
+    provenance = provenance
   )
 
   if (isTRUE(cfg$confound_regression$enable) && is.null(to_regress)) {
+    derivative_provenance_operation(provenance, "confound_regression", "skipped", message = "No regressors were generated.")
     to_log(lg, "warn", "Confound regression was requested but no regressors were generated; skipping confound_regression step.")
     processing_sequence <- processing_sequence[processing_sequence != "confound_regression"]
   }
@@ -646,6 +723,18 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   intermediate_outputs <- list()
 
   n_steps <- length(processing_sequence)
+  provenance$record$Resolved$ProcessingSequence <- derivative_provenance_array(processing_sequence)
+  provenance$record$Resolved$CensorPolicy <- cfg$scrubbing
+  provenance$record$Resolved$Censor <- value_or_default(
+    provenance$record$Resolved$Confounds$Censor, derivative_provenance_censor(censor_file)
+  )
+  if (n_steps == 0L) {
+    # Publication moves its staging file. Stage a copy when no image operation
+    # runs so that this move cannot consume the original fMRIPrep input.
+    cur_file <- file.path(workspace_dir, basename(proc_files$bold))
+    if (!file.copy(proc_files$bold, cur_file, overwrite = TRUE)) stop("Unable to stage input copy.")
+    derivative_provenance_operation(provenance, "copy_input", "executed")
+  }
 
   make_postproc_validator <- function(step_name, pre_file, post_file,
                                       step_index, context = list()) {
@@ -751,6 +840,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     )
     record$sequence_index <- length(validation_records) + 1L
     validation_records[[length(validation_records) + 1L]] <<- record
+    provenance$record$Validation <- validation_records
 
     if (length(record$warnings)) {
       for (warning_message in record$warnings) {
@@ -790,6 +880,39 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   #### Loop over fMRI processing steps in sequence
   for (ii in seq_along(processing_sequence)) {
     step <- processing_sequence[[ii]]
+    parameters <- switch(step,
+      scrub_interpolate = cfg$scrubbing,
+      scrub_timepoints = cfg$scrubbing,
+      cfg[[step]]
+    )
+    if (step == "confound_regression") {
+      parameters$columns <- provenance$record$Resolved$Confounds$RegressorColumns
+      parameters$preserve_mean <- TRUE
+    }
+    if (step == "apply_aroma") {
+      val <- cfg$apply_aroma$nonaggressive
+      parameters$nonaggressive <- if (is.null(val) || is.na(val)) TRUE else isTRUE(val)
+      parameters$noise_components <- derivative_provenance_array(proc_files$noise_ics)
+    }
+    if (step == "temporal_filter") {
+      parameters$method <- value_or_default(parameters$method, "fslmaths")
+      parameters$TR <- cfg$tr
+      # Match temporal_filter()'s cutoff normalization; null means disabled.
+      if (is.null(parameters$high_pass_hz) || is.infinite(parameters$high_pass_hz) ||
+          abs(parameters$high_pass_hz) < 1e-6) parameters$high_pass_hz <- NULL
+      if (is.null(parameters$low_pass_hz) || is.infinite(parameters$low_pass_hz)) parameters$low_pass_hz <- NULL
+    }
+    if (step == "apply_mask") parameters$resolved_mask <- derivative_provenance_fingerprint(apply_mask_file, "mask")
+    if (step == "spatial_smooth") {
+      parameters$mask <- derivative_provenance_fingerprint(brain_mask, "generated_automask")
+      parameters$brightness_threshold <- "0.75 * (masked median intensity - masked 2nd percentile)"
+      parameters$extent_policy <- "Reapply the nonzero temporal-minimum mask after SUSAN smoothing"
+    }
+    if (step == "intensity_normalize") {
+      parameters$mode <- normalization_mode
+      parameters$target <- normalization_target
+    }
+    derivative_provenance_operation(provenance, step, "running", parameters)
     is_last_step <- ii == n_steps
 
     # build up output file desc field for each step
@@ -869,6 +992,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     existing_destination <- file.exists(dest_out_file)
 
     if (existing_workspace && !isTRUE(cfg$overwrite)) {
+      derivative_provenance_operation(provenance, step, "reused", parameters,
+                    origin = derivative_provenance_fingerprint(out_file, "reused_intermediate"))
       to_log(lg, "info", "Skipping {step}; workspace file exists: {out_file}")
       cur_file <- out_file
       intermediate_outputs[[out_file]] <- dest_out_file
@@ -887,6 +1012,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
 
     if (!existing_workspace && existing_destination && !isTRUE(cfg$overwrite)) {
+      derivative_provenance_operation(provenance, step, "reused", parameters,
+                    origin = derivative_provenance_fingerprint(dest_out_file, "reused_intermediate"))
       to_log(lg, "info", "Reusing existing {step} output from {dest_out_file}")
       cur_file <- dest_out_file
       if (isTRUE(cfg$validate_postproc_steps)) {
@@ -972,6 +1099,17 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       stop("Unknown step: ", step)
     }
 
+    # Some helpers return their input when prerequisites are unavailable. That
+    # return is a skip, even when the requested settings enabled the operation.
+    operation_status <- if (identical(cur_file, pre_step_file)) "skipped" else "executed"
+    if (step == "apply_aroma" && operation_status == "executed") {
+      n_components <- ncol(data.table::fread(proc_files$melodic_mix, header = FALSE, nrows = 1L))
+      selected <- sort(unique(as.integer(proc_files$noise_ics)))
+      parameters$noise_components <- derivative_provenance_array(selected[selected >= 1L & selected <= n_components])
+    }
+    derivative_provenance_operation(provenance, step, operation_status, parameters,
+      message = if (operation_status == "skipped") "Operation returned its input without a transformation." else NULL)
+
     if (isTRUE(cfg$validate_postproc_steps)) {
       postproc_validate_or_stop(
         step_name = step,
@@ -1016,6 +1154,15 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     return(ok)
   }
 
+  # Helpers may return their input when skipping, and reused intermediates may
+  # live outside scratch. Publication must not move those original files.
+  if (!startsWith(normalizePath(cur_file, winslash = "/", mustWork = TRUE),
+                  paste0(normalizePath(workspace_dir, winslash = "/"), "/"))) {
+    staged_copy <- file.path(workspace_dir, "publish-copy.nii.gz")
+    if (!file.copy(cur_file, staged_copy, overwrite = TRUE)) stop("Unable to stage publication copy.")
+    cur_file <- staged_copy
+  }
+
   # move the final file into a BIDS-friendly file name with a desc field
   final_ready <- if (!identical(cur_file, final_filename)) {
     move_staged_file(
@@ -1042,8 +1189,15 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   for (cand in ancillary_candidates) {
     if (!is.null(cand$src) && nzchar(cand$src) && file.exists(cand$src)) {
-      move_staged_file(cand$src, cand$dest, overwrite = isTRUE(cfg$overwrite), label = cand$label)
+      # These companions were resolved for the newly published image. Keeping
+      # an older censor or design file here would misdescribe that derivative.
+      if (!move_staged_file(cand$src, cand$dest, overwrite = TRUE, label = cand$label)) {
+        stop("Unable to publish postprocessing companion: ", cand$dest)
+      }
     }
+  }
+  if (isTRUE(provenance$record$Resolved$Censor$Available)) {
+    provenance$record$Resolved$Censor$File <- derivative_provenance_fingerprint(final_censor_file, "censor")
   }
 
   if (isTRUE(cfg$keep_intermediates) && length(intermediate_outputs) > 0L) {
@@ -1055,6 +1209,10 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   }
 
   validation_pipeline_completed <- TRUE
+  provenance$record$Validation <- validation_records
+  provenance$record$Resolved$IntensityReference <- if (!is.null(normalization_reference)) {
+    normalization_reference
+  } else NULL
   if (validation_orchestration_started) {
     write_validation_summary()
     validation_statuses <- vapply(

@@ -60,6 +60,8 @@
 #'   voxel-retention table (\code{diagnostics}) when requested. Output ROI
 #'   columns and connectivity dimensions include every positive atlas label,
 #'   including labels with no usable voxels.
+#'   Each written derivative also receives a portable provenance sidecar and
+#'   methods/bibliography companions. Their paths are returned in `provenance`.
 #' @importFrom checkmate assert_file_exists assert_character assert_directory_exists assert_flag
 #' @export
 extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
@@ -248,13 +250,51 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
           stringsAsFactors = FALSE
         )
 
+        # Initialize only after atlas/grid validation, so invalid inputs cannot
+        # leave behind apparent derivative records. Each TSV gets its own ID.
+        provenance <- derivative_provenance_new(
+          if (save_ts) ts_file else cor_paths[[1L]], bold_file, "ROI extraction",
+          list(roi_reduce = roi_reduce, cor_method = cor_method,
+               min_vox_per_roi = min_vox_per_roi, rtoz = rtoz,
+               allow_atlas_resampling = allow_atlas_resampling, atlas_space = atlas_space)
+        )
+        derivative_provenance_sources(provenance, list(atlas = atlas, resolved_atlas = atlas_path,
+                                     spatial_mask = mask_file))
+        provenance$record$Resolved <- list(
+          Atlas = list(
+            Original = derivative_provenance_fingerprint(atlas, "atlas"),
+            Resolved = derivative_provenance_fingerprint(atlas_path, "resolved_atlas"),
+            SpaceDeclaration = atlas_space,
+            InputSpace = bids_info$space,
+            AtlasSpace = as.list(extract_bids_info(atlas))$space,
+            Resampled = !identical(normalizePath(atlas), normalizePath(atlas_path)),
+            Interpolation = "nearest-neighbour only when resampled; no inter-space registration",
+            Labels = derivative_provenance_array(roi_vals), Geometry = derivative_provenance_geometry(atlas_path)
+          ),
+          SpatialMask = if (!is.null(mask_file)) derivative_provenance_fingerprint(mask_file, "mask") else NULL,
+          VoxelValidity = "Exclude missing, all-zero, and constant BOLD time series",
+          RegionDiagnostics = diagnostics,
+          IntensityConvention = "Inherit input scale; PCA uses standardized voxel series and sign alignment to the regional mean"
+        )
+        derivative_provenance_operation(provenance, "roi_extraction", "running",
+                      list(reduction = roi_reduce, min_vox_per_roi = min_vox_per_roi))
+        provenance_files <- character()
+        extraction_completed <- FALSE
+        on.exit({
+          if (!extraction_completed) derivative_provenance_attempt(provenance, "failed", "ROI extraction did not complete.")
+        }, add = TRUE)
+
         if (isTRUE(save_diagnostics)) {
+          reused_diagnostics <- file.exists(diagnostics_file) && !overwrite
           if (file.exists(diagnostics_file) && isFALSE(overwrite)) {
             to_log(lg, "info", "Not overwriting existing ROI diagnostics file {diagnostics_file}")
           } else {
             to_log(lg, "info", "Writing subject {sub_id} ROI voxel-retention diagnostics to {diagnostics_file}")
             data.table::fwrite(diagnostics, diagnostics_file, sep = "\t", na = "NA")
           }
+          provenance_files <- c(provenance_files, derivative_provenance_roi_output(
+            provenance, diagnostics_file, reused_diagnostics, "roi_diagnostics"
+          ))
         }
 
         ts_mat <- sapply(seq_along(roi_vals), function(roi_index) {
@@ -324,7 +364,21 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
           }
         }
 
+        provenance$record$Resolved$Censor <- derivative_provenance_censor(censor_file, n_time)
+        derivative_provenance_sources(provenance, list(censor = censor_file))
+        provenance$record$Resolved$Censor$Application <- if (!file.exists(censor_file)) {
+          "unavailable"
+        } else if (length(censor) == n_time) "applied_to_input" else "already_applied_to_input"
+        provenance$record$Resolved$Censor$OriginalVolumeIndices <- if (file.exists(censor_file)) {
+          derivative_provenance_array(which(censor == 1L))
+        } else NULL
+        provenance$record$Resolved$OutputRows <- nrow(ts_mat)
+        provenance$record$Resolved$InputVolumeIndices <- derivative_provenance_array(ts_df$volume)
+        derivative_provenance_operation(provenance, "roi_extraction", "executed",
+                      list(reduction = roi_reduce, min_vox_per_roi = min_vox_per_roi))
+
         if (isTRUE(save_ts)) {
+          reused_timeseries <- file.exists(ts_file) && !overwrite
           if (file.exists(ts_file) && isFALSE(overwrite)) {
             to_log(lg, "info", "Not overwriting existing time series file {ts_file}")
           } else {
@@ -335,6 +389,9 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
             }
             data.table::fwrite(ts_df, ts_file, sep = "\t")
           }
+          provenance_files <- c(provenance_files, derivative_provenance_roi_output(
+            provenance, ts_file, reused_timeseries
+          ))
         } else {
           ts_file <- NULL
         }
@@ -404,15 +461,35 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
               to_log(lg, "warn", "No usable ROIs remain after filtering; all-NA connectivity matrix not written because overwrite=FALSE for {cor_file}")
             }
 
+            provenance_files <<- c(provenance_files, derivative_provenance_roi_output(
+              provenance, cor_file, !write_file, "connectivity",
+              list(method = cmeth, fisher_z = rtoz && !no_usable_rois,
+                   all_missing = no_usable_rois, usable_regions = ncol(ts_use),
+                   missing_values = if (cmeth == "cor.shrink") "corpcor::cor.shrink" else "pairwise.complete.obs")
+            ))
+
             cor_file
           })
           names(cor_files) <- cor_method
         }
 
+        if (!enough_timepoints && compute_correlation) {
+          derivative_provenance_operation(provenance, "connectivity", "skipped",
+            message = "Fewer than 20 timepoints; connectivity was not generated.")
+          for (cor_file in cor_paths) {
+            provenance$file <- cor_file
+            provenance_files <- c(provenance_files, derivative_provenance_attempt(
+              provenance, "skipped", "Fewer than 20 timepoints; connectivity was not generated."
+            ))
+          }
+        }
+        extraction_completed <- TRUE
+
         list(
           timeseries = ts_file,
           correlation = cor_files,
-          diagnostics = diagnostics_file
+          diagnostics = diagnostics_file,
+          provenance = unique(provenance_files)
         )
       },
       atlas_path = atlas,

@@ -20,6 +20,9 @@ map when requested, and logging to a subject-level log file. When
 postprocessing validation is enabled, a machine-readable JSON audit is
 written beside the subject log. Newly computed final images remain in the
 scratch workspace until their last-step validation has completed.
+A portable JSON sidecar and a \code{.provenance} companion directory contain
+resolved processing details, methods text requiring human review,
+bibliography, available upstream reports, and separate attempt records.
 }
 \description{
 Applies a sequence of postprocessing operations to a single subject-level BOLD NIfTI file, as specified by

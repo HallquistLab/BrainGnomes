@@ -10,11 +10,20 @@
 #' @param output_bids_info Named list of BIDS entities for the postprocessed output file
 #' @param fsl_img Optional path to a Singularity image with FSL installed.
 #' @param lg Logger object for messages.
+#' @param provenance Optional internal derivative-record collector.
 #' @return Path to the nuisance regressor file or `NULL` if not created.
 #' @importFrom stats setNames
 #' @keywords internal
 postprocess_confounds <- function(proc_files, cfg, processing_sequence,
-                                  output_bids_info, fsl_img = NULL, lg = NULL) {
+                                  output_bids_info, fsl_img = NULL, lg = NULL,
+                                  provenance = NULL) {
+  resolved <- list(Status = "not_requested", RegressorColumns = list())
+  # Retain actual column selection even if a later transformation raises an
+  # error. A started but unfinished confound stage must not read as completed.
+  if (!is.null(provenance)) on.exit({
+    if (identical(resolved$Status, "started")) resolved$Status <- "failed"
+    provenance$record$Resolved$Confounds <- resolved
+  }, add = TRUE)
   if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue("BrainGnomes")
 
   # if no confound steps are enabled, no need to continue
@@ -29,6 +38,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   }
 
   # read confounds file
+  resolved$Status <- "started"
   confounds <- data.table::fread(proc_files$confounds,
                                  na.strings = c("n/a", "NA", "."),
                                  data.table = FALSE)
@@ -38,6 +48,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     NULL
   }
   motion_filtered_fd <- NULL
+  motion_filter_applied <- FALSE
   motion_filter_type <- NULL
   processed_source_fd_col <- ".bg_source_framewise_displacement"
 
@@ -160,6 +171,18 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
                                         cfg$confound_calculate$columns))
   noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns,
                                       cfg$confound_calculate$noproc_columns))
+  resolved$ExpandedRegressionColumns <- derivative_provenance_array(cfg$confound_regression$columns)
+  resolved$ExpandedUnprocessedRegressionColumns <- derivative_provenance_array(cfg$confound_regression$noproc_columns)
+  resolved$ProcessedColumns <- derivative_provenance_array(confound_cols)
+  resolved$UnprocessedColumns <- derivative_provenance_array(noproc_cols)
+  resolved$MotionFilter <- list(
+    Settings = motion_filter_cfg, Applied = motion_filter_applied,
+    FDRecomputed = !is.null(motion_filtered_fd)
+  )
+  resolved$RequestedOperations <- derivative_provenance_array(intersect(
+    c("apply_aroma", "temporal_filter"), processing_sequence
+  ))
+  resolved$AppliedOperations <- list()
 
   # When calculated FD is a processed confound, send both FD lineages through
   # the same BOLD-matched operations. The canonical column contains FD from
@@ -200,6 +223,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       to_log(lg, "info", "No spikes detected; censor file will contain all 1s")
       writeLines(rep("1", nrow(confounds)), con = censor_file)
     }
+    resolved$Censor <- derivative_provenance_censor(censor_file, nrow(confounds))
   }
 
   has_confounds <- !is.null(confound_cols) && length(confound_cols) > 0L
@@ -217,6 +241,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   }
 
   if (!has_confounds && !has_noproc) {
+    resolved$Status <- "skipped_no_columns"
     if (isTRUE(cfg$confound_calculate$enable) || isTRUE(cfg$confound_regression$enable)) {
       to_log(lg, "info", "Confound postprocessing skipped; no confound columns matched the request and no noproc columns were supplied.")
     } else {
@@ -277,6 +302,9 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
             colnames(resid_mat) <- confound_names
             confounds_to_filt <- resid_mat
             confound_nii <- mat_to_nii(confounds_to_filt, ni_out = confound_nii)
+            resolved$AppliedOperations <- c(resolved$AppliedOperations, list("apply_aroma"))
+            resolved$AROMA <- list(Nonaggressive = nonaggressive_flag,
+                                  NoiseComponents = derivative_provenance_array(comp_idx))
           }
         }
       }
@@ -293,6 +321,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
         overwrite = TRUE, lg = lg, fsl_img = fsl_img,
         method = cfg$temporal_filter$method
       )
+      resolved$AppliedOperations <- c(resolved$AppliedOperations, list("temporal_filter"))
     }
 
     filtered_confounds <- data.frame(nii_to_mat(confound_nii))
@@ -410,6 +439,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       to_log(lg, "info", "Writing postprocessed confounds to: {confile}")
       to_log(lg, "info", "Columns are: {paste(names(df), collapse=', ')}")
       data.table::fwrite(df, file = confile, sep = "\t", col.names = include_header)
+      resolved$CalculatedColumns <- derivative_provenance_array(names(df))
     }
   }
 
@@ -456,7 +486,11 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       )
 
       const_cols <- sapply(df, function(x) all(x == x[1L]))
+      # Record design order after expansion and constant-column removal, before
+      # writing the headerless matrix consumed by nuisance regression.
+      resolved$DroppedConstantColumns <- derivative_provenance_array(names(df)[const_cols])
       if (any(const_cols)) df <- df[, !const_cols, drop = FALSE]
+      resolved$RegressorColumns <- derivative_provenance_array(c("intercept", names(df)))
       df <- cbind(1, df) # add intercept
 
       data.table::fwrite(df, file = to_regress, sep = "\t", col.names = FALSE)
@@ -465,6 +499,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     to_regress <- NULL
   }
 
+  resolved$Status <- "completed"
   return(to_regress)
 }
 
