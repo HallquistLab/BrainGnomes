@@ -5,6 +5,7 @@ make_project_input_fixture <- function() {
     project_directory = root,
     interactive = FALSE
   )
+  root <- cfg$metadata$project_directory
   list(
     root = root,
     config_file = file.path(root, "project_config.yaml"),

@@ -68,7 +68,10 @@ test_that("non-interactive setup supports templates and guarded overwrite", {
   )
 
   expect_identical(cfg$metadata$project_name, "derived")
-  expect_identical(cfg$metadata$project_directory, normalizePath(project_root))
+  expect_identical(
+    cfg$metadata$project_directory,
+    normalizePath(project_root, winslash = "/", mustWork = TRUE)
+  )
   expect_identical(cfg$custom_setting, "preserved")
   expect_error(
     setup_project(

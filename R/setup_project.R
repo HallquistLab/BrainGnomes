@@ -191,14 +191,17 @@ create_project_from_defaults <- function(project_name, project_directory,
   checkmate::assert_string(project_name)
   checkmate::assert_string(project_directory)
   checkmate::assert_flag(overwrite)
-  project_directory <- normalizePath(
-    path.expand(project_directory), winslash = "/", mustWork = FALSE
-  )
+  project_directory <- path.expand(project_directory)
 
   dir.create(project_directory, recursive = TRUE, showWarnings = FALSE)
   if (!dir.exists(project_directory)) {
     stop("Failed to create project directory: ", project_directory, call. = FALSE)
   }
+  # Resolve aliases only after the directory exists. On macOS, /var resolves to
+  # /private/var; on Windows, this also standardizes separators and long names.
+  project_directory <- normalizePath(
+    project_directory, winslash = "/", mustWork = TRUE
+  )
 
   scfg <- if (is.null(template)) {
     list()
