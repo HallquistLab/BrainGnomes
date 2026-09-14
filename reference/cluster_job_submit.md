@@ -97,8 +97,12 @@ cluster_job_submit(
 
   A named list of metadata fields to track about the submitted job. This
   may include the parent job ID, batch script path, and scheduler
-  options. This is used in conjunction with `tracking_sqlite_db` to
-  support job tracking.
+  options. The optional `contract_artifact_env_names` element explicitly
+  identifies additional file-valued environment variables that are
+  immutable execution inputs and should be checksummed in the job
+  contract. Mutable operational files such as tracking databases, logs,
+  status markers, and output manifests are always excluded. This is used
+  in conjunction with `tracking_sqlite_db` to support job tracking.
 
 ## Value
 

@@ -131,7 +131,13 @@ will be recorded, including job dependencies and parent-child relationships.</p>
 
 <dt id="arg-tracking-args">tracking_args<a class="anchor" aria-label="anchor" href="#arg-tracking-args"></a></dt>
 <dd><p>A named list of metadata fields to track about the submitted job. This may include the parent job ID,
-batch script path, and scheduler options. This is used in conjunction with <code>tracking_sqlite_db</code> to support job tracking.</p></dd>
+batch script path, and scheduler options. The optional
+<code>contract_artifact_env_names</code> element explicitly identifies additional
+file-valued environment variables that are immutable execution inputs and
+should be checksummed in the job contract. Mutable operational files such
+as tracking databases, logs, status markers, and output manifests are
+always excluded. This is used in conjunction with
+<code>tracking_sqlite_db</code> to support job tracking.</p></dd>
 
 </dl></div>
     <div class="section level2">
