@@ -1,5 +1,11 @@
 # BrainGnomes (development version)
 
+* Restrict scheduler-contract checksums to recognized immutable execution
+  inputs and explicitly selected environment artifacts. Mutable operational
+  files, including SQLite tracking databases, logs, status markers, state
+  files, receipts, and output manifests, remain recorded as environment
+  metadata but no longer trigger false contract-drift failures when jobs start.
+
 * Native postprocessing and ROI outputs now carry versioned JSON provenance,
   draft methods text, BibTeX, and available upstream citations and reports.
   Records distinguish executed, skipped, failed, and reused operations, retain

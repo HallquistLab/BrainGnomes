@@ -34,6 +34,14 @@ test_that("tracked scheduler submissions seal a job manifest", {
   script <- file.path(root, "worker.sbatch")
   writeLines(c("#!/bin/sh", "exit 0"), script)
   Sys.chmod(script, "0755")
+  container <- file.path(root, "fmriprep.sif")
+  custom_input <- file.path(root, "custom-input.txt")
+  unclassified_file <- file.path(root, "unclassified.txt")
+  mutable_files <- file.path(root, c(
+    "subject.log", "job.out", "job.err", "complete.marker",
+    "task-status.env", "prefetch-state.json", "outputs.json"
+  ))
+  file.create(c(container, custom_input, unclassified_file, mutable_files))
   withr::local_envvar(PATH = paste(root, Sys.getenv("PATH"), sep = .Platform$path.sep))
 
   tracking <- list(
@@ -48,12 +56,26 @@ test_that("tracked scheduler submissions seal a job manifest", {
     n_cpus = 2L,
     wall_time = "01:00:00",
     mem_total = "8G",
-    stdout_log = file.path(root, "job-%j.out"),
-    stderr_log = file.path(root, "job-%j.err")
+    stdout_log = mutable_files[[2L]],
+    stderr_log = mutable_files[[3L]],
+    contract_artifact_env_names = c(
+      "custom_input", "sqlite_db", "log_file", "stdout_log",
+      "stderr_log", "complete_file", "status_file",
+      "prefetch_state_file", "output_manifest_file"
+    )
   )
   job_id <- cluster_job_submit(
     script, scheduler = "slurm", sched_args = "--time=01:00:00",
-    env_variables = c(API_TOKEN = "do-not-record", input_label = "task"),
+    env_variables = c(
+      API_TOKEN = "do-not-record", input_label = "task",
+      fmriprep_container = container, custom_input = custom_input,
+      unclassified_file = unclassified_file,
+      log_file = mutable_files[[1L]], stdout_log = mutable_files[[2L]],
+      stderr_log = mutable_files[[3L]], complete_file = mutable_files[[4L]],
+      status_file = mutable_files[[5L]],
+      prefetch_state_file = mutable_files[[6L]],
+      output_manifest_file = mutable_files[[7L]]
+    ),
     echo = FALSE, tracking_sqlite_db = db, tracking_args = tracking
   )
 
@@ -82,6 +104,64 @@ test_that("tracked scheduler submissions seal a job manifest", {
     "do-not-record", manifest$execution$rendered_submission_command,
     fixed = TRUE
   ))
+  artifact_roles <- manifest$artifacts$role
+  expect_setequal(artifact_roles, c(
+    "batch_script", "environment.fmriprep_container",
+    "environment.custom_input"
+  ))
+  expect_true(all(c(
+    "sqlite_db", "log_file", "stdout_log", "stderr_log", "complete_file",
+    "status_file", "prefetch_state_file", "output_manifest_file"
+  ) %in% manifest$execution$environment$name))
+  expect_false(any(paste0("environment.", c(
+    "unclassified_file", "sqlite_db", "log_file", "stdout_log",
+    "stderr_log", "complete_file", "status_file", "prefetch_state_file",
+    "output_manifest_file"
+  )) %in% artifact_roles))
+
+  # Normal scheduler bookkeeping mutates every operational file after the
+  # contract is sealed. None of those changes should be treated as code drift.
+  invisible(lapply(
+    c(unclassified_file, mutable_files),
+    function(path) write("changed after submission", path, append = TRUE)
+  ))
+  expect_no_error(update_tracked_job_status(db, job_id, "STARTED"))
+  started <- get_tracked_job_status(job_id, sqlite_db = db)
+  expect_identical(started$contract_status, "VERIFIED")
+})
+
+test_that("environment artifact policy retains current immutable pipeline inputs", {
+  env_names <- c(
+    "snapshot_rds", "filelist_path", "heudiconv_heuristic",
+    "fs_license_file", "bids_validator", "flywheel_cmd",
+    "heudiconv_container", "fmriprep_container", "mriqc_container",
+    "aroma_container", "prefetch_container", "prefetch_script",
+    "postprocess_rscript", "postprocess_image_sched_script",
+    "extract_rscript", "extract_sched_script", "insert_tracked_job_path",
+    "upd_job_status_path", "add_parent_path"
+  )
+  env_variables <- stats::setNames(rep("placeholder", length(env_names)), env_names)
+
+  expect_setequal(
+    job_contract_environment_artifact_names(env_variables),
+    env_names
+  )
+
+  mutable_names <- c(
+    "sqlite_db", "project_tracking_db", "database_path", "subject_log",
+    "worker_stdout_file", "job_status_marker", "prefetch_state_file",
+    "runtime_receipt_path", "output_manifest_file", "BG_JOB_MANIFEST"
+  )
+  expect_true(all(vapply(
+    mutable_names,
+    is_mutable_job_contract_environment_name,
+    logical(1)
+  )))
+  expect_false(any(vapply(
+    c("upd_job_status_path", "filelist_path", "snapshot_rds"),
+    is_mutable_job_contract_environment_name,
+    logical(1)
+  )))
 })
 
 test_that("STARTED writes an immutable verified runtime receipt", {

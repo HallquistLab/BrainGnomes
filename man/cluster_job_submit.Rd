@@ -58,7 +58,13 @@ submission fails. Defaults to FALSE (i.e., issue a warning).}
 will be recorded, including job dependencies and parent-child relationships.}
 
 \item{tracking_args}{A named list of metadata fields to track about the submitted job. This may include the parent job ID,
-batch script path, and scheduler options. This is used in conjunction with \code{tracking_sqlite_db} to support job tracking.}
+batch script path, and scheduler options. The optional
+\code{contract_artifact_env_names} element explicitly identifies additional
+file-valued environment variables that are immutable execution inputs and
+should be checksummed in the job contract. Mutable operational files such
+as tracking databases, logs, status markers, and output manifests are
+always excluded. This is used in conjunction with
+\code{tracking_sqlite_db} to support job tracking.}
 }
 \value{
 A character string containing the jobid of the scheduled job.
