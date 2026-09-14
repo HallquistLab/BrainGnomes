@@ -95,6 +95,56 @@ redact_job_contract_command <- function(command, env_variables) {
   command
 }
 
+default_job_contract_environment_artifacts <- function() {
+  c(
+    # Run inputs whose contents determine what the scheduled job executes.
+    "snapshot_rds", "filelist_path", "heudiconv_heuristic",
+    "fs_license_file", "bids_validator", "flywheel_cmd",
+    # Container images and executable scripts used by current pipeline stages.
+    "heudiconv_container", "fmriprep_container", "mriqc_container",
+    "aroma_container", "prefetch_container", "prefetch_script",
+    "postprocess_rscript", "postprocess_image_sched_script",
+    "extract_rscript", "extract_sched_script",
+    # Installed helpers invoked by the scheduler scripts themselves.
+    "insert_tracked_job_path", "upd_job_status_path", "add_parent_path"
+  )
+}
+
+is_mutable_job_contract_environment_name <- function(name) {
+  if (!checkmate::test_string(name)) return(FALSE)
+  normalized <- tolower(name)
+  normalized %in% c("bg_job_manifest", "bg_contract_directory") ||
+    grepl(
+      paste0(
+        "(^|_)(sqlite_db|tracking_db|database_file|database_path|",
+        "stdout_log|stdout_file|stdout_path|stderr_log|stderr_file|stderr_path|",
+        "log|log_file|log_path|complete_file|complete_marker|fail_file|",
+        "fail_marker|status_file|status_dir|status_marker|state_file|state_path|",
+        "receipt_file|receipt_path|output_manifest|output_manifest_file|",
+        "output_manifest_path|job_manifest|job_manifest_file|job_manifest_path)$"
+      ),
+      normalized,
+      perl = TRUE
+    )
+}
+
+job_contract_environment_artifact_names <- function(env_variables,
+                                                    requested = NULL) {
+  if (is.null(env_variables) || length(env_variables) == 0L ||
+      is.null(names(env_variables))) {
+    return(character())
+  }
+  requested <- as.character(requested)
+  requested <- requested[!is.na(requested) & nzchar(requested)]
+  selected <- unique(c(
+    default_job_contract_environment_artifacts(), requested
+  ))
+  selected <- selected[
+    !vapply(selected, is_mutable_job_contract_environment_name, logical(1))
+  ]
+  intersect(selected, names(env_variables))
+}
+
 job_contract_artifacts <- function(script, env_variables, tracking_args,
                                    contract_directory) {
   candidates <- list(batch_script = script)
@@ -102,13 +152,17 @@ job_contract_artifacts <- function(script, env_variables, tracking_args,
     value <- tracking_args[[field]]
     if (checkmate::test_string(value)) candidates[[field]] <- value
   }
-  if (!is.null(env_variables) && length(env_variables) > 0L) {
-    env_names <- names(env_variables)
-    if (is.null(env_names)) env_names <- as.character(seq_along(env_variables))
-    for (i in seq_along(env_variables)) {
-      value <- env_variables[[i]]
+  # Environment metadata can name logs, status markers, and the live tracking
+  # database. Only checksum known immutable inputs or caller-selected inputs;
+  # operational paths remain available in execution$environment for provenance.
+  artifact_env_names <- job_contract_environment_artifact_names(
+    env_variables, tracking_args$contract_artifact_env_names
+  )
+  if (length(artifact_env_names) > 0L) {
+    for (env_name in artifact_env_names) {
+      value <- env_variables[[env_name]]
       if (!is.na(value) && nzchar(value) && file.exists(value) && !dir.exists(value)) {
-        candidates[[paste0("environment.", env_names[[i]])]] <- value
+        candidates[[paste0("environment.", env_name)]] <- value
       }
     }
   }
