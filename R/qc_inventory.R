@@ -10,13 +10,17 @@
 #'   data have not arrived. Discovered and tracked subjects are always retained.
 #' @param refresh Query the scheduler through [inspect_project()] for active
 #'   jobs. Defaults to `FALSE`; the snapshot then uses recorded database states.
+#' @param run_id Optional recorded run ID, or `"latest"`. Restricts the snapshot
+#'   to that run's saved participants, stages, and streams, using its recorded
+#'   configuration. Files are observed at collection time, not reconstructed.
 #' @return A `bg_qc_inventory` list with `metadata`, `acquisitions`, `inventory`
 #'   (one row per derivative/stage/stream), `workflow`, `metrics`, `evidence`,
 #'   `checks`, `jobs`, `attempts`, `manifest_files`, `active`, `reconciliation`,
 #'   and `issues`. Missing diagnostics are explicit; an available file is not
 #'   evidence of scientific quality or a successful producing attempt.
 #' @details Expected postprocessing paths are resolved from existing fMRIPrep
-#'   inputs and the current stream configuration; ROI targets follow those
+#'   inputs and the current stream configuration, or the recorded configuration
+#'   when `run_id` is supplied; ROI targets follow those
 #'   postprocessing paths. Before upstream inputs exist, configured work remains
 #'   visible in `workflow`, without guessing output spaces or echo combinations.
 #'   `acquisitions` inventories raw BOLD files separately, including each echo.
@@ -25,6 +29,12 @@
 #'   producing job to every acquisition. File-manifest comparisons use size and
 #'   modification time, not a content hash. Diagnostics have their own file
 #'   timestamps and can outlive the derivative they describe.
+#'   Disabled or irrelevant checks are `not_applicable`; absent required checks
+#'   are `missing`. `unavailable` preserves an unknown requirement. Existing
+#'   evidence remains visible even when the current setting is disabled.
+#'   `attention_reasons` explains flags, and `checks` preserves warnings, timing,
+#'   and structured details as JSON. Saved-run collection requires resolved
+#'   provenance and cannot be combined with additional `subjects`.
 #' @examples
 #' \dontrun{
 #' qc <- collect_qc_inventory("/path/to/project")
@@ -33,11 +43,15 @@
 #' render_qc_dashboard(qc, "/path/to/qc-dashboard")
 #' }
 #' @export
-collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FALSE) {
+collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FALSE,
+                                 run_id = NULL) {
   started_at <- qc_time(Sys.time())
   scfg <- project_config_from_input(input)
   checkmate::assert_data_frame(subjects, null.ok = TRUE)
-  inspection <- inspect_project(scfg, refresh = refresh)
+  context <- qc_collection_context(scfg, run_id, subjects)
+  scfg <- context$config
+  subjects <- context$subjects
+  inspection <- inspect_project(scfg, run_id = context$run_id, refresh = refresh)
   state <- new.env(parent = emptyenv())
   state$issues <- list()
   state$evidence <- list()
@@ -68,14 +82,24 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
     inventory <- rbind(inventory, qc_derivative_row(path, "mriqc",
       NA_character_, NA_character_, NA_character_, NA_character_, "discovered"))
   }
+  acquisitions <- acquisitions[qc_scope_rows(acquisitions, context), , drop = FALSE]
+  inventory <- inventory[qc_scope_rows(inventory, context), , drop = FALSE]
+  inventory$record_role <- ifelse(inventory$stage == "fmriprep" &
+    !"fmriprep" %in% context$steps, "upstream_input", "output")
+  if (!is.null(context$run_id)) {
+    inventory$record_role[!inventory$stage %in% context$steps] <- "upstream_input"
+  }
   inventory$record_id <- sprintf("derivative-%06d", seq_len(nrow(inventory)))
   info <- file.info(inventory$derivative_file)
   inventory$output_status <- ifelse(is.na(info$size), "missing",
     ifelse(info$isdir | info$size == 0, "empty_or_invalid", "available"))
   inventory$size_bytes <- as.numeric(info$size)
   inventory$modified_at <- qc_time(info$mtime)
-  inventory$validation_status <- rep("unavailable", nrow(inventory))
+  inventory$validation_status <- rep("not_applicable", nrow(inventory))
   inventory$diagnostics_status <- rep("unavailable", nrow(inventory))
+  inventory$validation_required <- rep(FALSE, nrow(inventory))
+  inventory$diagnostics_required <- rep(NA, nrow(inventory))
+  inventory$audit_warnings <- rep(FALSE, nrow(inventory))
   inventory$attention <- inventory$output_status != "available"
   # Shared destination paths can result from colliding stream configurations.
   # Preserve both expectations and expose the ambiguity instead of merging them.
@@ -100,6 +124,9 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
       confounds <- qc_find_confounds(row$derivative_file)
       inventory$diagnostics_status[i] <- qc_collect_motion(state, record, confounds)
     } else if (row$stage == "postprocess") {
+      cfg <- scfg$postprocess[[row$stream]]
+      inventory$validation_required[i] <- qc_required(cfg$validate_postproc_steps)
+      inventory$diagnostics_required[i] <- qc_required(cfg$scrubbing$enable)
       audit_name <- sub("\\.nii(\\.gz)?$", "_postproc-validation.json",
         basename(row$derivative_file))
       candidates <- audits[basename(audits) == audit_name]
@@ -108,16 +135,25 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
       )
       censor <- get_censor_file(as.list(extract_bids_info(row$derivative_file)))
       inventory$diagnostics_status[i] <- qc_collect_censor(state, record, censor)
+      inventory$audit_warnings[i] <- any(vapply(state$checks, function(check) {
+        identical(check$record_id, record) && nzchar(check$warnings)
+      }, logical(1)))
     } else if (row$stage == "extract_rois") {
+      inventory$diagnostics_required[i] <- qc_required(scfg$extract_rois[[row$stream]]$save_diagnostics)
       diagnostic <- sub("_(timeseries|connectivity)\\.tsv$", "_roidiagnostics.tsv",
         row$derivative_file)
       # Correlation entities occur only in connectivity filenames, not diagnostics.
       diagnostic <- sub("_(correlation|cor)-[^_]+", "", diagnostic)
       inventory$diagnostics_status[i] <- qc_collect_roi(state, record, diagnostic)
     }
+    if (row$stage %in% c("fmriprep", "mriqc")) inventory$diagnostics_required[i] <- TRUE
+    inventory$validation_status[i] <- qc_applicability(
+      inventory$validation_status[i], inventory$validation_required[i])
+    inventory$diagnostics_status[i] <- qc_applicability(
+      inventory$diagnostics_status[i], inventory$diagnostics_required[i])
     inventory$attention[i] <- inventory$attention[i] ||
-      inventory$validation_status[i] %in% c("failed", "error", "invalid", "ambiguous") ||
-      inventory$diagnostics_status[i] %in% c("invalid", "roi_loss")
+      inventory$validation_status[i] %in% c("failed", "error", "invalid", "ambiguous", "missing", "not_run") ||
+      inventory$diagnostics_status[i] %in% c("invalid", "roi_loss", "missing") || inventory$audit_warnings[i]
   }
 
   # Attach upstream HTML at its actual subject/acquisition scope. Evidence is
@@ -126,6 +162,8 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
     qc_list_files(roots$mriqc_directory, "\\.html$"))
   for (path in unique(reports)) {
     ids <- qc_entities(path)
+    if (!is.null(context$run_id) && !is.na(ids$sub_id) &&
+        !any(qc_scope_rows(ids, context, subject_evidence = TRUE))) next
     matched <- qc_compatible_rows(inventory, ids)
     if (!length(matched)) qc_add_evidence(state, NA_character_, "upstream_report", path)
     for (i in matched) qc_add_evidence(state, inventory$record_id[i], "upstream_report", path)
@@ -137,8 +175,15 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
     if (file.exists(sidecar)) qc_add_evidence(state, inventory$record_id[i], "sidecar", sidecar)
   }
 
-  workflow <- qc_workflow(scfg, inspection, acquisitions, inventory, subjects, state)
+  workflow <- qc_workflow(scfg, inspection, acquisitions, inventory, subjects, state,
+    run_scope = !is.null(context$run_id))
+  if (!is.null(context$run_id)) {
+    keep <- is.na(workflow$sub_id) | (workflow$stage %in% context$steps &
+      qc_scope_rows(workflow, context, subject_evidence = TRUE))
+    workflow <- workflow[keep, , drop = FALSE]
+  }
   inventory <- qc_attach_workflow(inventory, workflow)
+  inventory$attention_reasons <- qc_attention_reasons(inventory)
   manifests <- qc_manifest_files(inspection$jobs, state)
   evidence <- qc_bind_rows(state$evidence, qc_empty_evidence())
   metrics <- qc_bind_rows(state$metrics, qc_empty_metrics())
@@ -162,7 +207,13 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
       log_directory = inspection$log_directory,
       braingnomes_version = as.character(utils::packageVersion("BrainGnomes")),
       scheduler_refreshed = isTRUE(refresh),
-      expectation_basis = "Current configuration and discovered inputs; workflow includes expected subjects."),
+      scope = if (is.null(context$run_id)) "project" else "run", run_id = context$run_id,
+      selected_steps = context$steps, recorded_at = context$recorded_at,
+      provenance_file = context$provenance_file,
+      settings = qc_report_settings(scfg, context$steps),
+      expectation_basis = if (is.null(context$run_id))
+        "Current configuration and discovered inputs; workflow includes expected subjects." else
+        "Saved run configuration and participant scope; files observed at collection time."),
     acquisitions = acquisitions, inventory = inventory, workflow = workflow,
     metrics = metrics, regions = regions, evidence = unique(evidence), checks = checks,
     jobs = as.data.frame(inspection$jobs), attempts = inspection$attempts,
@@ -256,7 +307,9 @@ qc_empty_metrics <- function() {
 #' @noRd
 qc_empty_checks <- function() {
   data.frame(record_id = character(), step = character(), status = character(),
-    message = character(), source_file = character())
+    message = character(), warnings = character(), started_at = character(),
+    audited_at = character(), elapsed_seconds = numeric(), details_json = character(),
+    source_file = character())
 }
 
 #' Construct the regional diagnostic table schema
@@ -541,7 +594,12 @@ qc_collect_audit <- function(state, record, candidates, target) {
     if (!is.list(check)) next
     state$checks[[length(state$checks) + 1L]] <- data.frame(record_id = record,
       step = qc_scalar(check$step), status = qc_scalar(check$status),
-      message = qc_scalar(check$message), source_file = names(matches)[1L])
+      message = qc_scalar(check$message), warnings = paste(unlist(check$warnings), collapse = "\n"),
+      started_at = qc_scalar(check$started_at), audited_at = qc_scalar(audit$updated_at),
+      elapsed_seconds = suppressWarnings(as.numeric(qc_scalar(check$elapsed_seconds))),
+      details_json = as.character(jsonlite::toJSON(check$details, auto_unbox = TRUE,
+        null = "null", na = "null", digits = NA)), source_file = names(matches)[1L])
+    qc_collect_check_metrics(state, record, check, names(matches)[1L])
   }
   status <- qc_scalar(audit$overall_status)
   if (is.na(status) || !status %in% c("passed", "failed", "error", "skipped", "not_run")) "invalid" else status
@@ -585,12 +643,13 @@ qc_collect_roi <- function(state, record, path) {
 #' Join configured subject/stage expectations with recorded current workflow units
 #' @keywords internal
 #' @noRd
-qc_workflow <- function(scfg, inspection, acquisitions, inventory, subjects, state) {
+qc_workflow <- function(scfg, inspection, acquisitions, inventory, subjects, state,
+                        run_scope = FALSE) {
   candidates <- list(acquisitions[, c("sub_id", "ses_id"), drop = FALSE],
     inventory[, c("sub_id", "ses_id"), drop = FALSE],
     inspection$subject_stages[, c("sub_id", "ses_id"), drop = FALSE])
   bids_root <- scfg$metadata$bids_directory
-  if (checkmate::test_string(bids_root) && dir.exists(bids_root)) {
+  if (!run_scope && checkmate::test_string(bids_root) && dir.exists(bids_root)) {
     for (directory in list.dirs(bids_root, recursive = FALSE, full.names = TRUE)) {
       if (!grepl("^sub-[A-Za-z0-9]+$", basename(directory))) next
       sessions <- list.dirs(directory, recursive = FALSE, full.names = FALSE)
@@ -606,7 +665,7 @@ qc_workflow <- function(scfg, inspection, acquisitions, inventory, subjects, sta
     candidates[[length(candidates) + 1L]] <- subjects[, c("sub_id", "ses_id"), drop = FALSE]
   }
   # Include planned scopes even when subjects have not yet produced any files.
-  for (path in qc_list_files(scfg$metadata$log_directory, "^subjects\\.tsv$")) {
+  for (path in if (run_scope) character() else qc_list_files(scfg$metadata$log_directory, "^subjects\\.tsv$")) {
     scope <- qc_read_tsv(path, state)
     if (is.data.frame(scope) && "sub_id" %in% names(scope)) {
       if (!"ses_id" %in% names(scope)) scope$ses_id <- rep(NA_character_, nrow(scope))

@@ -520,6 +520,7 @@ record_run_provenance <- function(scfg, run_id, execution, debug = FALSE,
     run_id = run_id,
     recorded_at = recorded_at,
     state = "submission_started",
+    submission_preflight = execution$submission_preflight,
     invocation = context,
     request = list(
       steps = execution$steps,
@@ -786,16 +787,23 @@ latest_run_provenance_id <- function(scfg) {
 #' @param run_id Run ID returned by [run_project()] or listed in
 #'   `inspect_project(input)$runs`. Use `"latest"` for the most recently
 #'   recorded run.
-#' @return A `bg_run_provenance` object.
+#' @return A `bg_run_provenance` object. `submission_preflight` prefers the
+#'   controller's final saved report when available; otherwise it retains the
+#'   initial run assessment. Reading the report never repairs tracking records.
+#'   Its blockers and repairs describe the recorded assessment, not current
+#'   readiness. A missing report does not establish that submission is safe.
 #' @examples
 #' \dontrun{
 #' provenance <- get_run_provenance(scfg, run$run_id)
 #' provenance$request
 #' provenance$execution$subjects
 #' provenance$configuration$snapshot_file
+#' provenance$submission_preflight
 #' }
 #' @seealso [diagnose_project()] to inspect failures and [retry_project_run()]
-#'   to create a new run from failed work.
+#'   to create a new run from failed work. See
+#'   `vignette("diagnosing_pipeline", package = "BrainGnomes")` for reading
+#'   controller reports after deferred Flywheel scope is realized.
 #' @export
 get_run_provenance <- function(input = getwd(), run_id = "latest") {
   scfg <- project_config_from_input(input)
@@ -819,6 +827,9 @@ get_run_provenance <- function(input = getwd(), run_id = "latest") {
     )
   }
   record$current_jobs <- tracked_jobs_for_provenance(scfg, resolved)
+  record$submission_preflight <- read_run_submission_preflight(
+    scfg, resolved, fallback = record$submission_preflight, read_initial = FALSE
+  )
   record$provenance_file <- normalizePath(file, winslash = "/", mustWork = TRUE)
   class(record) <- c("bg_run_provenance", class(record))
   record
@@ -842,5 +853,6 @@ print.bg_run_provenance <- function(x, ...) {
     "BrainGnomes: {x$software$braingnomes$version}; artifacts: {nrow(x$artifacts)}; tracked jobs: {nrow(x$current_jobs)}"
   )
   cli::cli_text("Record: {.file {x$provenance_file}}")
+  print_saved_submission_preflight(x$submission_preflight)
   invisible(x)
 }

@@ -6,7 +6,18 @@
 \alias{BrainGnomes-package}
 \title{BrainGnomes: HPC Workflows for Functional MRI Preprocessing and Analysis}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 Configures, submits, and monitors reproducible functional magnetic resonance imaging workflows on high-performance computing clusters using containerized neuroimaging tools. The package can be installed and its configuration, BIDS, status, and native imaging helpers can be used without a cluster. Full pipeline execution requires a supported scheduler and stage-specific external software; template-dependent operations may also use Python and TemplateFlow.
+}
+\details{
+\if{html}{\figure{braingnomes-header.png}{options: style='max-width: 100\%; height: auto;' width='720' alt='BrainGnomes: gnomes working together on brain-processing assembly lines.'}}
+
+Start with \code{\link[=setup_project]{setup_project()}} and \code{\link[=run_project]{run_project()}}, then monitor progress with
+\code{\link[=inspect_project]{inspect_project()}}. Use \code{\link[=diagnose_project]{diagnose_project()}} to investigate failures and
+unresolved submissions, and \code{\link[=collect_qc_inventory]{collect_qc_inventory()}} to review a saved QC
+snapshot. The Quickstart introduces the complete workflow:
+\code{vignette("braingnomes_quickstart", package = "BrainGnomes")}.
 }
 \seealso{
 Useful links:

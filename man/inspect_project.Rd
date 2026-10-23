@@ -23,16 +23,22 @@ for current project status across all runs.}
 prefix. When supplied, every returned resolution is restricted to that
 subject, including its run summaries.}
 
-\item{refresh}{If \code{TRUE}, query the configured scheduler for jobs recorded as
-queued or running. The query is read-only: database values are retained and
+\item{refresh}{If \code{TRUE}, query the configured scheduler for outstanding
+allocations, including older attempts and dependency-blocked/unknown rows
+without confirmed termination. The query is read-only: database values are retained and
 any differences are returned in \code{reconciliation}. The default, \code{FALSE},
-relies only on the tracking database.}
+uses stored tracking state and saved preflight evidence without contacting
+the scheduler.}
 }
 \value{
 A \code{bg_project_inspection} object. Its \code{overview}, \code{stages},
 \code{active}, \code{reconciliation}, \code{subjects}, \code{subject_stages}, \code{runs},
 \code{attempts}, \code{submissions}, and \code{jobs} elements are data frames suitable for programmatic
 queries.
+\code{submission_preflight} contains the saved report for the selected run (or
+latest tracked run in project scope), preferring the controller's final
+report over the initial deferred assessment. It is historical evidence,
+separate from current submission states and scheduler observations.
 }
 \description{
 Provides a compact, non-interactive view of tracked work from submission
@@ -45,12 +51,21 @@ inspect only one submission.
 The \code{overview} table contains one row for the selected scope.
 \code{stages} and \code{subjects} aggregate its current work units;
 \code{active} reports current queued and running jobs with elapsed time,
-requested wall time, and health flags. When \code{refresh = TRUE},
+requested wall time, and health flags, plus unconfirmed older or blocked
+allocations. Its \code{is_current_attempt} field distinguishes current logical
+work from older allocations that still need termination review. Newer
+completed work cannot hide these allocations; the overview reports
+\code{ACTIVE_PRIOR_ATTEMPTS} instead of claiming completion in that case.
+When \code{refresh = TRUE},
 \code{reconciliation} compares those database states with the scheduler without
 modifying either source.
 \code{submissions} exposes UUID attempts registered before scheduler submission,
 including uncertain outcomes without a scheduler ID. Those outcomes remain
 visible and prevent a project from being reported as completed.
+Accepted attempts missing a consistent contract/allocation binding are
+likewise unconfirmed. Unreadable or nonscalar scope metadata is exposed in
+\code{submissions$metadata_error}; automatic preflight treats unknown scope
+conservatively rather than allowing a duplicate.
 \code{subject_stages} retains the stage and stream detail; \code{runs} summarizes
 submissions; and \code{attempts} retains both current and superseded logical
 attempts. \code{jobs} contains the underlying tracking rows and marks the rows
@@ -70,9 +85,14 @@ subject$active
 
 latest <- inspect_project(scfg, run_id = "latest", refresh = TRUE)
 latest$reconciliation
+latest$submissions
+latest$submission_preflight
 subset(latest$jobs, lifecycle_status == "FAILED")
 }
 }
 \seealso{
-\code{\link[=diagnose_project]{diagnose_project()}} for failure and log investigation.
+\code{\link[=diagnose_project]{diagnose_project()}} for failure and log investigation;
+\code{\link[=reconcile_project_jobs]{reconcile_project_jobs()}} and \code{\link[=resolve_project_submission]{resolve_project_submission()}} for explicit
+recovery. See \code{vignette("diagnosing_pipeline", package = "BrainGnomes")}
+for the distinction between current issues and historical preflight evidence.
 }

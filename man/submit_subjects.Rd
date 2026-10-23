@@ -14,7 +14,8 @@ submit_subjects(
   parent_ids = NULL,
   sequence_id = NULL,
   permission_check_cache = NULL,
-  dry_run = FALSE
+  dry_run = FALSE,
+  preflight_checked = FALSE
 )
 }
 \arguments{
@@ -42,6 +43,9 @@ already verified writable are skipped.}
 
 \item{dry_run}{Logical. If \code{TRUE}, report planned subject/session scope without submitting
 any subject-level jobs.}
+
+\item{preflight_checked}{Whether this exact resolved scope has already passed
+the submission preflight in the calling run_project() invocation.}
 }
 \description{
 Schedule subject-level processing

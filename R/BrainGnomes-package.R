@@ -1,4 +1,12 @@
-#' @keywords internal 
+#' @details
+#' \if{html}{\figure{braingnomes-header.png}{options: style='max-width: 100%; height: auto;' width='720' alt='BrainGnomes: gnomes working together on brain-processing assembly lines.'}}
+#'
+#' Start with [setup_project()] and [run_project()], then monitor progress with
+#' [inspect_project()]. Use [diagnose_project()] to investigate failures and
+#' unresolved submissions, and [collect_qc_inventory()] to review a saved QC
+#' snapshot. The Quickstart introduces the complete workflow:
+#' `vignette("braingnomes_quickstart", package = "BrainGnomes")`.
+#' @keywords internal
 "_PACKAGE"
 
 ## usethis namespace: start

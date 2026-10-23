@@ -6,17 +6,19 @@
 \usage{
 render_qc_dashboard(
   x,
-  output_dir,
+  output_dir = NULL,
   title = NULL,
   quarto = Sys.which("quarto"),
   quiet = TRUE
 )
 }
 \arguments{
-\item{x}{A \code{bg_qc_inventory} returned by \code{\link[=collect_qc_inventory]{collect_qc_inventory()}}.}
+\item{x}{A \code{bg_qc_inventory} returned by \code{\link[=collect_qc_inventory]{collect_qc_inventory()}}, or a path
+to a previously exported snapshot directory to resume rendering.}
 
 \item{output_dir}{A new or empty directory for the HTML and its downloadable
-RDS/TSV snapshot. Keep these files together when sharing the dashboard.}
+RDS/TSV snapshot. When \code{x} is an exported directory, defaults to that
+directory. Existing successful HTML reports cannot be replaced.}
 
 \item{title}{Optional dashboard title. Defaults to the project name.}
 
@@ -36,10 +38,17 @@ Rendering requires optional packages \code{reactable}, \code{plotly},
 \code{htmltools}, \code{htmlwidgets}, \code{knitr}, and \code{rmarkdown}. Collection and TSV/RDS
 export do not require these packages or Quarto. JavaScript and styles are
 embedded in the HTML; search, filtering, row details, and plots work without
-a server or network connection. Linked evidence remains in its source
+a server or network connection. Open the saved HTML in a web browser.
+TSV/RDS/JSON download links require the exported files beside the HTML;
+those files are not needed to view tables and plots.
+Linked evidence remains in its source
 location, using paths relative to the dashboard. Moving only the dashboard
 preserves its displayed snapshot but does not copy upstream reports, logs,
 or images. No human ratings or analysis decisions are collected.
+Exports survive missing rendering dependencies or rendering failure.
+\code{render-status.json} records the result, and \code{render.log} retains diagnostics
+even in quiet mode. An isolated writable Quarto cache is used and removed
+after rendering. Retry with \code{render_qc_dashboard("/path/to/export")}.
 }
 \seealso{
 \code{\link[=collect_qc_inventory]{collect_qc_inventory()}}, \code{\link[=write_qc_inventory]{write_qc_inventory()}}

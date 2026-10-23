@@ -16,13 +16,21 @@ normalize_inspection_subject_id <- function(subject_id) {
 parse_inspection_time <- function(x, timezone = Sys.timezone()) {
   if (!length(timezone) || is.na(timezone) || !nzchar(timezone)) timezone <- "UTC"
   if (inherits(x, "POSIXct")) return(as.POSIXct(x, tz = timezone))
-  suppressWarnings(as.POSIXct(
-    as.character(x), tz = timezone,
-    tryFormats = c(
-      "%Y-%m-%d %H:%M:%OS", "%Y-%m-%dT%H:%M:%OSZ",
+  # Parse each value independently: legacy local times and UTC receipts may
+  # coexist in one column. A literal Z must not be interpreted as local time.
+  parsed <- vapply(as.character(x), function(value) {
+    if (is.na(value) || !nzchar(trimws(value))) return(NA_real_)
+    utc <- grepl("Z$", value)
+    offset <- grepl("[+-][0-9]{2}:?[0-9]{2}$", value)
+    if (offset) value <- sub("([+-][0-9]{2}):([0-9]{2})$", "\\1\\2", value)
+    format <- if (utc) "%Y-%m-%dT%H:%M:%OSZ" else if (offset) {
       "%Y-%m-%dT%H:%M:%OS%z"
-    )
-  ))
+    } else "%Y-%m-%d %H:%M:%OS"
+    suppressWarnings(as.numeric(as.POSIXct(
+      value, format = format, tz = if (utc || offset) "UTC" else timezone
+    )))
+  }, numeric(1), USE.NAMES = FALSE)
+  as.POSIXct(parsed, origin = "1970-01-01", tz = timezone)
 }
 
 parse_wall_time_seconds <- function(x) {
@@ -62,7 +70,7 @@ empty_active_jobs <- function() {
   data.frame(
     job_id = character(), run_id = character(), sub_id = character(),
     ses_id = character(), stage = character(), stream = character(),
-    database_status = character(), scheduler = character(),
+    database_status = character(), is_current_attempt = logical(), scheduler = character(),
     scheduler_status = character(), health = character(),
     submitted_at = as.POSIXct(character(), tz = "UTC"),
     started_at = as.POSIXct(character(), tz = "UTC"),
@@ -88,11 +96,7 @@ empty_scheduler_reconciliation <- function() {
 
 build_active_job_health <- function(scfg, jobs, retrieved_at = Sys.time(),
                                     refresh = FALSE) {
-  active_jobs <- jobs[
-    !is.na(jobs$lifecycle_status) &
-      jobs$lifecycle_status %in% c("QUEUED", "RUNNING"),
-    , drop = FALSE
-  ]
+  active_jobs <- jobs[pending_tracked_job_rows(jobs), , drop = FALSE]
   if (nrow(active_jobs) == 0L) {
     return(list(
       active = empty_active_jobs(),
@@ -140,6 +144,7 @@ build_active_job_health <- function(scfg, jobs, retrieved_at = Sys.time(),
     stage = as.character(active_jobs$stage),
     stream = as.character(active_jobs$stream),
     database_status = as.character(active_jobs$lifecycle_status),
+    is_current_attempt = as.logical(active_jobs$is_current_attempt),
     scheduler = scheduler, scheduler_status = NA_character_,
     health = as.character(active_jobs$lifecycle_status),
     submitted_at = submitted, started_at = started,
@@ -152,6 +157,7 @@ build_active_job_health <- function(scfg, jobs, retrieved_at = Sys.time(),
     stringsAsFactors = FALSE
   )
   active$health[active$overdue] <- "OVERDUE"
+  active$health[!active$is_current_attempt | active$database_status %in% c("BLOCKED", "UNKNOWN")] <- "UNCONFIRMED"
   reconciliation <- empty_scheduler_reconciliation()
 
   if (isTRUE(refresh)) {

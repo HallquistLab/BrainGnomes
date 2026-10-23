@@ -27,3 +27,15 @@ files, project storage, and the job-tracking database. It is not required
 before \code{\link[=run_project]{run_project()}} and does not submit work, create directories, or modify
 the configuration.
 }
+\details{
+Doctor also reports uncertain submissions, missing recovery evidence, and
+BIDS conversion locks without resolving them. It is distinct from the
+automatic, request-scoped submission gate in \code{\link[=run_project]{run_project()}}, which can
+repair confirmed scheduler failures/cancellations. Use \code{\link[=diagnose_project]{diagnose_project()}}
+for the recovery decision guide and current submission issues.
+}
+\seealso{
+\code{\link[=reconcile_project_jobs]{reconcile_project_jobs()}} and \code{\link[=resolve_project_submission]{resolve_project_submission()}} for
+explicit recovery. See \code{vignette("diagnosing_pipeline", package = "BrainGnomes")}
+for how environment review, automatic preflight, and recovery fit together.
+}

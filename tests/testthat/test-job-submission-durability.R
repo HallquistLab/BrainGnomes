@@ -145,6 +145,23 @@ test_that("registration failure prevents scheduler invocation", {
   expect_identical(nrow(read_job_submission_attempts(fixture$db)), 0L)
 })
 
+test_that("tracked scheduler rejections stop fan-out and retain their diagnostics", {
+  skip_on_os("windows")
+  fixture <- make_submission_fixture()
+  fake <- file.path(fixture$root, "sbatch")
+  writeLines(c("#!/bin/sh",
+    "echo 'sbatch: error: Batch job submission failed: Invalid account' >&2",
+    "exit 1"), fake)
+  Sys.chmod(fake, "0755")
+  withr::local_envvar(PATH = paste(fixture$root, Sys.getenv("PATH"), sep = .Platform$path.sep))
+  expect_error(cluster_job_submit("true", scheduler = "slurm", echo = FALSE,
+    tracking_sqlite_db = fixture$db, tracking_args = fixture$tracking), "Invalid account")
+  records <- read_job_submission_attempts(fixture$db)
+  expect_identical(records$submission_state, "REJECTED")
+  expect_match(records$submission_detail, "Invalid account")
+  expect_true(file.exists(file.path(dirname(records$manifest_path), "submission.stderr")))
+})
+
 test_that("tracked local workers use the prepared UUID and their own process ID", {
   skip_on_os("windows")
   skip_if(Sys.which("bash") == "" || Sys.which("md5sum") == "")
@@ -337,10 +354,17 @@ test_that("bootstrap failure persists without loading the BrainGnomes namespace"
   expect_true(file.exists(receipt))
   expect_match(readLines(receipt), contract$contract_id, fixed = TRUE)
   # An array task's failure receipt must not prematurely finalize its root.
-  bind_job_submission(fixture$db, contract$contract_id, "830")
-  update_tracked_job_status(fixture$db, "830", "STARTED", strict = TRUE)
-  record_job_bootstrap_failure(fixture$db, contract$contract_id, "830", 1L, receipt, array_task = TRUE)
-  expect_identical(get_tracked_job_status("830", sqlite_db = fixture$db)$status, "STARTED")
+  array_tracking <- fixture$tracking
+  array_tracking$job_role <- "array"
+  array <- register_submission_fixture(fixture, array_tracking)
+  bind_job_submission(fixture$db, array$contract$contract_id, "831")
+  update_tracked_job_status(fixture$db, "831", "STARTED", strict = TRUE)
+  array_receipt <- file.path(array$contract$directory, "failure-0.tsv")
+  writeLines(paste("brain-gnomes-bootstrap-v1", array$contract$contract_id,
+    "831", "0", "1", sep = "\t"), array_receipt)
+  record_job_bootstrap_failure(fixture$db, array$contract$contract_id, "831", 1L,
+    array_receipt, array_task = TRUE)
+  expect_identical(get_tracked_job_status("831", sqlite_db = fixture$db)$status, "STARTED")
 })
 
 test_that("failed acknowledgement is durable and does not permit a duplicate launch", {
@@ -362,6 +386,57 @@ test_that("failed acknowledgement is durable and does not permit a duplicate lau
   expect_true(file.exists(file.path(dirname(records$manifest_path), "submission.stdout")))
   expect_error(submit(), "unconfirmed")
   expect_length(readLines(counter), 1L)
+})
+
+test_that("cohort controllers stop at the first real scheduler rejection or lost acknowledgement", {
+  skip_on_os("windows")
+  for (failure in c("Invalid account", "Socket timed out on send/recv operation")) {
+    fixture <- make_submission_fixture()
+    scheduler <- file.path(fixture$root, "sbatch")
+    counter <- file.path(fixture$root, "invocations")
+    writeLines(c("#!/bin/sh", paste("echo invoked >>", shQuote(counter)),
+      paste("echo", shQuote(paste0("sbatch: error: Batch job submission failed: ", failure)), ">&2"),
+      "exit 1"), scheduler)
+    Sys.chmod(scheduler, "0755")
+    withr::local_envvar(PATH = paste(fixture$root, Sys.getenv("PATH"), sep = .Platform$path.sep))
+    local_mocked_bindings(process_subject = function(scfg, sub_cfg, ...) {
+      tracking <- fixture$tracking
+      tracking$stage <- "fmriprep"
+      tracking$sub_id <- sub_cfg$sub_id[[1L]]
+      tracking$unit_key <- tracking_unit_key("fmriprep", sub_id = tracking$sub_id)
+      cluster_job_submit("true", scheduler = "slurm", echo = FALSE,
+        tracking_sqlite_db = fixture$db, tracking_args = tracking)
+    })
+    subjects <- data.frame(sub_id = sprintf("%03d", seq_len(49L)), ses_id = NA_character_)
+    expect_error(submit_subjects(structure(list(), class = "bg_project_cfg"),
+      steps = c(fmriprep = TRUE), resolved_subjects = subjects, preflight_checked = TRUE), failure)
+    expect_length(readLines(counter), 1L)
+    attempts <- read_job_submission_attempts(fixture$db)
+    expect_equal(nrow(attempts), 1L)
+    expect_identical(attempts$submission_state, if (failure == "Invalid account") "REJECTED" else "UNKNOWN")
+    expect_true(file.exists(file.path(dirname(attempts$manifest_path), "submission.stderr")))
+  }
+})
+
+test_that("worker-confirmed completion survives a lost client acknowledgement", {
+  skip_on_os("windows")
+  skip_if(Sys.which("bash") == "" || Sys.which("md5sum") == "")
+  fixture <- make_submission_fixture()
+  worker <- file.path(fixture$root, "worker.R")
+  writeLines('BrainGnomes::update_tracked_job_status(Sys.getenv("sqlite_db"), Sys.getenv("BG_WORKER_JOB_ID"), "COMPLETED", strict = TRUE)', worker)
+  scheduler <- file.path(fixture$root, "sbatch")
+  writeLines(c("#!/bin/bash", 'for arg; do worker="$arg"; done',
+    paste('SLURM_JOB_ID=941 bash "$worker" >', shQuote(file.path(fixture$root, "worker.log")), '2>&1 || exit $?'),
+    "echo 'sbatch: error: Socket timed out on send/recv operation' >&2", "exit 1"), scheduler)
+  Sys.chmod(scheduler, "0755")
+  withr::local_envvar(PATH = paste(fixture$root, Sys.getenv("PATH"), sep = .Platform$path.sep))
+  withr::local_envvar(c(SLURM_ARRAY_JOB_ID = NA, SLURM_ARRAY_TASK_ID = NA,
+    PBS_JOBID = NA, PBS_ARRAYID = NA, PBS_ARRAY_INDEX = NA))
+  expect_error(cluster_job_submit(worker, scheduler = "slurm", echo = FALSE,
+    tracking_sqlite_db = fixture$db, tracking_args = fixture$tracking), "Socket timed out")
+  expect_identical(get_tracked_job_status("941", sqlite_db = fixture$db)$status, "COMPLETED")
+  expect_identical(read_job_submission_attempts(fixture$db)$submission_state, "ACCEPTED")
+  expect_identical(read_job_submission_attempts(fixture$db)$scheduler_job_id, "941")
 })
 
 test_that("dynamic postprocessing arrays use the pre-registered submission path", {

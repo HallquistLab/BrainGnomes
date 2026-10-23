@@ -237,6 +237,69 @@ test_that("applied-user recovery documentation explains safe run-based actions",
   expect_match(cancel_plain, "immediately sends cancellation requests", fixed = TRUE)
 })
 
+test_that("recovery help documents evidence and mutation boundaries", {
+  topics <- c("reconcile_project_jobs", "resolve_project_submission")
+  expect_true(all(topics %in% getNamespaceExports("BrainGnomes")))
+  for (topic in topics) {
+    rd <- get_topic_rd(topic)
+    expect_match(rd_tag_text(rd, "\\usage"), paste0(topic, "("), fixed = TRUE)
+    expect_match(rd_tag_text(rd, "\\seealso"), "diagnosing_pipeline", fixed = TRUE)
+  }
+
+  reconcile <- gsub("[[:space:]]+", " ",
+    paste(unlist(get_topic_rd("reconcile_project_jobs")), collapse = ""))
+  resolve <- gsub("[[:space:]]+", " ",
+    paste(unlist(get_topic_rd("resolve_project_submission")), collapse = ""))
+  expect_match(reconcile, "preview contacts the scheduler", fixed = TRUE)
+  expect_match(reconcile, "VERIFY_OUTPUTS", fixed = TRUE)
+  expect_match(reconcile, "applied", fixed = TRUE)
+  expect_match(resolve, "no dry-run mode", fixed = TRUE)
+  expect_match(resolve, "exactly one of", fixed = TRUE)
+  expect_match(resolve, "Queue absence", fixed = TRUE)
+  expect_match(resolve, "not evidence of rejection", fixed = TRUE)
+
+  run_rd <- get_topic_rd("run_project")
+  expect_match(rd_tag_text(run_rd, "\\examples"),
+    "bg_submission_preflight_error", fixed = TRUE)
+  expect_match(rd_tag_text(run_rd, "\\examples"), "stop(error)", fixed = TRUE)
+})
+
+test_that("workflow vignettes integrate submission safety without running recovery", {
+  paths <- get_vignette_sources()
+  for (name in c("braingnomes_quickstart", "diagnosing_pipeline", "local_onboarding")) {
+    path <- paths[basename(paths) == paste0(name, ".Rmd")]
+    expect_length(path, 1L)
+    source <- readLines(path, warn = FALSE)
+    vignette_text <- paste(source, collapse = "\n")
+    for (guidance in c("submission_preflight", "reconcile_project_jobs(",
+                       "resolve_project_submission(", "diagnosing_pipeline")) {
+      if (name == "diagnosing_pipeline" && guidance == "diagnosing_pipeline") next
+      expect_match(vignette_text, guidance, fixed = TRUE, info = name)
+    }
+
+    chunk_starts <- grep("^```\\{r", source)
+    for (start in chunk_starts) {
+      end <- start + which(source[seq.int(start + 1L, length(source))] == "```")[[1L]]
+      code <- paste(source[seq.int(start + 1L, end - 1L)], collapse = "\n")
+      expect_no_error(parse(text = code))
+      if (grepl(paste0("(run_project|retry_project_run|cancel_project_run|",
+                       "reconcile_project_jobs|resolve_project_submission)\\s*\\("), code)) {
+        expect_match(source[[start]], "eval\\s*=\\s*FALSE", info = name)
+      }
+    }
+  }
+
+  diagnosis_path <- paths[basename(paths) == "diagnosing_pipeline.Rmd"]
+  diagnosis_text <- paste(readLines(diagnosis_path, warn = FALSE), collapse = "\n")
+  diagnosis_text <- gsub("[[:space:]]+", " ", diagnosis_text)
+  for (guidance in c("bg_submission_preflight_error", "stop(error)",
+                     "submission-preflight.json", "historical evidence",
+                     "mutually exclusive alternatives", "no dry-run mode",
+                     "VERIFY_OUTPUTS", "heudiconv.lock")) {
+    expect_match(diagnosis_text, guidance, fixed = TRUE)
+  }
+})
+
 test_that("vignette metadata and local assets remain publication-ready", {
   vignette_files <- get_vignette_sources()
   expect_gt(length(vignette_files), 0L)

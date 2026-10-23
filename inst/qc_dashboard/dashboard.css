@@ -26,6 +26,18 @@ body { color: var(--qc-ink); background: #edf2f6; }
 .qc-detail { padding: 1.2rem 1.5rem; background: #f7fafb; border-left: 3px solid var(--qc-teal); overflow-wrap: anywhere; }
 .qc-detail h4 { font-size: 1rem; }
 .qc-detail p { margin-bottom: .35rem; font-size: .85rem; }
+.qc-controls { display: flex; flex-wrap: wrap; gap: .8rem; align-items: end; }
+.qc-control { flex: 1 1 120px; }
+.qc-control label { display: block; font-weight: 600; margin-bottom: .3rem; }
+.qc-control select { width: 100%; padding: .4rem; border: 1px solid #9cacb8; border-radius: 5px; }
+.qc-controls button, .qc-participant { color: #155e71; background: #edf6f5; border: 1px solid #9cacb8; border-radius: 5px; padding: .4rem .7rem; }
+.qc-filter-note { flex-basis: 100%; margin: 0; font-size: .85rem; }
+.qc-check { padding: .8rem 0; border-bottom: 1px solid #dce5eb; }
+.qc-message, .qc-warning { white-space: pre-wrap; overflow-wrap: anywhere; }
+.qc-warning { color: #8b3b16; background: #fff2e3; padding: .6rem; }
+.qc-measurements { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr; gap: .25rem 1rem; font-size: .85rem; }
+.qc-measurements dd { margin: 0; overflow-wrap: anywhere; }
+button:focus-visible, select:focus-visible { outline: 3px solid #326eac; outline-offset: 2px; }
 .qc-evidence { padding-left: 1.2rem; }
 .qc-evidence li { margin-bottom: .65rem; }
 .qc-path { display: block; color: var(--qc-muted); font-family: monospace; font-size: .72rem; overflow-wrap: anywhere; }

@@ -255,6 +255,7 @@ diagnosis_choose_run_job <- function(scfg, diagnosis) {
   run_diagnosis <- diagnose_project(
     scfg, run_id = run_id, interactive = FALSE
   )
+  if (!diagnosis_review_recovery(run_diagnosis)) return(NULL)
   diagnosis_choose_scope_job(
     diagnosis_current_jobs(run_diagnosis),
     paste0("Unresolved problems in run ", run_id)
@@ -305,7 +306,9 @@ diagnosis_top_job <- function(scfg, diagnosis) {
     }
     cli::cli_h2(heading)
     if (nrow(groups) == 0L) {
-      cli::cli_alert_success("No unresolved failed, blocked, or cancelled jobs were found.")
+      if (nrow(diagnosis$submission_issues) || nrow(diagnosis$active_issues)) {
+        cli::cli_alert_warning("Submission or active-job issues still need review; no failed tracked jobs were found.")
+      } else cli::cli_alert_success("No unresolved failed, blocked, or cancelled jobs were found.")
     }
     labels <- groups$label
     actions <- character()
@@ -484,6 +487,11 @@ run_interactive_diagnosis <- function(input, run_id = NULL,
     interactive = FALSE
   )
   cli::cli_inform("Running guided project diagnosis...")
+  if (!diagnosis_review_recovery(diagnosis)) return(invisible(diagnosis))
+  if (!nrow(diagnosis$jobs) && nrow(diagnosis$submission_issues)) {
+    cli::cli_alert_info("This scope has unresolved submission outcomes and no scheduler-bound jobs to browse.")
+    return(invisible(diagnosis))
+  }
 
   direct_job <- !is.null(job_id)
   repeat {

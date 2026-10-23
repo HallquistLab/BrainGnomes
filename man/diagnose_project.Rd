@@ -2,7 +2,7 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{diagnose_project}
 \alias{diagnose_project}
-\title{Diagnose failed project work}
+\title{Diagnose failed work and unresolved project submissions}
 \usage{
 diagnose_project(
   input = getwd(),
@@ -36,12 +36,18 @@ tracked job; this can select a historical job when \code{run_id} is \code{NULL}.
 \value{
 When \code{interactive = FALSE}, a \code{bg_project_diagnosis} object containing
 the underlying \code{inspection}, its \code{jobs}, unresolved \code{failures}, and matching
-\code{logs} for the current project state or selected run. Interactive mode
+\code{logs} for the current project state or selected run. \code{submission_issues}
+and \code{active_issues} expose current recovery needs; \code{submission_preflight}
+contains the latest saved assessment in this scope, including controller
+reports after Flywheel synchronization. Saved reports are historical
+evidence and are not treated as current failures. Diagnosis never resolves
+submissions, repairs tracking rows, or submits jobs. Interactive mode
 returns the selected result from the guided browser, usually invisibly.
 }
 \description{
-Reports unresolved failed, cancelled, and blocked work and locates matching
-logs. In an interactive R session, the default opens the guided dependency
+Reports unresolved failed, cancelled, and blocked work, submission outcomes
+requiring review, and recorded scheduler or timing discrepancies. It locates
+matching job logs. In an interactive R session, the default opens the guided dependency
 and log browser. In a non-interactive session, the default returns a
 structured diagnosis of the current project state assembled by
 \code{\link[=inspect_project]{inspect_project()}} across runs. Select a run for a historical post-mortem or
@@ -54,6 +60,9 @@ diagnose_project(scfg) # guided browser in an interactive R session
 diagnosis <- diagnose_project(scfg, subject_id = "014", interactive = FALSE)
 diagnosis$failures
 diagnosis$logs
+diagnosis$submission_issues
+diagnosis$active_issues
+diagnosis$submission_preflight
 
 diagnose_project(scfg, job_id = "66273010")
 
@@ -63,4 +72,8 @@ old_run <- diagnose_project(scfg, run$run_id, interactive = FALSE)
 \seealso{
 \code{\link[=inspect_project]{inspect_project()}} for routine progress monitoring and
 \code{\link[=retry_project_run]{retry_project_run()}} to preview a new run after correcting a failure.
+Use \code{\link[=reconcile_project_jobs]{reconcile_project_jobs()}} for confirmed scheduler failures and
+\code{\link[=resolve_project_submission]{resolve_project_submission()}} after confirming an uncertain outcome.
+See \code{vignette("diagnosing_pipeline", package = "BrainGnomes")} for
+automatic preflight, saved reports, and evidence-based recovery examples.
 }

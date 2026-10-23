@@ -229,8 +229,7 @@
   keep <- !is.na(x) & nzchar(x)
   if (!any(keep)) return(NA_character_)
   values <- x[keep]
-  timestamps <- sub("T", " ", sub("Z$", "", values), fixed = TRUE)
-  parsed <- suppressWarnings(as.numeric(as.POSIXct(timestamps, tz = "UTC")))
+  parsed <- as.numeric(parse_inspection_time(values))
   if (all(is.na(parsed))) return(if (which == "min") min(values) else max(values))
   index <- if (which == "min") which.min(replace(parsed, is.na(parsed), Inf)) else which.max(replace(parsed, is.na(parsed), -Inf))
   values[[index]]
@@ -329,8 +328,7 @@
     )
   })
   result <- do.call(rbind, rows)
-  timestamps <- sub("T", " ", sub("Z$", "", result$submitted), fixed = TRUE)
-  parsed <- suppressWarnings(as.numeric(as.POSIXct(timestamps, tz = "UTC")))
+  parsed <- as.numeric(parse_inspection_time(result$submitted))
   result <- result[
     order(parsed, result$.latest_id, decreasing = TRUE, na.last = TRUE),
     , drop = FALSE
@@ -435,7 +433,7 @@
 
 .build_project_inspection <- function(scfg, jobs, scope = "project", run_id = NULL,
                                       subject_id = NULL, refresh = FALSE,
-                                      all_runs = NULL) {
+                                      all_runs = NULL, preflight = NULL) {
   retrieved_at <- Sys.time()
   submissions <- inspect_job_submissions(scfg$metadata$sqlite_db)
   if (nrow(submissions) && identical(scope, "run")) {
@@ -446,7 +444,7 @@
   }
   jobs <- .annotate_tracked_jobs(jobs)
   if (is.null(all_runs)) all_runs <- .project_runs_from_jobs(jobs)
-  all_runs <- project_runs_with_submissions(all_runs, submissions)
+  all_runs <- project_runs_with_submissions(all_runs, submissions, jobs)
   attempts <- .aggregate_job_attempts(jobs)
   attempts <- .mark_current_attempts(attempts, all_runs, run_scope = identical(scope, "run"))
   current <- attempts[attempts$is_current, , drop = FALSE]
@@ -468,7 +466,8 @@
   )
   overview <- .inspection_overview(current, jobs, all_runs, scope, run_id)
   overview$n_unconfirmed_submissions <- if (nrow(submissions)) {
-    sum(submissions$submission_state %in% c("SUBMITTING", "UNKNOWN"))
+    sum(submissions$submission_state %in% c("SUBMITTING", "UNKNOWN") |
+      (submissions$submission_state == "ACCEPTED" & !submission_bindings_present(submissions, jobs)))
   } else 0L
   # A confirmed pre-launch rejection has no scheduler-bound row. Include the
   # latest result for its unit/role, but not superseded rejection history.
@@ -481,9 +480,13 @@
   if (overview$n_rejected_submissions > 0L) overview$overall_status <- "SUBMISSION_FAILED"
   if (overview$n_unconfirmed_submissions > 0L) overview$overall_status <- "UNCONFIRMED_SUBMISSIONS"
   active_health <- build_active_job_health(
-    scfg, jobs[jobs$is_current_attempt, , drop = FALSE],
+    scfg, jobs,
     retrieved_at = retrieved_at, refresh = refresh
   )
+  overview$n_prior_active_jobs <- sum(!active_health$active$is_current_attempt)
+  if (overview$n_prior_active_jobs > 0L && overview$overall_status == "COMPLETED") {
+    overview$overall_status <- "ACTIVE_PRIOR_ATTEMPTS"
+  }
   overview$n_active_attention <- sum(active_health$active$health %in% c(
     "STALE_DATABASE", "DATABASE_LAG", "SUSPENDED", "OVERDUE", "UNCONFIRMED"
   ))
@@ -503,6 +506,11 @@
   if (!checkmate::test_string(log_directory)) {
     log_directory <- file.path(project_directory, "logs")
   }
+  report_run <- if (identical(scope, "run")) run_id else if (nrow(all_runs)) all_runs$run_id[[1L]] else NULL
+  report_cfg <- scfg
+  report_cfg$metadata$log_directory <- log_directory
+  if (is.null(preflight)) preflight <- read_run_submission_preflight(report_cfg, report_run)
+  preflight <- scope_submission_preflight(preflight, subject_id)
 
   class(jobs) <- unique(c("bg_run_jobs", class(jobs)))
   attr(jobs, "scope") <- scope
@@ -528,6 +536,7 @@
     runs = runs,
     attempts = attempts,
     submissions = submissions,
+    submission_preflight = preflight,
     jobs = jobs
   ), class = "bg_project_inspection")
 }
@@ -548,23 +557,38 @@
 #' @param subject_id Optional subject identifier, with or without the `sub-`
 #'   prefix. When supplied, every returned resolution is restricted to that
 #'   subject, including its run summaries.
-#' @param refresh If `TRUE`, query the configured scheduler for jobs recorded as
-#'   queued or running. The query is read-only: database values are retained and
+#' @param refresh If `TRUE`, query the configured scheduler for outstanding
+#'   allocations, including older attempts and dependency-blocked/unknown rows
+#'   without confirmed termination. The query is read-only: database values are retained and
 #'   any differences are returned in `reconciliation`. The default, `FALSE`,
-#'   relies only on the tracking database.
+#'   uses stored tracking state and saved preflight evidence without contacting
+#'   the scheduler.
 #' @return A `bg_project_inspection` object. Its `overview`, `stages`,
 #'   `active`, `reconciliation`, `subjects`, `subject_stages`, `runs`,
 #'   `attempts`, `submissions`, and `jobs` elements are data frames suitable for programmatic
 #'   queries.
+#'   `submission_preflight` contains the saved report for the selected run (or
+#'   latest tracked run in project scope), preferring the controller's final
+#'   report over the initial deferred assessment. It is historical evidence,
+#'   separate from current submission states and scheduler observations.
 #' @details The `overview` table contains one row for the selected scope.
 #'   `stages` and `subjects` aggregate its current work units;
 #'   `active` reports current queued and running jobs with elapsed time,
-#'   requested wall time, and health flags. When `refresh = TRUE`,
+#'   requested wall time, and health flags, plus unconfirmed older or blocked
+#'   allocations. Its `is_current_attempt` field distinguishes current logical
+#'   work from older allocations that still need termination review. Newer
+#'   completed work cannot hide these allocations; the overview reports
+#'   `ACTIVE_PRIOR_ATTEMPTS` instead of claiming completion in that case.
+#'   When `refresh = TRUE`,
 #'   `reconciliation` compares those database states with the scheduler without
 #'   modifying either source.
 #'   `submissions` exposes UUID attempts registered before scheduler submission,
 #'   including uncertain outcomes without a scheduler ID. Those outcomes remain
 #'   visible and prevent a project from being reported as completed.
+#'   Accepted attempts missing a consistent contract/allocation binding are
+#'   likewise unconfirmed. Unreadable or nonscalar scope metadata is exposed in
+#'   `submissions$metadata_error`; automatic preflight treats unknown scope
+#'   conservatively rather than allowing a duplicate.
 #'   `subject_stages` retains the stage and stream detail; `runs` summarizes
 #'   submissions; and `attempts` retains both current and superseded logical
 #'   attempts. `jobs` contains the underlying tracking rows and marks the rows
@@ -583,9 +607,14 @@
 #'
 #' latest <- inspect_project(scfg, run_id = "latest", refresh = TRUE)
 #' latest$reconciliation
+#' latest$submissions
+#' latest$submission_preflight
 #' subset(latest$jobs, lifecycle_status == "FAILED")
 #' }
-#' @seealso [diagnose_project()] for failure and log investigation.
+#' @seealso [diagnose_project()] for failure and log investigation;
+#'   [reconcile_project_jobs()] and [resolve_project_submission()] for explicit
+#'   recovery. See `vignette("diagnosing_pipeline", package = "BrainGnomes")`
+#'   for the distinction between current issues and historical preflight evidence.
 #' @export
 inspect_project <- function(input = getwd(), run_id = NULL,
                             subject_id = NULL, refresh = FALSE) {
@@ -596,10 +625,11 @@ inspect_project <- function(input = getwd(), run_id = NULL,
   all_jobs <- .annotate_tracked_jobs(all_jobs)
   all_runs <- .project_runs_from_jobs(all_jobs)
   submissions <- inspect_job_submissions(scfg$metadata$sqlite_db)
-  all_runs <- project_runs_with_submissions(all_runs, submissions)
+  all_runs <- project_runs_with_submissions(all_runs, submissions, all_jobs)
 
   scope <- "project"
   resolved <- NULL
+  preflight <- NULL
   jobs <- all_jobs
   if (!is.null(run_id)) {
     scope <- "run"
@@ -628,18 +658,19 @@ inspect_project <- function(input = getwd(), run_id = NULL,
       matching_submissions <- any(eligible)
     }
     if (nrow(jobs) == 0L && !matching_submissions) {
-      run_text <- if (is.null(run_id)) "" else paste0(" in the selected run")
-      stop(
-        "No tracked jobs were found for sub-", subject_id, run_text, ".",
-        call. = FALSE
-      )
+      report_run <- if (!is.null(resolved)) resolved else if (nrow(all_runs)) all_runs$run_id[[1L]] else NULL
+      preflight <- scope_submission_preflight(read_run_submission_preflight(scfg, report_run), subject_id)
+      if (is.null(preflight) || !nrow(preflight$blockers)) {
+        run_text <- if (is.null(run_id)) "" else paste0(" in the selected run")
+        stop("No tracked jobs were found for sub-", subject_id, run_text, ".", call. = FALSE)
+      }
     }
   }
   scoped_runs <- .project_runs_from_jobs(jobs)
 
   .build_project_inspection(
     scfg, jobs, scope = scope, run_id = resolved,
-    subject_id = subject_id, refresh = refresh, all_runs = scoped_runs
+    subject_id = subject_id, refresh = refresh, all_runs = scoped_runs, preflight = preflight
   )
 }
 
@@ -695,12 +726,19 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L,
   )
   if (overview$n_unconfirmed_submissions > 0L) {
     cli::cli_alert_warning(
-      "Unconfirmed submissions: {overview$n_unconfirmed_submissions}. Inspect x$submissions before resubmitting."
+      "Unconfirmed submissions: {overview$n_unconfirmed_submissions}. Inspect x$submissions, confirm scheduler outcomes, then use resolve_project_submission() before resubmitting."
     )
   }
   if (overview$n_rejected_submissions > 0L) {
     cli::cli_alert_warning("Rejected submissions: {overview$n_rejected_submissions}. Inspect x$submissions for details.")
   }
+  if (overview$n_active_stale > 0L) {
+    cli::cli_alert_info("Scheduler and database differ. Preview recovery with reconcile_project_jobs(input); inspection does not change SQLite.")
+  }
+  if (!is.null(overview$n_prior_active_jobs) && overview$n_prior_active_jobs > 0L) {
+    cli::cli_alert_warning("{overview$n_prior_active_jobs} older attempt allocation(s) still lack confirmed termination. Review x$active before retrying; newer completed work does not clear these records.")
+  }
+  print_saved_submission_preflight(x$submission_preflight)
 
   if (nrow(x$active) > 0L && max_active > 0L) {
     shown_active <- utils::head(x$active, max_active)
@@ -748,7 +786,7 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L,
   scfg <- project_config_from_input(input)
   jobs <- .annotate_tracked_jobs(.read_project_tracking_jobs(scfg))
   project_runs_with_submissions(.project_runs_from_jobs(jobs),
-                                inspect_job_submissions(scfg$metadata$sqlite_db))
+                                inspect_job_submissions(scfg$metadata$sqlite_db), jobs)
 }
 
 .get_run_jobs_data <- function(input, run_id = "latest") {
