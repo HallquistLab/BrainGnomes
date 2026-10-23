@@ -106,12 +106,14 @@
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/read_df_sqlite.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/read_multiline_input.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/read_project_plan.html</loc></url>
+<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/reconcile_project_jobs.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/remove_nifti_volumes.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/render_qc_dashboard.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/resample_template_to_img.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/reset_tracking_sqlite_db.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/resolve_intensity_normalization_mode.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/resolve_intensity_normalization_target.html</loc></url>
+<url><loc>https://hallquistlab.github.io/BrainGnomes/reference/resolve_project_submission.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/rm_niftis.html</loc></url>
 <url><loc>https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.html</loc></url>

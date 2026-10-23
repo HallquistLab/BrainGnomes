@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>BrainGnomes Quickstart • BrainGnomes</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="icon" sizes="any" href="../favicon.ico">
+<link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -20,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.01</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,14 +69,13 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-
-      <h1>BrainGnomes Quickstart</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>BrainGnomes Quickstart</h1>
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">09 Oct 2026</h4>
+            <h4 data-toc-skip class="date">23 Oct 2026</h4>
       
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0/vignettes/braingnomes_quickstart.Rmd" class="external-link"><code>vignettes/braingnomes_quickstart.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/braingnomes_quickstart.Rmd" class="external-link"><code>vignettes/braingnomes_quickstart.Rmd</code></a></small>
       <div class="d-none name"><code>braingnomes_quickstart.Rmd</code></div>
     </div>
 
@@ -504,6 +508,15 @@ unattended run, for example:</p>
 BrainGnomes defers subject-level job scheduling until after the sync job
 completes. This ensures downstream steps (BIDS conversion, fMRIPrep,
 etc.) see all current data from Flywheel.</p>
+<p>The initial submission preflight checks project-level blockers but
+explicitly marks subject/session scope as deferred. After
+synchronization, the dependent controller checks the discovered scope,
+including newly arrived data, before submitting any subject jobs. Its
+final report is saved with the run, even when it blocks downstream
+submission; inspect it with
+<code>get_run_provenance(scfg, run$run_id)$submission_preflight</code>
+after the controller has executed. The original run handle may still
+contain the initial report.</p>
 </div>
 </div>
 <div class="section level3">
@@ -765,11 +778,22 @@ internally; no separate inspection step is required.</p>
 <code>"postprocess"</code>, and <code>"extract_rois"</code>. BIDS
 validation is configured with the project but scheduled independently
 through <code><a href="../reference/run_bids_validation.html">run_bids_validation()</a></code>.</p>
+<p>Every live run automatically checks pending tracking metadata for the
+resolved request before directory preparation, container fingerprinting,
+or job submission. It reports automatic repairs when scheduler
+accounting confirms that a previously active job failed or was
+cancelled. Relevant active jobs and uncertain submission outcomes stop
+the request, even with <code>force = TRUE</code> or existing completion
+markers. This gate uses small tracking records and batched scheduler
+queries, not imaging reads, output-tree scans, or manifest checks. It
+does not replace BIDS validation or verification of completed
+outputs.</p>
 <p>Before submitting, preview the selected work without creating
 directories, changing permissions, or contacting the scheduler:</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">preview</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"all"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="va">preview</span><span class="op">$</span><span class="va">preview</span><span class="op">$</span><span class="va">work</span></span></code></pre></div>
+<span><span class="va">preview</span><span class="op">$</span><span class="va">preview</span><span class="op">$</span><span class="va">work</span></span>
+<span><span class="va">preview</span><span class="op">$</span><span class="va">submission_preflight</span><span class="op">$</span><span class="va">blockers</span></span></code></pre></div>
 <p>Dry runs return a <code>bg_project_plan</code> rather than
 <code>TRUE</code>. The preview lists subjects/sessions, stages and
 streams, input/output and log locations, requested resources, and
@@ -784,6 +808,14 @@ commands disabled; use <code>dry_run = TRUE</code> when you want no jobs
 submitted. Console output shows at most 20 detailed rows; the returned
 table retains all rows. Optional saved plans and retry previews expose
 the same information.</p>
+<p>The dry-run preflight reports pending metadata without scheduler
+queries, automatic repairs, or a saved report file. A plan is still
+returned when these metadata checks find blockers; it is a preview, not
+a certificate that live submission will succeed. A live blocker raises
+<code>bg_submission_preflight_error</code> with the complete
+<code>$report$blockers</code> and <code>$report$repairs</code> tables.
+An early blocker can stop the call before any new run record is
+created.</p>
 <p>For scripts, keep JSON stdout separate from diagnostic stderr:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Shell equivalent:</span></span>
@@ -812,6 +844,7 @@ masks, and other selected execution files.</p>
 <span><span class="va">status</span><span class="op">$</span><span class="va">stages</span></span>
 <span><span class="va">status</span><span class="op">$</span><span class="va">subjects</span></span>
 <span><span class="va">status</span><span class="op">$</span><span class="va">active</span></span>
+<span><span class="va">status</span><span class="op">$</span><span class="va">submissions</span></span>
 <span></span>
 <span><span class="co"># Focus every view and count on one subject.</span></span>
 <span><span class="va">subject_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
@@ -823,14 +856,16 @@ masks, and other selected execution files.</p>
 <span><span class="co"># Restrict the same views to this submission.</span></span>
 <span><span class="va">run_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span></span>
 <span><span class="va">provenance</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_run_provenance.html">get_run_provenance</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span></span>
+<span><span class="va">provenance</span><span class="op">$</span><span class="va">submission_preflight</span></span>
 <span><span class="fu"><a href="../reference/find_run_logs.html">find_run_logs</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, failed_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="step-3-diagnose-when-needed">Step 3: Diagnose when needed<a class="anchor" aria-label="anchor" href="#step-3-diagnose-when-needed"></a>
 </h3>
 <p>Diagnosis is not a routine prerequisite. In an interactive R session,
-<code><a href="../reference/diagnose_project.html">diagnose_project()</a></code> opens the guided dependency and log
-browser for current failed, blocked, or cancelled work:</p>
+<code><a href="../reference/diagnose_project.html">diagnose_project()</a></code> offers a submission-readiness review
+when recovery issues or a saved preflight exist, then the dependency and
+log browser for current failed, blocked, or cancelled work:</p>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
 <p>The guided browser starts with unresolved problems and retains each
@@ -845,7 +880,53 @@ reports:</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">diagnosis</span><span class="op">$</span><span class="va">failures</span></span>
-<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">logs</span></span></code></pre></div>
+<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">logs</span></span>
+<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">submission_issues</span></span>
+<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">active_issues</span></span>
+<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">submission_preflight</span></span></code></pre></div>
+<p>Use <code>submission_issues</code> for uncertain acceptance or
+scheduler rejections, including attempts without job IDs.
+<code>active_issues</code> highlights tracking states that need
+attention; a refreshed inspection adds scheduler observations.
+<code>submission_preflight</code> is saved evidence from the selected
+run (or latest tracked run), not a live readiness verdict. Its recorded
+blockers remain historical even after recovery. Inspection and diagnosis
+never perform repairs.</p>
+<p>Two exported R functions support explicit recovery:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>Function</th>
+<th>When to use it</th>
+<th>Safety boundary</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>reconcile_project_jobs(scfg)</code></td>
+<td>A known allocation has stale active tracking status</td>
+<td>Queries accounting without changing SQLite by default. Use
+<code>dry_run = FALSE</code> to apply only confirmed
+failures/cancellations.</td>
+</tr>
+<tr class="even">
+<td><code>resolve_project_submission(scfg, contract_id, ...)</code></td>
+<td>One submission’s acceptance is uncertain</td>
+<td>Immediately binds a confirmed allocation ID or records authoritative
+rejection evidence; no dry-run mode.</td>
+</tr>
+</tbody>
+</table>
+<p>Queue absence or missing logs is not evidence of rejection, and
+scheduler completion does not verify outputs. Keep the log directory’s
+<code>runs/</code> tree and SQLite together. See <a href="diagnosing_pipeline.html">Inspecting and Diagnosing Pipeline
+Runs</a> for recovery decision tables, mutually exclusive resolution
+examples, and handling a blocked unattended submission. Correct the
+cause and resolve any uncertain acceptance before repeating
+<code><a href="../reference/run_project.html">run_project()</a></code> or submitting a retry.</p>
 <p>The configuration object is optional when the project root is the
 current working directory. In that case, <code><a href="../reference/inspect_project.html">inspect_project()</a></code>
 and <code><a href="../reference/diagnose_project.html">diagnose_project()</a></code> find
@@ -900,7 +981,11 @@ changed, or before an expensive submission.</p>
 <p>Pass <code>deep = TRUE</code> to also initialize the active
 reticulate Python and inspect optional modules used by
 template-dependent postprocessing. Doctor never submits jobs or changes
-project files and is not required before <code><a href="../reference/run_project.html">run_project()</a></code>.</p>
+project files and is not required before <code><a href="../reference/run_project.html">run_project()</a></code>. It
+also reports uncertain submissions and missing recovery evidence without
+resolving them. This optional environment review is distinct from the
+automatic, request-scoped submission gate, which can repair confirmed
+stale failures.</p>
 </div>
 <div class="section level3">
 <h3 id="plan-inspect-or-persist-resolved-work">Plan: inspect or persist resolved work<a class="anchor" aria-label="anchor" href="#plan-inspect-or-persist-resolved-work"></a>
@@ -972,13 +1057,21 @@ it.</p>
 run and reruns the failed or cancelled stages and subjects even if old
 completion files would otherwise cause them to be skipped. The new run’s
 provenance records the source run ID. Jobs marked
-<code>FAILED_BY_EXT</code> did not run because an earlier job failed.
-They are not included by default; set
-<code>include_blocked = TRUE</code> when the new run should include that
-affected downstream work too.</p>
+<code>FAILED_BY_EXT</code> represent work blocked by an earlier failure,
+not confirmed scheduler termination. They are not included by default;
+set <code>include_blocked = TRUE</code> when the new run should include
+that affected downstream work too.</p>
 <p>Cancellation is separate from retry. Preview it first; the second
 call below immediately asks the scheduler to cancel jobs that are still
 queued or running. It does not delete project data or outputs.</p>
+<p>Successful client requests return
+<code>cancellation_requested</code>; they do not mark SQLite rows
+cancelled or authorize an immediate retry. Accounting must confirm
+termination through explicit reconciliation or the next relevant live
+submission preflight. Unconfirmed dependency-blocked allocations can
+also be cancelled. Older outstanding attempts remain visible in
+<code>inspect_project()$active</code> even when newer logical work is
+complete.</p>
 <div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/cancel_project_run.html">cancel_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/cancel_project_run.html">cancel_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>

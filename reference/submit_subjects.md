@@ -15,7 +15,8 @@ submit_subjects(
   parent_ids = NULL,
   sequence_id = NULL,
   permission_check_cache = NULL,
-  dry_run = FALSE
+  dry_run = FALSE,
+  preflight_checked = FALSE
 )
 ```
 
@@ -66,6 +67,11 @@ submit_subjects(
 
   Logical. If `TRUE`, report planned subject/session scope without
   submitting any subject-level jobs.
+
+- preflight_checked:
+
+  Whether this exact resolved scope has already passed the submission
+  preflight in the calling run_project() invocation.
 
 ## Details
 

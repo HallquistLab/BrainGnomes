@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Local onboarding and prerequisites • BrainGnomes</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="icon" sizes="any" href="../favicon.ico">
+<link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -20,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.01</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,14 +69,13 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-
-      <h1>Local onboarding and prerequisites</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>Local onboarding and prerequisites</h1>
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">11 Sep 2026</h4>
+            <h4 data-toc-skip class="date">23 Oct 2026</h4>
       
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0/vignettes/local_onboarding.Rmd" class="external-link"><code>vignettes/local_onboarding.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/local_onboarding.Rmd" class="external-link"><code>vignettes/local_onboarding.Rmd</code></a></small>
       <div class="d-none name"><code>local_onboarding.Rmd</code></div>
     </div>
 
@@ -180,11 +184,13 @@ NIfTI image:</p>
 paths and selected stage resources, resolves stream settings, and
 reports planned subject/session work without submitting jobs:</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="va">preview</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span></span>
 <span>  <span class="st">"/real/project"</span>,</span>
 <span>  steps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"postprocess"</span>, <span class="st">"extract_rois"</span><span class="op">)</span>,</span>
 <span>  dry_run <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="va">preview</span><span class="op">$</span><span class="va">submission_preflight</span><span class="op">$</span><span class="va">blockers</span></span>
+<span><span class="va">preview</span><span class="op">$</span><span class="va">submission_preflight</span><span class="op">$</span><span class="va">scope_deferred</span></span></code></pre></div>
 <p>The same call accepts <code>project_config.yaml</code> or a loaded
 <code>bg_project_cfg</code> object. If the project root is the current
 working directory, the first argument can be omitted.</p>
@@ -192,6 +198,23 @@ working directory, the first argument can be omitted.</p>
 configuration: the selected stages still need real directories, inputs,
 containers, and other required files so that validation can describe a
 trustworthy plan.</p>
+<p>Its submission preflight reads pending tracking metadata without
+querying the scheduler, repairing records, or saving a preflight report
+file. It can return a plan containing potential blockers, so a dry-run
+preview is not proof of live readiness. When Flywheel synchronization
+can add data, subject/session checks are explicitly deferred until the
+dependent controller discovers the scope.</p>
+<p>On a configured cluster, every live <code><a href="../reference/run_project.html">run_project()</a></code>
+repeats the relevant checks, reports automatic repairs of confirmed
+failed/cancelled allocations, and stops on active jobs or uncertain
+submissions. <code>force = TRUE</code> does not bypass these
+protections. Inspection and diagnosis are read-only; explicit recovery
+uses the exported <code><a href="../reference/reconcile_project_jobs.html">reconcile_project_jobs()</a></code> and
+<code><a href="../reference/resolve_project_submission.html">resolve_project_submission()</a></code> functions. The former previews
+accounting by default; the latter updates one attempt immediately and
+requires confirmed acceptance or rejection evidence. Neither should be
+run against the placeholder configuration above. See <a href="diagnosing_pipeline.html">Inspecting and Diagnosing Pipeline
+Runs</a> for the decision guide and safe recovery examples.</p>
 </div>
 <div class="section level2">
 <h2 id="stage-specific-prerequisites">Stage-specific prerequisites<a class="anchor" aria-label="anchor" href="#stage-specific-prerequisites"></a>

@@ -69,8 +69,9 @@ cluster_job_submit(
 - fail_on_error:
 
   Whether to stop execution of the script (TRUE), or issue a warning
-  (FALSE) if the job submission fails. Defaults to FALSE (i.e., issue a
-  warning).
+  (FALSE) if the job submission fails. Defaults to FALSE for untracked
+  jobs. Tracked submission failures always stop to prevent cascading
+  submissions with missing dependencies.
 
 - wait_jobs:
 

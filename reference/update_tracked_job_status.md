@@ -32,7 +32,8 @@ update_tracked_job_status(
 - status:
 
   Character string. The job status to set. Must be one of: `"QUEUED"`,
-  `"STARTED"`, `"FAILED"`, `"COMPLETED"`, `"FAILED_BY_EXT"`.
+  `"STARTED"`, `"FAILED"`, `"COMPLETED"`, `"FAILED_BY_EXT"`, or
+  `"CANCELLED"`.
 
 - output_manifest:
 
@@ -80,7 +81,10 @@ tracking row has an associated job manifest. The receipt records the
 compute host and verifies that the sealed manifest and execution-driving
 files still match their submission-time checksums. A manifest configured
 with the default `"fail"` drift policy stops execution when verification
-fails.
+fails. Repeated progress messages preserve the initial submission/start
+timestamp. A late `QUEUED` or `STARTED` message cannot resurrect
+terminal tracking state; invalid transitions warn, or raise an error
+with `strict = TRUE`.
 
 When `status` is `"COMPLETED"` and `output_manifest` is provided, the
 manifest is stored in the `output_manifest` column for later
@@ -88,10 +92,12 @@ verification. Completion status, its timestamp, and the manifest are
 written atomically in one SQL update.
 
 If `cascade = TRUE`, and the status is `"FAILED"` or `"FAILED_BY_EXT"`,
-any dependent jobs (as determined via
-[`get_tracked_job_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_tracked_job_status.md))
-will be recursively marked as `"FAILED_BY_EXT"`, unless their status is
-already `"FAILED"` or they are listed in `exclude`.
+any dependent jobs (as determined by tracking parent relationships) are
+marked `"FAILED_BY_EXT"` only while queued or unknown. Started and
+terminal descendants retain their own evidence. Excluded branches are
+not traversed, and legacy cycles cannot cause infinite recursion. A
+dependency-blocked status does not establish scheduler termination: such
+allocations still block duplicate launches until accounting confirms it.
 
 If no tracking row matches `job_id`, a warning is emitted and no
 manifest/cascade updates are attempted, preventing silent status-update

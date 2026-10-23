@@ -79,8 +79,8 @@ run_project(
 
 - force:
 
-  A logical value indicating whether to force the execution of all
-  steps, regardless of their current status.
+  Logical. Rerun selected work even when completion markers exist. Does
+  not bypass active-job or uncertain-submission blockers.
 
 - dry_run:
 
@@ -101,7 +101,10 @@ run UUID, scheduler job IDs known at submission time, and the path to
 the complete run provenance record. Dry runs invisibly return a
 `bg_project_plan` with concrete work units, paths, resources, and
 current completion-marker decisions after printing the preview. No jobs
-are submitted.
+are submitted. Returned runs and dry-run plans include a
+`submission_preflight` report. A blocking live preflight raises a
+`bg_submission_preflight_error` whose `report` contains the full
+`blockers` and `repairs` data frames.
 
 ## Details
 
@@ -110,7 +113,35 @@ folders, finding matching subjects, and saving the run record. The first
 use of a large container in a project may take longer because
 BrainGnomes reads the complete file once to identify the exact copy
 used. During large submissions, periodic messages report progress
-through the subject list.
+through the subject list. A submission preflight runs before saving
+provenance or submitting setup jobs. It checks pending SQLite metadata
+and batches accounting queries for relevant active jobs, reports
+automatic failure/cancellation repairs, and stops on unresolved blockers
+even when `force = TRUE`. It does not read imaging files, scan output
+trees, verify manifests, or hash containers. Dry runs report pending
+metadata without querying the scheduler or repairing records, and do not
+save a preflight report file. Their returned plan includes
+`submission_preflight`. A dry-run plan can contain blockers and is not a
+live readiness certificate. An early live blocker can stop the call
+before a new run record exists; inspect the error's `report` rather than
+assuming a new run ID was created.
+
+With Flywheel synchronization, initial subject/session checks are
+explicitly deferred. Project-level blockers are checked before
+submission; the dependent controller checks the discovered
+subject/session scope before submitting any subject jobs. Its own
+project dependencies are allowed. Final per-submission guards remain in
+place to catch concurrent launches after the preflight. The controller
+saves its small report as `submission-preflight.json` in the run
+directory, including when blockers prevent subject submission. Read the
+saved report through
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+or
+[`get_run_provenance()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_provenance.md)
+after the controller executes; the original run handle may still contain
+the initial deferred assessment. Saved assessments are historical
+evidence, not a live readiness verdict. Missing reports do not establish
+readiness.
 
 ## See also
 
@@ -126,7 +157,13 @@ to submit the BIDS validation configured with the project;
 [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
 and
 [`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
-for optional recovery after a submitted run fails.
+for optional recovery after a submitted run fails;
+[`reconcile_project_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/reconcile_project_jobs.md)
+and
+[`resolve_project_submission()`](https://hallquistlab.github.io/BrainGnomes/reference/resolve_project_submission.md)
+for explicit tracking/submission recovery. See
+[`vignette("diagnosing_pipeline", package = "BrainGnomes")`](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md)
+for the recovery decision guide.
 
 ## Examples
 
@@ -134,5 +171,19 @@ for optional recovery after a submitted run fails.
   if (FALSE) { # \dontrun{
     # Assuming you have a valid project configuration list named `study_config`
     run_project(study_config, steps = "fmriprep", force = FALSE)
+
+    preview <- run_project(study_config, steps = "fmriprep", dry_run = TRUE)
+    preview$submission_preflight$blockers
+    preview$submission_preflight$scope_deferred
+
+    # Live submission if ready; report blockers and rethrow if not.
+    run <- tryCatch(
+      run_project(study_config, steps = "fmriprep"),
+      bg_submission_preflight_error = function(error) {
+        print(error$report$repairs)
+        print(error$report$blockers)
+        stop(error)
+      }
+    )
   } # }
 ```

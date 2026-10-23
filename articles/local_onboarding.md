@@ -133,11 +133,13 @@ planned subject/session work without submitting jobs:
 
 ``` r
 
-run_project(
+preview <- run_project(
   "/real/project",
   steps = c("postprocess", "extract_rois"),
   dry_run = TRUE
 )
+preview$submission_preflight$blockers
+preview$submission_preflight$scope_deferred
 ```
 
 The same call accepts `project_config.yaml` or a loaded `bg_project_cfg`
@@ -148,6 +150,30 @@ A dry run is submission-free, but it is not a substitute for
 configuration: the selected stages still need real directories, inputs,
 containers, and other required files so that validation can describe a
 trustworthy plan.
+
+Its submission preflight reads pending tracking metadata without
+querying the scheduler, repairing records, or saving a preflight report
+file. It can return a plan containing potential blockers, so a dry-run
+preview is not proof of live readiness. When Flywheel synchronization
+can add data, subject/session checks are explicitly deferred until the
+dependent controller discovers the scope.
+
+On a configured cluster, every live
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
+repeats the relevant checks, reports automatic repairs of confirmed
+failed/cancelled allocations, and stops on active jobs or uncertain
+submissions. `force = TRUE` does not bypass these protections.
+Inspection and diagnosis are read-only; explicit recovery uses the
+exported
+[`reconcile_project_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/reconcile_project_jobs.md)
+and
+[`resolve_project_submission()`](https://hallquistlab.github.io/BrainGnomes/reference/resolve_project_submission.md)
+functions. The former previews accounting by default; the latter updates
+one attempt immediately and requires confirmed acceptance or rejection
+evidence. Neither should be run against the placeholder configuration
+above. See [Inspecting and Diagnosing Pipeline
+Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md)
+for the decision guide and safe recovery examples.
 
 ## Stage-specific prerequisites
 

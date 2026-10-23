@@ -24,7 +24,8 @@ for reviewing settings and the submission environment.
 
 Run directly with run_project(); use dry_run = TRUE to preview without
 submission. Plans are optional when you want to inspect, save, or share
-a resolved request before submitting it.
+a resolved request before submitting it. Live runs automatically check
+relevant submission blockers and report confirmed tracking repairs.
 
 - [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   : Run the project workflow
@@ -42,19 +43,25 @@ a resolved request before submitting it.
 ## Monitor, diagnose, and recover
 
 Inspect current progress, investigate failures with diagnose_project(),
-and preview retries or cancellations before acting. Diagnosis supports
-both a guided browser and structured results.
+and preview retries or cancellations before acting. Diagnose uncertain
+submissions even without job IDs, reconcile known allocations, or
+resolve one acceptance outcome using confirmed evidence. Saved preflight
+reports remain historical evidence separate from current recovery needs.
 
 - [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
   : Inspect current project progress
 - [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
-  : Diagnose failed project work
+  : Diagnose failed work and unresolved project submissions
 - [`find_run_logs()`](https://hallquistlab.github.io/BrainGnomes/reference/find_run_logs.md)
   : Find output and error logs for one run
+- [`reconcile_project_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/reconcile_project_jobs.md)
+  : Recover stale active job records using scheduler accounting
+- [`resolve_project_submission()`](https://hallquistlab.github.io/BrainGnomes/reference/resolve_project_submission.md)
+  : Resolve an uncertain submission after confirming its outcome
 - [`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
   : Create a new run for failed work
 - [`cancel_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/cancel_project_run.md)
-  : Cancel queued or running jobs from one run
+  : Request cancellation of outstanding allocations from one run
 - [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md)
   : Get processing status for all subjects
 - [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md)

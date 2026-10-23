@@ -1,9 +1,19 @@
-# Cancel queued or running jobs from one run
+# Request cancellation of outstanding allocations from one run
 
-Cancellation affects only tracked jobs that are still queued or running.
-It does not delete project data, logs, or completed outputs. Calling
-this function with `dry_run = FALSE` immediately sends cancellation
-requests to the configured scheduler, so preview the commands first.
+Cancellation targets queued, running, or unconfirmed tracked
+allocations, including dependency-blocked jobs without confirmed
+scheduler termination. It does not delete project data, logs, or
+completed outputs. Calling this function with `dry_run = FALSE`
+immediately sends cancellation requests to the configured scheduler, so
+preview the commands first. A successful client exit confirms only the
+request, not that all allocation processes have stopped. Tracking
+remains unchanged until scheduler accounting confirms
+failure/cancellation through
+[`reconcile_project_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/reconcile_project_jobs.md)
+or the next relevant live
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
+preflight. Concurrent worker completion is preserved. Missing accounting
+never establishes termination.
 
 ## Usage
 
@@ -32,7 +42,10 @@ cancel_project_run(input = getwd(), run_id = "latest", dry_run = TRUE)
 
 ## Value
 
-A data frame describing each cancellation attempt.
+A data frame describing each cancellation attempt. `status` is
+`would_cancel` for previews, `cancellation_requested` for successful
+client requests, and `failed` for client errors. Requests do not mark
+SQLite rows `CANCELLED` or authorize immediate duplicate launches.
 
 ## See also
 

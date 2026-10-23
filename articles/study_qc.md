@@ -21,6 +21,9 @@ qc <- collect_qc_inventory(
   subjects = data.frame(sub_id = c("001", "002"), ses_id = "baseline")
 )
 
+# Optional: use a completed run's saved settings and realized scope.
+run_qc <- collect_qc_inventory(scfg, run_id = "latest")
+
 subset(qc$inventory, output_status == "missing")
 subset(qc$workflow, status %in% c("FAILED", "BLOCKED", "NOT_TRACKED"))
 ```
@@ -42,7 +45,7 @@ The returned `bg_qc_inventory` object includes these tables:
 | `metrics` | Numeric values with units, definitions, source files, and available/missing observation counts |
 | `regions` | Per-label usable voxel proportions, retention status, and recorded exclusion reasons |
 | `evidence` | Source/report/diagnostic paths, availability, size, and modification time |
-| `checks` | Individual saved postprocessing validation messages and statuses |
+| `checks` | Saved postprocessing checks, full messages, warnings, timestamps, elapsed seconds, and structured details as JSON |
 | `jobs`, `attempts` | Historical job records and logical attempts, preserving current-attempt indicators |
 | `manifest_files` | Exact paths in historical output manifests and current size/mtime comparisons |
 | `active`, `reconciliation` | Active-job timing and optional scheduler comparisons |
@@ -76,11 +79,32 @@ write_qc_inventory(qc, "/path/to/exports/qc-snapshot-01")
 Each export requires a new or empty directory. Render a new snapshot
 when the study changes; an existing report remains a record of what was
 observed at its collection time. If Quarto fails, the RDS and TSV
-exports remain available and `render.log` contains the failure details.
-Use a new directory for a subsequent rendering attempt.
+exports remain available and `render.log` retains the failure details
+even in quiet mode. `render-status.json` records the result. Rendering
+uses a temporary writable Quarto cache, including on systems with a
+read-only home directory. Retry from the retained export without
+rescanning the project:
 
-The four dashboard pages cover study progress, derivative exploration,
-QC metrics, and workflow/evidence details. Tables use
+``` r
+
+html <- render_qc_dashboard("/path/to/reports/qc-snapshot-01")
+```
+
+A successful HTML report cannot be overwritten. Rendering also accepts
+an exported directory and a different new output directory.
+
+The overview starts with selected output counts, required audits,
+participant summaries, and attention reasons. It separates supporting
+upstream inputs, raw BOLD files, workflow units, and job records. Shared
+participant, session, task, stage, stream, and space controls apply
+exact matches across tables with those identity columns. Click a
+participant in the summary to apply its filter. Snapshot totals and
+plots keep their own scope and selectors.
+
+The four dashboard pages cover the overview, derivative exploration, QC
+metrics, and workflow/evidence details. Manifest views show grouped
+association counts, distinct paths, and exceptions; the download retains
+every association. Tables use
 [reactable](https://glin.github.io/reactable/), with client-side
 filtering, sorting, pagination, and expandable rows. Plotly charts
 provide hover values and selection among metric/stage/stream/task/atlas
@@ -113,9 +137,17 @@ multi-echo combinations are not guessed. The subject scope includes
 discovered files and BIDS participant directories, tracked subjects,
 saved run subject tables, and any explicitly supplied subjects.
 Historical scope remains visible even if the current configuration has
-changed. Existing native outputs are retained when their upstream images
-are no longer available; unavailable stream/source attribution is left
-missing.
+changed.
+
+With `run_id`, expectations instead use the saved configuration and
+realized participant/session scope, selected stages and streams, and
+exact retry units. The snapshot records the run ID, provenance path,
+selected stages, and settings. This mode requires resolved run
+provenance and cannot be combined with `subjects`, which adds
+project-wide expectations. Files and manifest comparisons still describe
+the current filesystem, rather than historical reconstruction. Existing
+native outputs are retained when their upstream images are no longer
+available; unavailable stream/source attribution is left missing.
 
 A file marked `available` exists and is nonempty. A completed job
 describes its recorded workflow outcome. A saved audit marked `passed`
@@ -128,11 +160,13 @@ attempt does not acquire ownership of an older output.
 
 The `attention` field highlights missing/empty derivatives, invalid or
 failed audits, malformed diagnostics, saved ROI loss, shared destination
-paths, and failed/blocked/cancelled workflow context. `workflow_status`,
-`workflow_scope`, and `workflow_run_id` identify the current
-participant/session-level context; they do not identify the producing
-attempt for the derivative. It is a navigation aid and does not define
-analysis inclusion or exclusion.
+paths, and failed/blocked/cancelled workflow context, missing required
+checks, and saved audit warnings. `attention_reasons` explains the flags
+in plain language. `workflow_status`, `workflow_scope`, and
+`workflow_run_id` identify the current participant/session-level
+context; they do not identify the producing attempt for the derivative.
+It is a navigation aid and does not define analysis inclusion or
+exclusion.
 
 - `mean_fd` summarizes finite `framewise_displacement` values in the
   original fMRIPrep confounds TSV, in millimeters. The metric table
@@ -157,9 +191,15 @@ analysis inclusion or exclusion.
 Optional diagnostics are not generated by collection. Enable native
 `validate_postproc_steps` or ROI `save_diagnostics` in the processing
 configuration when those records are wanted for future processing.
-Previously missing evidence remains unavailable. No human ratings,
-review lifecycle, inclusion decisions, or automatic motion thresholds
-are implemented.
+Absent evidence is `not_applicable` when its check is disabled or does
+not apply to that stage, `missing` when required, and `unavailable` when
+the requirement is unknown. Existing evidence is retained even if its
+setting is now disabled. Expanding a saved check shows full messages,
+warnings, timings, and scalar measurements; arrays remain in the JSON
+details in `checks.tsv`. Selected mask replay, smoothness, intensity,
+and spectral measurements are also available as numeric metrics with
+units and saved sampling counts. No human ratings, review lifecycle,
+inclusion decisions, or automatic motion thresholds are implemented.
 
 The exports contain participant identifiers and source paths. Share them
 with the same access controls as the study’s existing reports.

@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>HPC Workflows for Functional MRI Preprocessing and Analysis • BrainGnomes</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" sizes="any" href="favicon.ico">
+<link rel="manifest" href="site.webmanifest">
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -13,6 +18,8 @@
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="HPC Workflows for Functional MRI Preprocessing and Analysis">
 <meta name="description" content="Configures, submits, and monitors reproducible functional magnetic resonance imaging workflows on high-performance computing clusters using containerized neuroimaging tools. The package can be installed and its configuration, BIDS, status, and native imaging helpers can be used without a cluster. Full pipeline execution requires a supported scheduler and stage-specific external software; template-dependent operations may also use Python and TemplateFlow.">
 <meta property="og:description" content="Configures, submits, and monitors reproducible functional magnetic resonance imaging workflows on high-performance computing clusters using containerized neuroimaging tools. The package can be installed and its configuration, BIDS, status, and native imaging helpers can be used without a cluster. Full pipeline execution requires a supported scheduler and stage-specific external software; template-dependent operations may also use Python and TemplateFlow.">
+<meta property="og:image" content="https://hallquistlab.github.io/BrainGnomes/reference/figures/braingnomes-header.png">
+<meta property="og:image:alt" content="BrainGnomes: a team of distinct gnomes handing off brain models and working at parallel processing stations.">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -22,7 +29,7 @@
 
     <a class="navbar-brand me-2" href="index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.01</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,10 +69,13 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="braingnomes">BrainGnomes<a class="anchor" aria-label="anchor" href="#braingnomes"></a>
-</h1></div>
+<div class="page-header">
+<img src="logo.png" class="logo" alt=""><h1 id="braingnomes-">BrainGnomes <a class="anchor" aria-label="anchor" href="#braingnomes-"></a>
+</h1>
+</div>
 <!-- badges: start -->
 
+<p><img src="reference/figures/braingnomes-header.png" class="img-fluid" width="2172" height="724" alt="BrainGnomes: a team of distinct gnomes handing off brain models and working at parallel processing stations."></p>
 <p>BrainGnomes is an R package for configuring, submitting, and monitoring reproducible fMRI workflows on high-performance computing (HPC) systems. It coordinates containerized neuroimaging tools and scheduler jobs from one project configuration, while retaining logs and job-tracking information for each run.</p>
 <p>The package supports the parts of a workflow that you need: optional Flywheel synchronization, DICOM-to-BIDS conversion with HeuDiConv, MRIQC, fMRIPrep, ICA-AROMA, postprocessing, and ROI time-series/connectivity extraction. BIDS validation is configured with the project but submitted separately through <code><a href="reference/run_bids_validation.html">run_bids_validation()</a></code>. You can begin with raw DICOMs or use it only for later steps when BIDS or fMRIPrep outputs already exist.</p>
 <div class="section level2">
@@ -256,14 +266,62 @@
 <p>Every submitted run records a provenance bundle beneath <code>&lt;log_directory&gt;/runs/&lt;run_id&gt;/</code>. It contains the exact configuration and resolved subject scope plus a JSON record of the request, resources, dependencies, BrainGnomes/R/platform versions, submission host, scheduler, and checksummed containers and other execution-driving files. Read it with <code>get_run_provenance(scfg, run$run_id)</code> or <code>BrainGnomes provenance &lt;project&gt;</code>. Before jobs are submitted, <code><a href="reference/run_project.html">run_project()</a></code> reports when it is finding subjects and saving this run record. The first use of a large container in a project can take a minute because BrainGnomes reads the complete file to identify the exact copy used; later runs reuse the project’s saved result while the file is unchanged.</p>
 <p>The run record distinguishes intended work from work actually sent to the scheduler. Immediately before each managed <code>sbatch</code> or <code>qsub</code> submission, BrainGnomes writes an immutable job manifest beneath <code>&lt;log_directory&gt;/runs/&lt;run_id&gt;/jobs/</code>. It records the stage, subject/session, resources, dependencies, command, relevant environment, logs, and checksums of the scripts, configuration, containers, and other files that control that job. When the scheduler starts the job, a runtime receipt records the compute host and verifies those checksums. A missing or changed manifest or execution-driving file stops the job with a pointer to its receipt. These paths also appear in <code>inspect_project(scfg)$jobs</code> and the run provenance.</p>
 <p>For a Flywheel run, the initial plan and run record mark subject scope as deferred. After synchronization succeeds, BrainGnomes saves <code>scope-realization.json</code> with the subjects and sessions it found, then creates the downstream job manifests. This permits new Flywheel data to enter the run without treating the earlier plan as an exact job roster.</p>
-<p><code>inspect_project(scfg)</code> reports the current effective project state across runs, using the newest attempt for each subject, stage, and stream. Its <code>overview</code>, <code>active</code>, <code>reconciliation</code>, <code>stages</code>, <code>subjects</code>, <code>subject_stages</code>, <code>runs</code>, <code>attempts</code>, and <code>jobs</code> elements are ordinary data frames. Supply <code>subject_id</code> to focus every view on one subject, or <code>run_id = "latest"</code>/an explicit ID to restrict inspection to one submission. The default remains database-only; <code>refresh = TRUE</code> adds a read-only scheduler comparison for jobs recorded as queued or running.</p>
+<p><code>inspect_project(scfg)</code> reports the current effective project state across runs, using the newest attempt for each subject, stage, and stream. Its <code>overview</code>, <code>active</code>, <code>reconciliation</code>, <code>stages</code>, <code>subjects</code>, <code>subject_stages</code>, <code>runs</code>, <code>attempts</code>, <code>submissions</code>, and <code>jobs</code> elements are ordinary data frames. Supply <code>subject_id</code> to focus every view on one subject, or <code>run_id = "latest"</code>/an explicit ID to restrict inspection to one submission. The default uses stored tracking state and saved preflight evidence without contacting the scheduler; <code>refresh = TRUE</code> adds a read-only scheduler comparison for jobs recorded as queued or running.</p>
+<p>Outstanding older attempts and dependency-blocked allocations remain visible in <code>$active</code> until their termination is confirmed; newer successful work cannot silently clear them. Successful cancellation commands return <code>cancellation_requested</code> and leave tracking unchanged until accounting confirms termination. Uncertain legacy states, missing session scope, and inconsistent accepted bindings continue to block relevant duplicate launches.</p>
+<p>Every live <code><a href="reference/run_project.html">run_project()</a></code> call also performs a scoped submission preflight before preparing directories, fingerprinting containers, or submitting jobs. It reads pending tracking metadata and batches accounting requests for relevant active jobs. Confirmed failures and cancellations are repaired and reported; active jobs and uncertain submissions block the request even with <code>force = TRUE</code> or existing completion markers. It does not read imaging files, scan output trees, or verify manifests. Dry runs report pending metadata without contacting the scheduler or repairing records. <code><a href="reference/doctor_project.html">doctor_project()</a></code> remains an optional, read-only review of configuration and the submission environment.</p>
+<p>With Flywheel synchronization, project checks run first and subject/session checks are explicitly deferred. The controller checks the discovered scope before submitting any subject jobs, including new subjects or sessions. Its final report is saved with the run and exposed as <code>submission_preflight</code> through <code><a href="reference/inspect_project.html">inspect_project()</a></code> and <code><a href="reference/get_run_provenance.html">get_run_provenance()</a></code>. Saved reports describe the assessment at its recorded time; live submission issues are reported separately.</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">subject_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
 <span><span class="va">active_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, refresh <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">active_status</span><span class="op">$</span><span class="va">active</span></span>
-<span><span class="va">active_status</span><span class="op">$</span><span class="va">reconciliation</span></span></code></pre></div>
-<p>If work fails, first inspect the failed jobs and logs, correct the underlying problem, and then preview the retry:</p>
+<span><span class="va">active_status</span><span class="op">$</span><span class="va">reconciliation</span></span>
+<span><span class="va">active_status</span><span class="op">$</span><span class="va">submission_preflight</span></span>
+<span><span class="fu"><a href="reference/get_run_provenance.html">get_run_provenance</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span><span class="op">)</span><span class="op">$</span><span class="va">submission_preflight</span></span></code></pre></div>
+<p>Two recovery actions handle different evidence:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr>
+<th>Function</th>
+<th>Use</th>
+<th>Effect</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code><a href="reference/reconcile_project_jobs.html">reconcile_project_jobs()</a></code></td>
+<td>A known scheduler job has stale tracking status</td>
+<td>Preview accounting results; apply confirmed failures/cancellations with <code>dry_run = FALSE</code>.</td>
+</tr>
+<tr>
+<td><code><a href="reference/resolve_project_submission.html">resolve_project_submission()</a></code></td>
+<td>Acceptance of one submission was never confirmed</td>
+<td>Bind a confirmed allocation ID, or record evidence that the scheduler rejected the request.</td>
+</tr>
+</tbody>
+</table>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">submission_issues</span></span>
+<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">active_issues</span></span>
+<span><span class="va">diagnosis</span><span class="op">$</span><span class="va">submission_preflight</span></span>
+<span></span>
+<span><span class="co"># Preview first; neither call submits or cancels jobs.</span></span>
+<span><span class="fu"><a href="reference/reconcile_project_jobs.html">reconcile_project_jobs</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/reconcile_project_jobs.html">reconcile_project_jobs</a></span><span class="op">(</span><span class="va">scfg</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Only after confirming acceptance of this exact attempt:</span></span>
+<span><span class="va">contract_id</span> <span class="op">&lt;-</span> <span class="st">"REPLACE_WITH_EXACT_CONTRACT_UUID"</span></span>
+<span><span class="fu"><a href="reference/resolve_project_submission.html">resolve_project_submission</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">contract_id</span>, scheduler_job_id <span class="op">=</span> <span class="st">"12345"</span><span class="op">)</span></span></code></pre></div>
+<p>Alternatively, only after authoritative confirmation that <strong>no job was accepted</strong>, record rejection instead of binding an allocation:</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/resolve_project_submission.html">resolve_project_submission</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">contract_id</span>,</span>
+<span>  rejection_reason <span class="op">=</span> <span class="st">"Scheduler administrator confirmed rejection."</span><span class="op">)</span></span></code></pre></div>
+<p>Queue absence, elapsed time, and missing logs cannot establish rejection. Scheduler completion alone also does not verify required outputs. Keep <code>logs/runs</code> together with SQLite when backing up or moving a project. Guided <code><a href="reference/diagnose_project.html">diagnose_project()</a></code> exposes submission issues and saved assessments before opening the tracked-job browser; reviewing them makes no recovery changes. <code><a href="reference/resolve_project_submission.html">resolve_project_submission()</a></code> has no dry-run mode and updates one attempt immediately. A run-based retry may not select an unbound attempt; after confirming rejection and fixing the cause, repeat the intended <code><a href="reference/run_project.html">run_project()</a></code> request. See <a href="https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html">Inspecting and Diagnosing Pipeline Runs</a> for the recovery decision guide, deferred Flywheel reports, and handling a blocked unattended submission. The same guide is available with <code><a href="articles/diagnosing_pipeline.html">vignette("diagnosing_pipeline", package = "BrainGnomes")</a></code> when vignettes are installed.</p>
+<p>If work fails, first inspect the failed jobs and logs, correct the underlying problem, and then preview the retry:</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">status</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">status</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">failed_logs</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/find_run_logs.html">find_run_logs</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, failed_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
@@ -272,15 +330,15 @@
 <span><span class="co"># This submits a new run; it does not change the original run.</span></span>
 <span><span class="va">retry_run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>In an interactive session, <code>diagnose_project(scfg)</code> starts with current unresolved problems and carries each stage, subject, or run selection forward until a specific job and its logs are reached. Skip directly to a known subject or scheduler job when useful:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, job_id <span class="op">=</span> <span class="st">"66273010"</span><span class="op">)</span></span></code></pre></div>
 <p>By default, retry includes jobs that failed or were cancelled. Set <code>include_blocked = TRUE</code> only when the new run should also include downstream jobs that could not start because an earlier job failed. The new run records the source run ID in provenance. Retries retain exact subject/session/stage/stream combinations, including after saving and reloading a plan. Required setup jobs are shown separately; array or sentinel failures retry their owning work unit. If only setup jobs failed, include blocked work to recover its scope or start a direct run with an explicit selection. Ambiguous legacy records or missing inputs stop the retry instead of expanding it.</p>
 <p>The CLI requires an explicit choice between a preview and action:</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="co"># Replace this value with the run ID reported by BrainGnomes status.</span></span>
-<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a><span class="va">run_id</span><span class="op">=</span><span class="st">"REPLACE_WITH_RUN_ID"</span></span>
-<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--dry-run</span></span>
-<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--yes</span></span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="co"># Replace this value with the run ID reported by BrainGnomes status.</span></span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a><span class="va">run_id</span><span class="op">=</span><span class="st">"REPLACE_WITH_RUN_ID"</span></span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--dry-run</span></span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--yes</span></span></code></pre></div>
 <p>Cancellation follows the same preview-first pattern and affects only queued or running scheduler jobs; it does not delete project data or outputs. BIDS validation remains independently schedulable with <code><a href="reference/run_bids_validation.html">run_bids_validation()</a></code> or <code>BrainGnomes validate-bids</code>. The <a href="https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> shows the primary workflow and these optional tools.</p>
 </div>
 </div>
@@ -288,7 +346,7 @@
 <h2 id="study-qc-dashboard">Study QC dashboard<a class="anchor" aria-label="anchor" href="#study-qc-dashboard"></a>
 </h2>
 <p>Collect existing workflow records and diagnostic files into a study snapshot:</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">qc</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/collect_qc_inventory.html">collect_qc_inventory</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">qc</span><span class="op">$</span><span class="va">inventory</span>  <span class="co"># derivative availability and QC summaries</span></span>
 <span><span class="va">qc</span><span class="op">$</span><span class="va">workflow</span>  <span class="co"># expected work and recorded execution states</span></span>

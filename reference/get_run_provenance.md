@@ -31,14 +31,22 @@ get_run_provenance(input = getwd(), run_id = "latest")
 
 ## Value
 
-A `bg_run_provenance` object.
+A `bg_run_provenance` object. `submission_preflight` prefers the
+controller's final saved report when available; otherwise it retains the
+initial run assessment. Reading the report never repairs tracking
+records. Its blockers and repairs describe the recorded assessment, not
+current readiness. A missing report does not establish that submission
+is safe.
 
 ## See also
 
 [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
 to inspect failures and
 [`retry_project_run()`](https://hallquistlab.github.io/BrainGnomes/reference/retry_project_run.md)
-to create a new run from failed work.
+to create a new run from failed work. See
+[`vignette("diagnosing_pipeline", package = "BrainGnomes")`](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md)
+for reading controller reports after deferred Flywheel scope is
+realized.
 
 ## Examples
 
@@ -48,5 +56,6 @@ provenance <- get_run_provenance(scfg, run$run_id)
 provenance$request
 provenance$execution$subjects
 provenance$configuration$snapshot_file
+provenance$submission_preflight
 } # }
 ```
