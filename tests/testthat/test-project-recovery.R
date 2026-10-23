@@ -25,13 +25,17 @@ add_recovery_attempt <- function(fixture) {
 }
 
 test_that("inspection parses mixed local and UTC timestamps independently", {
+  withr::local_envvar(TZ = "UTC")
   times <- c("2026-10-19 17:42:20.123456", "2026-10-19T21:42:20.123456Z",
              "2026-10-19T17:42:20.123456-04:00", "not-a-time", NA, "")
   parsed <- parse_inspection_time(times, "America/New_York")
   expect_equal(as.numeric(parsed[1:3]), rep(as.numeric(parsed[[1L]]), 3L))
   expect_true(all(is.na(parsed[4:6])))
   expect_length(parse_inspection_time(character()), 0L)
-  expect_identical(parse_inspection_time(parsed), parsed)
+  converted <- parse_inspection_time(parsed)
+  expect_equal(as.numeric(converted), as.numeric(parsed))
+  expect_identical(attr(converted, "tzone"), "UTC")
+  expect_identical(parse_inspection_time(parsed, "America/New_York"), parsed)
 })
 
 test_that("recovery previews failures and never infers success or missing outcomes", {

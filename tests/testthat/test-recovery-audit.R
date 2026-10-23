@@ -432,7 +432,7 @@ test_that("diagnosis log discovery cannot confuse subject numbers and job ID pre
   file.create(expected,
     file.path(fixture$cfg$metadata$log_directory, "fmriprep_jobid-1234.err"),
     file.path(fixture$cfg$metadata$log_directory, "fmriprep_sub-123_jobid-456.err"))
-  expect_identical(find_run_logs(fixture$cfg, "logs")$path, expected)
+  expect_path_identical(find_run_logs(fixture$cfg, "logs")$path, expected)
   fixture$cfg$metadata$log_directory <- NULL
   expect_equal(nrow(find_run_logs(fixture$cfg, "logs")), 0L)
 })
