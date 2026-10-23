@@ -1,3 +1,73 @@
+# BrainGnomes 1.01 (2026-10-23)
+
+## Job submission, tracking, and recovery
+
+* Audit recovery and tracking races with real SQLite/process regressions and
+  executable scheduler stand-ins. Guard unknown legacy scope/states, missing or
+  inconsistent accepted bindings, and outstanding allocations from older runs.
+  Preserve active and terminal descendants during dependency failure cascades;
+  bound cyclic traversal and reject late progress that resurrects terminal rows.
+  Cancellation now returns `cancellation_requested` without declaring jobs
+  stopped; dependency-blocked allocations remain guarded/cancellable until
+  scheduler termination is confirmed. Preserve their logical blocked status on
+  recovery. Query shared Slurm job IDs without an implicit current-user filter,
+  and reject stale TORQUE exit codes after requeue. Add an opt-in interactive
+  Slurm recovery test; see `tests/RECOVERY_TESTING.md` for coverage and execution.
+  Add scalar covering indexes on write/migration paths so pending checks avoid
+  scanning completed job-object history; previews remain non-mutating.
+  Preserve UTC/offset semantics when ranking mixed legacy/local timestamps so
+  an older success cannot hide a newer failed run. Match log allocation IDs
+  rather than participant numbers or numeric prefixes from unrelated jobs.
+  Write new submission/start/end tracking timestamps with explicit UTC offsets.
+* Document automatic submission preflight and evidence-based recovery in the
+  quickstart, local onboarding, diagnosis vignette, and public function help.
+  Distinguish previews from live readiness, current issues from saved reports,
+  and known-allocation reconciliation from uncertain-acceptance resolution.
+* Separate submission assessment, tracking repairs, report persistence, console
+  summaries, and blocker enforcement. Keep the exported recovery API stable;
+  integrate unresolved submission outcomes into structured and guided diagnosis.
+  Expose the controller's final preflight through inspection and run provenance,
+  retaining its recorded scope and time independently of current recovery needs.
+* Run a scoped submission preflight before directory preparation, provenance
+  fingerprinting, or job submission. Batch scheduler queries for relevant active
+  jobs, report confirmed automatic repairs, and stop on unresolved attempts or
+  active jobs regardless of completion markers or force. Flywheel runs explicitly
+  defer subject/session checks and repeat the gate on the controller's realized
+  scope. Dry runs inspect pending metadata without scheduler calls or repairs.
+* Recover confirmed scheduler failures and cancellations before retry duplicate
+  checks, with previewable `reconcile_project_jobs()` and explicit
+  `resolve_project_submission()` for uncertain outcomes. Preserve unknown and
+  completed scheduler outcomes until their evidence is reviewed. Stop tracked
+  submission loops at the first error, retain scheduler rejection diagnostics,
+  and distinguish explicit Slurm policy/request rejection from lost acknowledgements.
+  Handle mixed legacy/UTC timestamps in project inspection. Surface uncertain
+  submissions and missing evidence in `doctor_project()` and reject plans/runs
+  while a BIDS-root conversion lock exists.
+## Study quality control
+
+* Improve study QC reports with participant summaries, explicit attention
+  reasons, shared identity filters, selected-output and upstream-input counts,
+  saved processing settings, and compact manifest summaries with full exports.
+  Show participant, raw BOLD, attention, and issue totals individually; reserve
+  "X of Y" notation for output availability and audit completion.
+  Fix single-field shared filters interrupting initialization of later tables
+  and plots in downloaded reports.
+  Combine mean FD across tasks and output spaces, showing each confounds source
+  once, and reset metric plot categories when switching views to avoid gaps.
+  Distinguish disabled checks from missing required evidence, preserve audit
+  warnings/timing/structured measurements, and support saved-run scopes via
+  `collect_qc_inventory(run_id = "latest")`. Preserve diagnostics after failed
+  rendering and retry directly from exported snapshots with an isolated writable
+  Quarto cache. Keep version 1.0 snapshots renderable, including empty exports,
+  without inventing audit requirements that were not recorded.
+
+## Package branding
+
+* Add the official assembly-line hex logo and matching header to the README
+  and package overview help, with browser icons and a social-preview image on
+  the package website. Use the hex as a small package badge and the rectangular
+  artwork as the header.
+
 # BrainGnomes 1.0 (2026-10-09)
 
 * Preserve integer NIfTI storage types after interpolation, regression, and

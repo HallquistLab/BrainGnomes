@@ -48,7 +48,8 @@ extraction streams should run. When \code{"extract_rois"} is included in
 commands. Debug mode still submits scheduler jobs and writes tracking/log
 records; use \code{dry_run = TRUE} for a submission-free preview.}
 
-\item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
+\item{force}{Logical. Rerun selected work even when completion markers exist.
+Does not bypass active-job or uncertain-submission blockers.}
 
 \item{dry_run}{A logical value indicating whether to perform a dry run. Dry
 runs validate settings and report subject/session scope plus resolved
@@ -63,6 +64,9 @@ the run UUID, scheduler job IDs known at submission time, and the path to
 the complete run provenance record. Dry runs invisibly return a
 \code{bg_project_plan} with concrete work units, paths, resources, and current
 completion-marker decisions after printing the preview. No jobs are submitted.
+Returned runs and dry-run plans include a \code{submission_preflight} report.
+A blocking live preflight raises a \code{bg_submission_preflight_error} whose
+\code{report} contains the full \code{blockers} and \code{repairs} data frames.
 }
 \description{
 This remains the standard execution path after \code{\link[=setup_project]{setup_project()}}. It resolves
@@ -79,11 +83,48 @@ folders, finding matching subjects, and saving the run record. The first
 use of a large container in a project may take longer because BrainGnomes
 reads the complete file once to identify the exact copy used. During large
 submissions, periodic messages report progress through the subject list.
+A submission preflight runs before saving provenance or submitting setup
+jobs. It checks pending SQLite metadata and batches accounting queries for
+relevant active jobs, reports automatic failure/cancellation repairs, and
+stops on unresolved blockers even when \code{force = TRUE}. It does not read
+imaging files, scan output trees, verify manifests, or hash containers.
+Dry runs report pending metadata without querying the scheduler or repairing
+records, and do not save a preflight report file. Their returned plan
+includes \code{submission_preflight}.
+A dry-run plan can contain blockers and is not a live readiness certificate.
+An early live blocker can stop the call before a new run record exists;
+inspect the error's \code{report} rather than assuming a new run ID was created.
+
+With Flywheel synchronization, initial subject/session checks are explicitly
+deferred. Project-level blockers are checked before submission; the dependent
+controller checks the discovered subject/session scope before submitting any
+subject jobs. Its own project dependencies are allowed. Final per-submission
+guards remain in place to catch concurrent launches after the preflight.
+The controller saves its small report as \code{submission-preflight.json} in the
+run directory, including when blockers prevent subject submission.
+Read the saved report through \code{\link[=inspect_project]{inspect_project()}} or \code{\link[=get_run_provenance]{get_run_provenance()}}
+after the controller executes; the original run handle may still contain
+the initial deferred assessment. Saved assessments are historical evidence,
+not a live readiness verdict. Missing reports do not establish readiness.
 }
 \examples{
   \dontrun{
     # Assuming you have a valid project configuration list named `study_config`
     run_project(study_config, steps = "fmriprep", force = FALSE)
+
+    preview <- run_project(study_config, steps = "fmriprep", dry_run = TRUE)
+    preview$submission_preflight$blockers
+    preview$submission_preflight$scope_deferred
+
+    # Live submission if ready; report blockers and rethrow if not.
+    run <- tryCatch(
+      run_project(study_config, steps = "fmriprep"),
+      bg_submission_preflight_error = function(error) {
+        print(error$report$repairs)
+        print(error$report$blockers)
+        stop(error)
+      }
+    )
   }
 }
 \seealso{
@@ -93,5 +134,8 @@ context, and artifact fingerprints; \code{\link[=plan_project]{plan_project()}} 
 inspection or persistence of the resolved request; \code{\link[=run_bids_validation]{run_bids_validation()}}
 to submit the BIDS validation configured with the project;
 \code{\link[=diagnose_project]{diagnose_project()}} and \code{\link[=retry_project_run]{retry_project_run()}} for optional recovery after
-a submitted run fails.
+a submitted run fails; \code{\link[=reconcile_project_jobs]{reconcile_project_jobs()}} and
+\code{\link[=resolve_project_submission]{resolve_project_submission()}} for explicit tracking/submission recovery.
+See \code{vignette("diagnosing_pipeline", package = "BrainGnomes")} for the
+recovery decision guide.
 }

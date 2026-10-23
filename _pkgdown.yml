@@ -2,6 +2,12 @@ url: https://hallquistlab.github.io/BrainGnomes/
 template:
   bootstrap: 5
   bootswatch: spacelab
+  opengraph:
+    image:
+      src: man/figures/braingnomes-header.png
+      alt: >-
+        BrainGnomes: a team of distinct gnomes handing off brain models and
+        working at parallel processing stations.
 
 reference:
 - title: Start and configure a project
@@ -22,7 +28,8 @@ reference:
   desc: >-
     Run directly with run_project(); use dry_run = TRUE to preview without
     submission. Plans are optional when you want to inspect, save, or share
-    a resolved request before submitting it.
+    a resolved request before submitting it. Live runs automatically check
+    relevant submission blockers and report confirmed tracking repairs.
   contents:
   - run_project
   - plan_project
@@ -34,12 +41,16 @@ reference:
 - title: Monitor, diagnose, and recover
   desc: >-
     Inspect current progress, investigate failures with diagnose_project(),
-    and preview retries or cancellations before acting. Diagnosis supports
-    both a guided browser and structured results.
+    and preview retries or cancellations before acting. Diagnose uncertain
+    submissions even without job IDs, reconcile known allocations, or resolve
+    one acceptance outcome using confirmed evidence. Saved preflight reports
+    remain historical evidence separate from current recovery needs.
   contents:
   - inspect_project
   - diagnose_project
   - find_run_logs
+  - reconcile_project_jobs
+  - resolve_project_submission
   - retry_project_run
   - cancel_project_run
   - get_project_status

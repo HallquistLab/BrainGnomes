@@ -179,6 +179,16 @@ ensure_tracking_db_schema <- function(sqlite_db) {
       }
     )
   }
+  # Keep routine pending checks off completed history and its overflow BLOB
+  # pages. Build indexes only on explicit write/migration paths, never previews.
+  fields <- DBI::dbListFields(con, "job_tracking")
+  pending_columns <- intersect(c("status", "scheduler_terminal_state", "unit_key", "job_role",
+    "scheduler", "job_id", "contract_id", "job_name", "stage", "stream", "sub_id", "ses_id",
+    "sequence_id"), fields)
+  DBI::dbExecute(con, paste("CREATE INDEX IF NOT EXISTS job_tracking_pending_v1 ON job_tracking (",
+    paste(pending_columns, collapse = ","), ") WHERE", pending_tracked_job_clause(fields)))
+  DBI::dbExecute(con, paste("CREATE INDEX IF NOT EXISTS job_tracking_unit_role",
+    "ON job_tracking (unit_key, job_role)"))
   invisible(NULL)
 }
 
@@ -259,6 +269,7 @@ create_tracking_db = function(sqlite_db) {
   }, error = function(e) {
     stop(format_tracking_db_error(sqlite_db, operation = "create_tracking_db schema creation", err = e), call. = FALSE)
   })
+  ensure_tracking_db_schema(sqlite_db)
   ensure_job_submission_schema(sqlite_db)
 }
 
@@ -348,7 +359,7 @@ insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
                 tracking_args$n_nodes, tracking_args$n_cpus, tracking_args$wall_time, 
                 tracking_args$mem_per_cpu, tracking_args$mem_total, tracking_args$scheduler,
                 tracking_args$scheduler_options, tracking_args$job_obj, 
-                as.character(Sys.time()), tracking_args$status,
+                job_contract_timestamp(), tracking_args$status,
                 tracking_args$contract_id, tracking_args$stage,
                 tracking_args$stream, tracking_args$sub_id,
                 tracking_args$ses_id, tracking_args$job_role,
@@ -417,6 +428,31 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 }
 
 
+#' Propagate dependency failures without overwriting worker or terminal evidence
+#' @param sqlite_db Existing tracking database.
+#' @param job_id Failed root allocation.
+#' @param exclude Allocation IDs whose entire descendant branches are excluded.
+#' @return Number of pending descendants marked blocked, invisibly.
+#' @noRd
+cascade_tracked_job_failure <- function(sqlite_db, job_id, exclude = NULL) {
+  excluded <- unique(c(job_id, as.character(exclude)))
+  placeholders <- paste(rep("?", length(excluded)), collapse = ",")
+  # UNION (not UNION ALL) bounds traversal even if a legacy database contains
+  # a cycle. Status predicates are checked by SQLite at write time, not from
+  # an earlier, potentially stale snapshot of the dependency tree.
+  query <- paste0(
+    "WITH RECURSIVE descendants(id) AS (",
+    "SELECT id FROM job_tracking WHERE parent_id = (SELECT id FROM job_tracking WHERE job_id = ?) ",
+    "AND job_id NOT IN (", placeholders, ") UNION ",
+    "SELECT child.id FROM job_tracking child JOIN descendants parent ON child.parent_id = parent.id ",
+    "WHERE child.job_id NOT IN (", placeholders, ")) ",
+    "UPDATE job_tracking SET status = 'FAILED_BY_EXT', time_ended = ? ",
+    "WHERE id IN (SELECT id FROM descendants) AND (status IS NULL OR UPPER(TRIM(status)) IN ('QUEUED','UNKNOWN'))"
+  )
+  submit_tracking_query(query, sqlite_db,
+    param = c(list(job_id), as.list(excluded), as.list(excluded), list(job_contract_timestamp())))
+}
+
 #' Update Job Status in Tracking SQLite Database
 #'
 #' Updates the status of a specific job in a tracking database, optionally cascading failure status to downstream jobs.
@@ -424,7 +460,8 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #' @param sqlite_db Character string. Path to the SQLite database file used for job tracking.
 #' @param job_id Character string or numeric. ID of the job to update. If numeric, it will be coerced to a string.
 #' @param status Character string. The job status to set. Must be one of:
-#'   \code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"}, \code{"FAILED_BY_EXT"}.
+#'   \code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"},
+#'   \code{"FAILED_BY_EXT"}, or \code{"CANCELLED"}.
 #' @param output_manifest Character string. Optional JSON manifest of output files to store when
 #'   status is \code{"COMPLETED"}. See \code{\link{capture_output_manifest}}.
 #' @param cascade Logical. If \code{TRUE}, and the \code{status} is a failure type (\code{"FAILED"} or \code{"FAILED_BY_EXT"}),
@@ -446,14 +483,20 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #' host and verifies that the sealed manifest and execution-driving files still
 #' match their submission-time checksums. A manifest configured with the default
 #' `"fail"` drift policy stops execution when verification fails.
+#' Repeated progress messages preserve the initial submission/start timestamp.
+#' A late `QUEUED` or `STARTED` message cannot resurrect terminal tracking state;
+#' invalid transitions warn, or raise an error with `strict = TRUE`.
 #'
 #' When \code{status} is \code{"COMPLETED"} and \code{output_manifest} is provided, the manifest
 #' is stored in the \code{output_manifest} column for later verification. Completion
 #' status, its timestamp, and the manifest are written atomically in one SQL update.
 #'
 #' If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined
-#' via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
-#' \code{"FAILED"} or they are listed in \code{exclude}.
+#' by tracking parent relationships) are marked \code{"FAILED_BY_EXT"} only while
+#' queued or unknown. Started and terminal descendants retain their own evidence.
+#' Excluded branches are not traversed, and legacy cycles cannot cause infinite
+#' recursion. A dependency-blocked status does not establish scheduler termination:
+#' such allocations still block duplicate launches until accounting confirms it.
 #'
 #' If no tracking row matches \code{job_id}, a warning is emitted and no manifest/cascade
 #' updates are attempted, preventing silent status-update failures.
@@ -489,7 +532,7 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
     warning("Only status FAILED or FAILED_BY_EXT can cascade in `update_tracked_job_status`")
   }
   
-  now <- as.character(Sys.time())
+  now <- job_contract_timestamp()
   time_field <- switch(status,
                        QUEUED = "time_submitted",
                        STARTED = "time_started",
@@ -509,6 +552,18 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
     update_sql <- glue("UPDATE job_tracking SET STATUS = ?, {time_field} = ?, output_manifest = ? WHERE job_id = ?")
     update_params <- list(status, now, manifest_value, job_id)
   }
+  if (status %in% c("QUEUED", "STARTED")) {
+    allowed <- if (status == "QUEUED") {
+      "(status IS NULL OR UPPER(TRIM(status)) IN ('UNKNOWN','QUEUED'))"
+    } else {
+      "(status IS NULL OR UPPER(TRIM(status)) NOT IN ('COMPLETED','FAILED','CANCELLED'))"
+    }
+    allowed <- paste(allowed,
+      "AND COALESCE(UPPER(TRIM(scheduler_terminal_state)), '') NOT IN ('COMPLETED','FAILED','CANCELLED')")
+    # Duplicate array STARTED messages retain the first start time. Late
+    # progress cannot resurrect a terminated allocation or reset its receipt.
+    update_sql <- glue("UPDATE job_tracking SET status = ?, {time_field} = COALESCE({time_field}, ?) WHERE job_id = ? AND {allowed}")
+  }
   rows_updated <- tryCatch({
     submit_tracking_query(
       str = update_sql,
@@ -523,6 +578,17 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
   })
 
   if (length(rows_updated) != 1L || !is.numeric(rows_updated) || is.na(rows_updated) || rows_updated < 1) {
+    if (length(rows_updated) == 1L && !is.na(rows_updated) && status %in% c("QUEUED", "STARTED")) {
+      existing <- submit_sqlite_query("SELECT status FROM job_tracking WHERE job_id = ?",
+        sqlite_db, param = list(job_id), return_result = TRUE)
+      if (nrow(existing)) {
+        message <- paste0("Refusing tracking transition from ", existing$status[[1L]],
+          " to ", status, " for job ", job_id, "; preserve terminal or newer worker state.")
+        if (strict) stop(message, call. = FALSE)
+        warning(message, call. = FALSE)
+        return(invisible(NULL))
+      }
+    }
     message <- glue(
       "update_tracked_job_status did not match any row for job_id '{job_id}' in {sqlite_db}. ",
       "Status remains unchanged in SQLite."
@@ -538,31 +604,12 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
     )
   }
   
-  # recursive function for "cascading" failures using status "FAILED_BY_EXT"
   if (cascade) {
-    if (is.numeric(exclude)) exclude <- as.character(exclude)
-    
-    status_tree <- get_tracked_job_status(
-      job_id = job_id,
-      return_children = TRUE,
-      sqlite_db = sqlite_db
-    ) # retrieve current job and children
-    if (!is.data.frame(status_tree) || nrow(status_tree) == 0L) return(invisible(NULL))
-    job_ids <- status_tree$job_id # get list of job ids
-    
-    for (child_job in setdiff(job_ids, c(job_id, exclude))) {
-      child_idx <- which(status_tree$job_id == child_job)
-      child_status <- if (length(child_idx) > 0L) status_tree$status[child_idx[1L]] else NA_character_ # check status
-      if (length(child_status) != 1L || is.na(child_status) || child_status != "FAILED") {
-        update_tracked_job_status(
-          sqlite_db = sqlite_db,
-          job_id = child_job,
-          status = "FAILED_BY_EXT",
-          cascade = TRUE,
-          strict = strict
-        )
-      }
-    }
+    tryCatch(cascade_tracked_job_failure(sqlite_db, job_id, exclude), error = function(error) {
+      message <- format_tracking_db_error(sqlite_db, "cascading dependency failure", error)
+      if (strict) stop(message, call. = FALSE)
+      warning(message, call. = FALSE)
+    })
   }
   
   return(invisible(NULL))
@@ -626,6 +673,7 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
   on.exit(try(if (!is.null(con)) dbDisconnect(con), silent = TRUE), add = TRUE)
   if (!checkmate::test_file_exists(sqlite_db)) {
     warning("Cannot find SQLite database at: ", sqlite_db)
+    return(invisible(NULL))
   }
   stopifnot("Must specify `job_id` or `sequence_id`, not both" =
               is.null(job_id) || is.null(sequence_id))
@@ -663,7 +711,9 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
   })
   
   # rehydrate job_obj back into R6 class
-  if (nrow(df) > 0L) df$job_obj <- lapply(df$job_obj, function(x) if (!is.null(x)) unserialize(x))
+  if (nrow(df) > 0L && "job_obj" %in% names(df)) {
+    df$job_obj <- lapply(df$job_obj, function(value) if (!is.null(value)) unserialize(value))
+  }
   return(df)
 }
 

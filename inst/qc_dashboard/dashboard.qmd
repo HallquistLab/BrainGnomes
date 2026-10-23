@@ -8,35 +8,101 @@ library(reactable)
 library(plotly)
 qc <- readRDS(params$snapshot)
 widgets <- readRDS(params$widgets)
+totals <- widgets$summary$totals
 ```
 
 # Overview
+
+## Row {height=200}
+
+::: {.card title="Explore this snapshot"}
+
+```{r}
+widgets$controls
+```
+
+:::
 
 ## Row {height=140}
 
 ```{r}
 #| content: valuebox
-list(icon = "people", color = "#183044", title = "Participants in workflow scope",
-     value = length(unique(na.omit(qc$workflow$sub_id))))
+list(icon = "people", color = "#183044", title = "Participants",
+     value = totals$participants)
 ```
 
 ```{r}
 #| content: valuebox
-list(icon = "layers", color = "#127a70", title = "Available derivative records",
-     value = paste(sum(qc$inventory$output_status == "available"), "/", nrow(qc$inventory)))
+list(icon = "file-earmark", color = "#183044", title = "Raw BOLD files",
+     value = totals$raw_bold_files)
 ```
 
 ```{r}
 #| content: valuebox
-list(icon = "exclamation-circle", color = "#b84653", title = "Missing derivative records",
-     value = sum(qc$inventory$output_status == "missing"))
+list(icon = "layers", color = "#127a70", title = "Selected outputs available",
+     value = paste(totals$available_outputs, "of", totals$outputs))
+```
+
+## Row {height=140}
+
+```{r}
+#| content: valuebox
+list(icon = "check-circle", color = "#326eac", title = "Required audits passed",
+     value = paste(totals$passed_required_audits, "of", totals$required_audits))
 ```
 
 ```{r}
 #| content: valuebox
-list(icon = "activity", color = "#326eac", title = "Workflow units completed",
-     value = paste(sum(qc$workflow$status == "COMPLETED"), "/", nrow(qc$workflow)))
+list(icon = "exclamation-circle", color = "#b84653", title = "Records needing attention",
+     value = totals$attention_records)
 ```
+
+```{r}
+#| content: valuebox
+list(icon = "exclamation-triangle", color = "#b84653", title = "Collection issues",
+     value = totals$collection_issues)
+```
+
+## Row {height=350}
+
+::: {.card title="Outputs by stage and stream"}
+
+Counts describe files and derivative records. Supporting upstream inputs are
+listed separately from the outputs selected by the snapshot configuration.
+One raw BOLD file can yield several spaces, streams, and atlas products.
+
+```{r}
+widgets$outputs
+```
+
+:::
+
+## Row {height=390}
+
+::: {.card title="Participant summary"}
+
+Click a participant to apply its shared table filter. Counts describe the whole
+snapshot; zero output records can mean upstream inputs have not arrived.
+
+```{r}
+widgets$participants
+```
+
+:::
+
+## Row {height=410}
+
+::: {.card title="Needs attention"}
+
+Each row explains its flags. Expand it to read saved audit messages and follow
+original evidence. An empty table means there are no flagged derivative
+records; collection issues and untracked workflow units remain separate.
+
+```{r}
+widgets$attention
+```
+
+:::
 
 ## Row {height=440}
 
@@ -55,6 +121,12 @@ tags$div(class = "qc-about",
   tags$p(class = "qc-eyebrow", "BRAINGNOMES / QC SNAPSHOT"),
   tags$h3(qc$metadata$project),
   tags$p(tags$strong("Collected: "), qc$metadata$created_at),
+  tags$p(tags$strong("Scope: "), if (identical(qc$metadata$scope, "run"))
+    paste("Saved run", qc$metadata$run_id) else "Project-wide"),
+  tags$p(qc$metadata$expectation_basis),
+  tags$p("Current files are observed at collection time. A saved run scope does not reconstruct historical files."),
+  tags$p(paste(totals$completed_units, "of", totals$workflow_units,
+    "workflow units completed;", totals$job_records, "job records (including controllers and sentinels).")),
   tags$p(if (qc$metadata$scheduler_refreshed) "Active jobs compared with the scheduler at collection time."
     else "Database snapshot; the scheduler was not queried."),
   tags$p("Collect a new snapshot to refresh this dashboard."),
@@ -65,6 +137,19 @@ tags$div(class = "qc-about",
     tags$a(href = "inventory.rds", download = "inventory.rds", "Complete R object"))
 )
 ```
+
+## Row {height=350}
+
+::: {.card title="Processing settings"}
+
+Settings describe the configuration used for expectations. A saved run uses its
+recorded settings; existing evidence may come from earlier processing.
+
+```{r}
+widgets$settings
+```
+
+:::
 
 ## Row {height=410}
 
@@ -87,10 +172,13 @@ widgets$workflow
 ::: {.card title="Explore outputs and evidence"}
 
 Search or filter any column, then expand a row for source files, diagnostics,
-validation messages, and exact output-manifest associations. “Available” means
+validation measurements, full messages, and exact output-manifest associations. “Available” means
 a nonempty file exists. “Attention” marks missing/empty outputs, failed or
 invalid audits, recorded ROI loss, shared destinations, and failed workflow
-context; it is not an exclusion recommendation.
+context. Missing required diagnostics and audit warnings also need attention.
+“Not applicable” means that check is disabled or does not apply to the stage;
+“unavailable” means its requirement is unknown and no evidence was found.
+These flags are navigation aids for human review.
 
 ```{r}
 widgets$inventory
@@ -116,11 +204,14 @@ widgets$acquisitions
 
 ## Row {height=530}
 
-::: {.card title="Motion and retained data"}
+::: {.card title="QC measurements"}
 
-Choose a metric/stage/stream/task/atlas group from the plot menu. Hover for
-values, units, and observed/missing denominators. Each evidence source appears
-once within its group. Values are descriptive; no dashboard cutoff is applied.
+Mean FD combines all tasks in one view, with one point per confounds file;
+individual scans are not averaged together. Other metrics retain their
+stage/stream/task/atlas comparison groups in the plot menu. Hover for scan
+identities, values, units, and observed/missing denominators. Each evidence
+source appears once within its group. Values are descriptive; no dashboard
+cutoff is applied.
 
 ```{r}
 widgets$metric_plot
@@ -134,8 +225,9 @@ widgets$metric_plot
 
 FD comes from the original fMRIPrep confounds. Censor retention describes the
 saved mask and does not establish whether volumes were removed. ROI retention
-uses the extraction rule saved in the diagnostics. Missing diagnostics remain
-unavailable, rather than being interpreted as a passing result.
+uses the extraction rule saved in the diagnostics. Structured audit measurements include mask replay errors, smoothness, intensity
+errors, and spectral attenuation when recorded. These are computational
+measurements with their saved units and sampling counts.
 MRIQC metrics retain their upstream names and definitions in a separate group.
 
 ```{r}
@@ -149,7 +241,10 @@ widgets$metrics
 ::: {.card title="Postprocessing validation checks"}
 
 Audits test computational operations. Their timestamps and source files are
-retained in the evidence table; an older audit may outlive its derivative.
+retained with each check; an older audit may outlive its derivative.
+Participant and acquisition identities support the same table filters as outputs.
+Expand a check for its full message, warnings, timings, and scalar details.
+Complete structured details, including arrays, are retained in `checks.tsv`.
 
 ```{r}
 widgets$checks
@@ -212,6 +307,14 @@ job manifests. They do not verify file contents or scientific quality.
 widgets$manifests
 ```
 
+Distinct paths and job/file associations are counted separately. The same file
+can be listed by a controller and an array job. All associations remain in the
+manifest download; exceptions are listed below.
+
+```{r}
+widgets$manifest_exceptions
+```
+
 :::
 
 ## Row {.tabset height=440}
@@ -240,6 +343,11 @@ widgets$issues
 
 ::: {.card title="Downloads & interpretation"}
 
+The HTML includes the displayed tables, plots, and interactive controls. Save it
+and open it in a web browser to review offline. To use the download links below,
+keep the corresponding TSV/RDS/JSON files beside the HTML. Links to original
+evidence require access to those source files.
+
 - [Raw acquisitions](acquisitions.tsv)
 - [Derivative inventory](inventory.tsv)
 - [Workflow inventory](workflow.tsv)
@@ -252,8 +360,9 @@ widgets$issues
 - [Collection issues](issues.tsv)
 - [Complete R object](inventory.rds) and [snapshot metadata](snapshot.json)
 
-All downloads describe the same snapshot. Expected native outputs are resolved
-from the **current configuration and discovered upstream inputs**. Until inputs
+All downloads describe the same snapshot. Project-wide expectations use the
+current configuration; a saved run scope uses its recorded configuration,
+participants, stages, and streams. Files are observed at collection time. Until inputs
 exist, workflow expectations provide the denominator; output spaces and echo
 combinations are not guessed. Configurations may have changed since a historical
 attempt. Consult its saved manifest and receipt for its execution settings.

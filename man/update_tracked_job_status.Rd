@@ -20,7 +20,8 @@ update_tracked_job_status(
 \item{job_id}{Character string or numeric. ID of the job to update. If numeric, it will be coerced to a string.}
 
 \item{status}{Character string. The job status to set. Must be one of:
-\code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"}, \code{"FAILED_BY_EXT"}.}
+\code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"},
+\code{"FAILED_BY_EXT"}, or \code{"CANCELLED"}.}
 
 \item{output_manifest}{Character string. Optional JSON manifest of output files to store when
 status is \code{"COMPLETED"}. See \code{\link{capture_output_manifest}}.}
@@ -52,14 +53,20 @@ tracking row has an associated job manifest. The receipt records the compute
 host and verifies that the sealed manifest and execution-driving files still
 match their submission-time checksums. A manifest configured with the default
 \code{"fail"} drift policy stops execution when verification fails.
+Repeated progress messages preserve the initial submission/start timestamp.
+A late \code{QUEUED} or \code{STARTED} message cannot resurrect terminal tracking state;
+invalid transitions warn, or raise an error with \code{strict = TRUE}.
 
 When \code{status} is \code{"COMPLETED"} and \code{output_manifest} is provided, the manifest
 is stored in the \code{output_manifest} column for later verification. Completion
 status, its timestamp, and the manifest are written atomically in one SQL update.
 
 If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined
-via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
-\code{"FAILED"} or they are listed in \code{exclude}.
+by tracking parent relationships) are marked \code{"FAILED_BY_EXT"} only while
+queued or unknown. Started and terminal descendants retain their own evidence.
+Excluded branches are not traversed, and legacy cycles cannot cause infinite
+recursion. A dependency-blocked status does not establish scheduler termination:
+such allocations still block duplicate launches until accounting confirms it.
 
 If no tracking row matches \code{job_id}, a warning is emitted and no manifest/cascade
 updates are attempted, preventing silent status-update failures.

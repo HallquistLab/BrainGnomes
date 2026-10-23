@@ -174,7 +174,7 @@ test_that("malformed and absent evidence cannot become a QC pass", {
   expect_gte(nrow(result$issues), 3L)
   unlink(paths$audit)
   result <- collect_qc_inventory(fixture$cfg)
-  expect_equal(subset(result$inventory, stage == "postprocess")$validation_status, "unavailable")
+  expect_equal(subset(result$inventory, stage == "postprocess")$validation_status, "missing")
 })
 
 test_that("historical manifest associations do not imply production by the latest attempt", {
@@ -305,4 +305,167 @@ test_that("unknown atlas identities do not pool different diagnostic directories
     value = c(90, 95), unit = "%", n_observations = 10L, n_missing = 0L)
   plot <- plotly::plotly_build(qc_metrics_plot(metrics, inventory))
   expect_length(plot$x$data, 2L)
+})
+
+test_that("disabled, missing required, and unknown diagnostics stay distinct", {
+  fixture <- make_qc_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE))
+  paths <- populate_qc_fixture(fixture)
+  unlink(c(paths$audit, paths$censor, paths$diag))
+  fixture$cfg$postprocess$clean$scrubbing <- list(enable = FALSE)
+  fixture$cfg$extract_rois$network$save_diagnostics <- FALSE
+  x <- collect_qc_inventory(fixture$cfg)
+  pp <- subset(x$inventory, stage == "postprocess")
+  expect_equal(pp$validation_status, "missing")
+  expect_equal(pp$diagnostics_status, "not_applicable")
+  expect_match(pp$attention_reasons, "Saved audit missing", fixed = TRUE)
+  expect_true(all(subset(x$inventory, stage == "extract_rois")$diagnostics_status == "not_applicable"))
+  expect_true(all(subset(x$inventory, stage == "fmriprep")$validation_status == "not_applicable"))
+  fixture$cfg$postprocess$clean$validate_postproc_steps <- FALSE
+  fixture$cfg$postprocess$clean$scrubbing$enable <- TRUE
+  pp <- subset(collect_qc_inventory(fixture$cfg)$inventory, stage == "postprocess")
+  expect_equal(pp$validation_status, "not_applicable")
+  expect_equal(pp$diagnostics_status, "missing")
+  fixture$cfg$postprocess$clean$scrubbing <- NULL
+  pp <- subset(collect_qc_inventory(fixture$cfg)$inventory, stage == "postprocess")
+  expect_equal(pp$diagnostics_status, "unavailable")
+})
+
+test_that("saved checks retain warnings, timing, and numeric structured measurements", {
+  fixture <- make_qc_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE))
+  paths <- populate_qc_fixture(fixture)
+  audit <- jsonlite::read_json(paths$audit)
+  audit$updated_at <- "2026-10-10T10:00:01Z"
+  audit$checks[[1L]]$warnings <- c("Calibration warning", "Inspect saved mask")
+  audit$checks[[1L]]$started_at <- "2026-10-10T10:00:00Z"
+  audit$checks[[1L]]$elapsed_seconds <- 1.25
+  audit$checks[[1L]]$details <- list(max_absolute_error = 0.002,
+    n_mismatched = 3L, volumes_compared = 4L, samples = c(1, 3, 4))
+  jsonlite::write_json(audit, paths$audit, auto_unbox = TRUE)
+  x <- collect_qc_inventory(fixture$cfg)
+  expect_equal(x$checks$elapsed_seconds, 1.25)
+  expect_equal(x$checks$audited_at, audit$updated_at)
+  expect_equal(jsonlite::fromJSON(x$checks$details_json)$samples, c(1, 3, 4))
+  expect_match(x$checks$warnings, "Calibration warning\nInspect saved mask", fixed = TRUE)
+  expect_true(subset(x$inventory, stage == "postprocess")$audit_warnings)
+  expect_match(subset(x$inventory, stage == "postprocess")$attention_reasons, "warnings")
+  metric <- subset(x$metrics, metric == "apply_mask: max_absolute_error")
+  expect_equal(metric$value, 0.002)
+  expect_equal(metric$n_observations, 4L)
+  expect_equal(qc_display_identity(x$checks, x$inventory)$sub_id, "001")
+})
+
+test_that("saved run scope uses recorded settings rather than current configuration", {
+  fixture <- make_qc_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE))
+  populate_qc_fixture(fixture)
+  populate_qc_fixture(fixture, "002")
+  path <- file.path(fixture$cfg$metadata$log_directory, "runs", "run-current", "provenance.json")
+  dir.create(dirname(path), recursive = TRUE)
+  saved <- list(schema_version = "brain-gnomes-run-provenance-v1", run_id = "run-current",
+    recorded_at = "2026-10-10T10:00:00Z", configuration = list(values = unclass(fixture$cfg)),
+    request = list(steps = "postprocess", postprocess_streams = "clean"),
+    execution = list(scope_status = "resolved", subjects = data.frame(sub_id = "001", ses_id = "A")))
+  jsonlite::write_json(saved, path, auto_unbox = TRUE, na = "null")
+  fixture$cfg$postprocess$clean$bids_desc <- "changed"
+  x <- collect_qc_inventory(fixture$cfg, run_id = "latest")
+  expect_equal(x$metadata$run_id, "run-current")
+  expect_equal(x$metadata$scope, "run")
+  expect_equal(unique(x$acquisitions$sub_id), "001")
+  expect_equal(unique(x$inventory$sub_id), "001")
+  expect_equal(unique(x$workflow$stage), "postprocess")
+  expect_equal(subset(x$inventory, stage == "postprocess")$output_status, "available")
+  expect_equal(subset(x$inventory, stage == "fmriprep")$record_role, "upstream_input")
+  expect_equal(qc_dashboard_summary(x)$totals$outputs, 1L)
+  expect_equal(qc_dashboard_summary(x)$totals$upstream_inputs, 1L)
+  # An input can need attention even though selected output counts exclude it.
+  flagged <- x
+  flagged$inventory$attention[flagged$inventory$record_role == "upstream_input"] <- TRUE
+  expect_equal(qc_dashboard_summary(flagged)$participants$attention_records, 1L)
+  expect_error(collect_qc_inventory(fixture$cfg, subjects = data.frame(sub_id = "003"),
+    run_id = "latest"), "do not combine")
+  saved$execution$scope_status <- "deferred"
+  jsonlite::write_json(saved, path, auto_unbox = TRUE, na = "null")
+  expect_error(collect_qc_inventory(fixture$cfg, run_id = "latest"), "unresolved")
+})
+
+test_that("run row filtering retains exact retry units and participant-wide reports", {
+  cfg <- list(postprocess = list(enable = TRUE, a = list(), b = list()),
+    extract_rois = list(enable = FALSE))
+  context <- list(run_id = "retry", steps = "postprocess", config = cfg,
+    subjects = data.frame(sub_id = c("001", "002"), ses_id = c("A", "B")),
+    work_units = data.frame(sub_id = c("001", "002"), ses_id = c("A", "B"),
+      stage = "postprocess", stream = c("a", "b")))
+  rows <- expand.grid(sub_id = c("001", "002"), ses_id = c("A", "B"),
+    stage = "postprocess", stream = c("a", "b"), stringsAsFactors = FALSE)
+  expect_equal(sum(qc_scope_rows(rows, context)), 2L)
+  reports <- data.frame(sub_id = c("001", "002", "003"), ses_id = NA_character_)
+  expect_equal(qc_scope_rows(reports, context, subject_evidence = TRUE), c(TRUE, TRUE, FALSE))
+  expect_false(any(qc_scope_rows(reports, context)))
+  context$subjects <- data.frame(sub_id = "001", ses_id = NA_character_)
+  context$work_units <- NULL
+  later_sessions <- data.frame(sub_id = "001", ses_id = c(NA_character_, "added-later"))
+  expect_equal(qc_scope_rows(later_sessions, context), c(TRUE, FALSE))
+})
+
+test_that("manifest summaries count duplicate associations separately from paths", {
+  files <- data.frame(stage = "postprocess", stream = "clean",
+    status = c("matches_size_and_mtime", "matches_size_and_mtime", "missing"),
+    path = c("/one", "/one", "/two"))
+  summary <- qc_manifest_summary(files)
+  matched <- subset(summary, status == "matches_size_and_mtime")
+  expect_equal(matched$associations, 2L)
+  expect_equal(matched$unique_paths, 1L)
+})
+
+test_that("version 1.0 snapshots remain renderable without inventing audit requirements", {
+  for (package in c("reactable", "plotly", "htmltools", "htmlwidgets")) skip_if_not_installed(package)
+  fixture <- make_qc_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE))
+  for (populated in c(FALSE, TRUE)) {
+    if (populated) populate_qc_fixture(fixture)
+    legacy <- collect_qc_inventory(fixture$cfg)
+    legacy$inventory[c("record_role", "attention_reasons", "validation_required",
+      "diagnostics_required", "audit_warnings")] <- NULL
+    legacy$checks[c("warnings", "started_at", "audited_at", "elapsed_seconds", "details_json")] <- NULL
+    legacy$metadata[c("settings", "scope", "run_id", "selected_steps")] <- NULL
+    original <- legacy
+    summary <- qc_dashboard_summary(legacy)
+    expect_equal(summary$totals$outputs, nrow(legacy$inventory))
+    expect_equal(summary$totals$required_audits, 0L)
+    widgets <- qc_dashboard_widgets(legacy, fixture$root)
+    expect_identical(widgets$summary, summary)
+    expect_s3_class(widgets$inventory, "reactable")
+    expect_identical(legacy, original)
+  }
+})
+
+test_that("render failures retain exports and can resume without recollection", {
+  skip_on_os("windows")
+  for (package in c("reactable", "plotly", "htmltools", "htmlwidgets", "knitr", "rmarkdown")) skip_if_not_installed(package)
+  fixture <- make_qc_fixture()
+  on.exit(unlink(fixture$root, recursive = TRUE))
+  x <- collect_qc_inventory(fixture$cfg)
+  output <- file.path(fixture$root, "report")
+  expect_error(render_qc_dashboard(x, output, quarto = ""), "Quarto")
+  expect_identical(readRDS(file.path(output, "inventory.rds")), x)
+  expect_equal(jsonlite::read_json(file.path(output, "render-status.json"))$state, "failed")
+  renderer <- file.path(fixture$root, "fake-quarto")
+  writeLines(c("#!/bin/sh", "if [ \"$1\" = \"--version\" ]; then echo 1.9.0; exit 0; fi",
+    "echo 'intentional renderer failure' >&2", "exit 17"), renderer)
+  Sys.chmod(renderer, "0755")
+  before <- tools::md5sum(file.path(output, c("inventory.rds", "inventory.tsv", "snapshot.json")))
+  cache_before <- Sys.getenv("XDG_CACHE_HOME", unset = NA_character_)
+  expect_error(render_qc_dashboard(output, quarto = renderer), "exit code 17")
+  expect_match(paste(readLines(file.path(output, "render.log")), collapse = "\n"), "intentional renderer failure")
+  expect_equal(jsonlite::read_json(file.path(output, "render-status.json"))$exit_code, 17L)
+  expect_identical(Sys.getenv("XDG_CACHE_HOME", unset = NA_character_), cache_before)
+  writeLines(c("#!/bin/sh", "if [ \"$1\" = \"--version\" ]; then echo 1.9.0; exit 0; fi",
+    "test -d \"$XDG_CACHE_HOME\" || exit 2", "echo '<html>rendered</html>' > index.html"), renderer)
+  html <- render_qc_dashboard(output, quarto = renderer)
+  expect_true(file.exists(html))
+  expect_equal(jsonlite::read_json(file.path(output, "render-status.json"))$state, "complete")
+  expect_identical(tools::md5sum(names(before)), before)
+  expect_error(render_qc_dashboard(output, quarto = renderer), "already exists")
 })

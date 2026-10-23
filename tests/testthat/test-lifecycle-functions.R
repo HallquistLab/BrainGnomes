@@ -136,6 +136,25 @@ test_that("doctor_project is the only exported R preflight entry point", {
   expect_false(exists("doctor", envir = asNamespace("BrainGnomes"), inherits = FALSE))
 })
 
+test_that("doctor reports uncertain submissions and missing recovery evidence", {
+  fixture <- make_lifecycle_project()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  db <- fixture$cfg$metadata$sqlite_db
+  create_tracking_db(db)
+  con <- job_submission_connect(db)
+  DBI::dbExecute(con, paste(
+    "INSERT INTO job_submission_attempts",
+    "(contract_id, submission_state, manifest_path, tracking_metadata, prepared_at)",
+    "VALUES ('uncertain', 'UNKNOWN', 'missing-manifest.json', '{}', '2026-10-23T12:00:00Z')"
+  ))
+  DBI::dbDisconnect(con)
+  report <- doctor_project(fixture$cfg, steps = "fmriprep", quiet = TRUE)
+  expect_false(report$ok)
+  expect_true(any(report$checks$check == "unconfirmed_submissions" & report$checks$status == "fail"))
+  expect_true(any(report$checks$check == "missing_submission_evidence" & report$checks$status == "warn"))
+  expect_identical(read_job_submission_attempts(db)$submission_state, "UNKNOWN")
+})
+
 test_that("plans include implicit setup jobs and round-trip through YAML", {
   fixture <- make_lifecycle_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
@@ -290,9 +309,10 @@ test_that("cancellation captures scheduler diagnostics and preserves exit status
   ))
   scheduler_status <- 1L
   local_mocked_bindings(
-    system2 = function(command, args, stdout, stderr) {
+    system2 = function(command, args, stdout, stderr, timeout) {
       expect_identical(command, "scancel")
-      expect_identical(args, "81003")
+      expect_identical(args, shQuote("81003"))
+      expect_equal(timeout, 15L)
       expect_true(stdout)
       expect_true(stderr)
       structure("Scheduler diagnostic", status = scheduler_status)
@@ -304,8 +324,8 @@ test_that("cancellation captures scheduler diagnostics and preserves exit status
   expect_identical(inspect_project(fixture$cfg)$jobs$status, "QUEUED")
   scheduler_status <- 0L
   expect_output(cancelled <- cancel_project_run(fixture$cfg, "cancel-output", dry_run = FALSE), NA)
-  expect_identical(cancelled$status, "cancelled")
-  expect_identical(inspect_project(fixture$cfg)$jobs$status, "CANCELLED")
+  expect_identical(cancelled$status, "cancellation_requested")
+  expect_identical(inspect_project(fixture$cfg)$jobs$status, "QUEUED")
 })
 
 test_that("retry dry runs derive a force plan from failed jobs", {

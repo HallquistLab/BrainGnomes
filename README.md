@@ -1,9 +1,11 @@
-# BrainGnomes
+# BrainGnomes <img src="man/figures/logo.png" align="right" width="120" height="120" alt="BrainGnomes hex logo: four gnomes working together on a brain-processing assembly line." />
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/HallquistLab/BrainGnomes/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/HallquistLab/BrainGnomes/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/HallquistLab/BrainGnomes/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/HallquistLab/BrainGnomes/actions/workflows/pkgdown.yaml)
 <!-- badges: end -->
+
+<img src="man/figures/braingnomes-header.png" class="img-fluid" width="2172" height="724" alt="BrainGnomes: a team of distinct gnomes handing off brain models and working at parallel processing stations." />
 
 BrainGnomes is an R package for configuring, submitting, and monitoring reproducible fMRI workflows on high-performance computing (HPC) systems. It coordinates containerized neuroimaging tools and scheduler jobs from one project configuration, while retaining logs and job-tracking information for each run.
 
@@ -301,18 +303,88 @@ without treating the earlier plan as an exact job roster.
 `inspect_project(scfg)` reports the current effective project state across
 runs, using the newest attempt for each subject, stage, and stream. Its
 `overview`, `active`, `reconciliation`, `stages`, `subjects`,
-`subject_stages`, `runs`, `attempts`, and `jobs` elements are ordinary data
+`subject_stages`, `runs`, `attempts`, `submissions`, and `jobs` elements are ordinary data
 frames. Supply `subject_id` to focus every view on one subject, or
 `run_id = "latest"`/an explicit ID to restrict inspection to one submission.
-The default remains database-only; `refresh = TRUE` adds a read-only scheduler
-comparison for jobs recorded as queued or running.
+The default uses stored tracking state and saved preflight evidence without
+contacting the scheduler; `refresh = TRUE` adds a read-only scheduler comparison
+for jobs recorded as queued or running.
+
+Outstanding older attempts and dependency-blocked allocations remain visible
+in `$active` until their termination is confirmed; newer successful work cannot
+silently clear them. Successful cancellation commands return
+`cancellation_requested` and leave tracking unchanged until accounting confirms
+termination. Uncertain legacy states, missing session scope, and inconsistent
+accepted bindings continue to block relevant duplicate launches.
+
+Every live `run_project()` call also performs a scoped submission preflight
+before preparing directories, fingerprinting containers, or submitting jobs.
+It reads pending tracking metadata and batches accounting requests for relevant
+active jobs. Confirmed failures and cancellations are repaired and reported;
+active jobs and uncertain submissions block the request even with `force = TRUE`
+or existing completion markers. It does not read imaging files, scan output
+trees, or verify manifests. Dry runs report pending metadata without contacting
+the scheduler or repairing records. `doctor_project()` remains an optional,
+read-only review of configuration and the submission environment.
+
+With Flywheel synchronization, project checks run first and subject/session
+checks are explicitly deferred. The controller checks the discovered scope
+before submitting any subject jobs, including new subjects or sessions. Its
+final report is saved with the run and exposed as `submission_preflight` through
+`inspect_project()` and `get_run_provenance()`. Saved reports describe the
+assessment at its recorded time; live submission issues are reported separately.
 
 ```r
 subject_status <- inspect_project(scfg, subject_id = "540294")
 active_status <- inspect_project(scfg, refresh = TRUE)
 active_status$active
 active_status$reconciliation
+active_status$submission_preflight
+get_run_provenance(scfg, run$run_id)$submission_preflight
 ```
+
+Two recovery actions handle different evidence:
+
+| Function | Use | Effect |
+| --- | --- | --- |
+| `reconcile_project_jobs()` | A known scheduler job has stale tracking status | Preview accounting results; apply confirmed failures/cancellations with `dry_run = FALSE`. |
+| `resolve_project_submission()` | Acceptance of one submission was never confirmed | Bind a confirmed allocation ID, or record evidence that the scheduler rejected the request. |
+
+```r
+diagnosis <- diagnose_project(scfg, interactive = FALSE)
+diagnosis$submission_issues
+diagnosis$active_issues
+diagnosis$submission_preflight
+
+# Preview first; neither call submits or cancels jobs.
+reconcile_project_jobs(scfg)
+reconcile_project_jobs(scfg, dry_run = FALSE)
+
+# Only after confirming acceptance of this exact attempt:
+contract_id <- "REPLACE_WITH_EXACT_CONTRACT_UUID"
+resolve_project_submission(scfg, contract_id, scheduler_job_id = "12345")
+```
+
+Alternatively, only after authoritative confirmation that **no job was
+accepted**, record rejection instead of binding an allocation:
+
+```r
+resolve_project_submission(scfg, contract_id,
+  rejection_reason = "Scheduler administrator confirmed rejection.")
+```
+
+Queue absence, elapsed time, and missing logs cannot establish rejection.
+Scheduler completion alone also does not verify required outputs. Keep
+`logs/runs` together with SQLite when backing up or moving a project. Guided
+`diagnose_project()` exposes submission issues and saved assessments before
+opening the tracked-job browser; reviewing them makes no recovery changes.
+`resolve_project_submission()` has no dry-run mode and updates one attempt
+immediately. A run-based retry may not select an unbound attempt; after
+confirming rejection and fixing the cause, repeat the intended `run_project()`
+request. See [Inspecting and Diagnosing Pipeline Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html)
+for the recovery decision guide, deferred Flywheel reports, and handling a
+blocked unattended submission. The same guide is available with
+`vignette("diagnosing_pipeline", package = "BrainGnomes")` when vignettes are installed.
 
 If work fails, first inspect the failed jobs and logs, correct the underlying
 problem, and then preview the retry:

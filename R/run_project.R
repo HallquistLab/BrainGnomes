@@ -102,7 +102,8 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #' @param debug Logical. Enable verbose worker debugging and suppress imaging
 #'   commands. Debug mode still submits scheduler jobs and writes tracking/log
 #'   records; use `dry_run = TRUE` for a submission-free preview.
-#' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
+#' @param force Logical. Rerun selected work even when completion markers exist.
+#'   Does not bypass active-job or uncertain-submission blockers.
 #' @param dry_run A logical value indicating whether to perform a dry run. Dry
 #'   runs validate settings and report subject/session scope plus resolved
 #'   postprocessing and extraction stream settings without submitting any jobs.
@@ -127,16 +128,56 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #'   the complete run provenance record. Dry runs invisibly return a
 #'   `bg_project_plan` with concrete work units, paths, resources, and current
 #'   completion-marker decisions after printing the preview. No jobs are submitted.
+#'   Returned runs and dry-run plans include a `submission_preflight` report.
+#'   A blocking live preflight raises a `bg_submission_preflight_error` whose
+#'   `report` contains the full `blockers` and `repairs` data frames.
 #' @details Before submission, BrainGnomes reports when it is checking project
 #'   folders, finding matching subjects, and saving the run record. The first
 #'   use of a large container in a project may take longer because BrainGnomes
 #'   reads the complete file once to identify the exact copy used. During large
 #'   submissions, periodic messages report progress through the subject list.
+#'   A submission preflight runs before saving provenance or submitting setup
+#'   jobs. It checks pending SQLite metadata and batches accounting queries for
+#'   relevant active jobs, reports automatic failure/cancellation repairs, and
+#'   stops on unresolved blockers even when `force = TRUE`. It does not read
+#'   imaging files, scan output trees, verify manifests, or hash containers.
+#'   Dry runs report pending metadata without querying the scheduler or repairing
+#'   records, and do not save a preflight report file. Their returned plan
+#'   includes `submission_preflight`.
+#'   A dry-run plan can contain blockers and is not a live readiness certificate.
+#'   An early live blocker can stop the call before a new run record exists;
+#'   inspect the error's `report` rather than assuming a new run ID was created.
+#'
+#'   With Flywheel synchronization, initial subject/session checks are explicitly
+#'   deferred. Project-level blockers are checked before submission; the dependent
+#'   controller checks the discovered subject/session scope before submitting any
+#'   subject jobs. Its own project dependencies are allowed. Final per-submission
+#'   guards remain in place to catch concurrent launches after the preflight.
+#'   The controller saves its small report as `submission-preflight.json` in the
+#'   run directory, including when blockers prevent subject submission.
+#'   Read the saved report through [inspect_project()] or [get_run_provenance()]
+#'   after the controller executes; the original run handle may still contain
+#'   the initial deferred assessment. Saved assessments are historical evidence,
+#'   not a live readiness verdict. Missing reports do not establish readiness.
 #' @export
 #' @examples
 #'   \dontrun{
 #'     # Assuming you have a valid project configuration list named `study_config`
 #'     run_project(study_config, steps = "fmriprep", force = FALSE)
+#'
+#'     preview <- run_project(study_config, steps = "fmriprep", dry_run = TRUE)
+#'     preview$submission_preflight$blockers
+#'     preview$submission_preflight$scope_deferred
+#'
+#'     # Live submission if ready; report blockers and rethrow if not.
+#'     run <- tryCatch(
+#'       run_project(study_config, steps = "fmriprep"),
+#'       bg_submission_preflight_error = function(error) {
+#'         print(error$report$repairs)
+#'         print(error$report$blockers)
+#'         stop(error)
+#'       }
+#'     )
 #'   }
 #' @seealso [inspect_project()] to monitor current progress;
 #'   [get_run_provenance()] to read the recorded configuration, execution
@@ -144,7 +185,10 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #'   inspection or persistence of the resolved request; [run_bids_validation()]
 #'   to submit the BIDS validation configured with the project;
 #'   [diagnose_project()] and [retry_project_run()] for optional recovery after
-#'   a submitted run fails.
+#'   a submitted run fails; [reconcile_project_jobs()] and
+#'   [resolve_project_submission()] for explicit tracking/submission recovery.
+#'   See `vignette("diagnosing_pipeline", package = "BrainGnomes")` for the
+#'   recovery decision guide.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
@@ -297,13 +341,6 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
   }
 
-  # Validation is read-only and precedes all submission-side writes, including
-  # folder creation/permission repair. Guided runs use their final selections.
-  if (!isTRUE(scfg$dry_run)) {
-    cli::cli_alert_info("Checking the project folders needed for this run...")
-    scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
-  }
-
   cli::cli_alert_info("Finding the subjects and sessions that match this run...")
   execution <- resolve_project_execution(
     scfg,
@@ -333,8 +370,12 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     }
   }
 
+  preflight <- prepare_project_submission(scfg, execution, dry_run = isTRUE(scfg$dry_run))
+  execution$submission_preflight <- preflight
+
   if (isTRUE(scfg$dry_run)) {
     plan <- project_plan_from_execution(scfg, execution, validation[c("valid", "issues", "messages")])
+    plan$submission_preflight <- preflight
     dry_requested <- names(steps)[steps]
     cat("\nDry run enabled. No jobs will be submitted.\n")
     cat("Requested steps:", paste(dry_requested, collapse = ", "), "\n")
@@ -369,6 +410,10 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     return(invisible(plan))
   }
 
+  # Blockers are resolved before directory preparation or artifact fingerprinting.
+  cli::cli_alert_info("Checking the project folders needed for this run...")
+  scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
+
   # generate sequence ID for job tracking
   sequence_id <- uuid::UUIDgenerate()
   scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
@@ -394,7 +439,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
   if (!any(steps[names(steps) != "flywheel_sync"])) {
     return(invisible(new_project_run(
       scfg, sequence_id, submitted_ids = flywheel_id,
-      provenance_file = provenance_file
+      provenance_file = provenance_file, submission_preflight = preflight
     )))
   }
 
@@ -475,7 +520,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
       scfg, sequence_id,
       submitted_ids = c(flywheel_id, fsaverage_id, prefetch_id, controller_id),
       deferred = TRUE,
-      provenance_file = provenance_file
+      provenance_file = provenance_file, submission_preflight = preflight
     )))
   }
 
@@ -485,12 +530,13 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     resolved_subjects = execution$subjects,
     postprocess_streams = postprocess_streams,
     extract_streams = extract_streams, parent_ids = parent_ids, sequence_id = sequence_id,
-    permission_check_cache = permission_check_cache
+    permission_check_cache = permission_check_cache,
+    preflight_checked = TRUE
   )
   return(invisible(new_project_run(
     scfg, sequence_id,
     submitted_ids = c(fsaverage_id, prefetch_id),
-    provenance_file = provenance_file
+    provenance_file = provenance_file, submission_preflight = preflight
   )))
 }
 
@@ -510,6 +556,8 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
 #'   already verified writable are skipped.
 #' @param dry_run Logical. If \code{TRUE}, report planned subject/session scope without submitting
 #'   any subject-level jobs.
+#' @param preflight_checked Whether this exact resolved scope has already passed
+#'   the submission preflight in the calling run_project() invocation.
 #' @details 
 #'   This function is not meant to be called by users! Instead, it is called internally
 #'   after flywheel sync completes.
@@ -517,9 +565,10 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
 submit_subjects <- function(scfg, steps, subject_filter = NULL,
   resolved_subjects = NULL, postprocess_streams = NULL,
   extract_streams = NULL, parent_ids = NULL, sequence_id = NULL,
-  permission_check_cache = NULL, dry_run = FALSE) {
+  permission_check_cache = NULL, dry_run = FALSE, preflight_checked = FALSE) {
 
   checkmate::assert_flag(dry_run)
+  checkmate::assert_flag(preflight_checked)
   checkmate::assert_data_frame(resolved_subjects, null.ok = TRUE)
 
   subject_dirs <- if (is.null(resolved_subjects)) {
@@ -536,6 +585,22 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
   subject_dirs <- retry_subject_scope(subject_dirs, work_units)
   if (nrow(subject_dirs) == 0L) {
     stop("No subject/session inputs match the requested run.", call. = FALSE)
+  }
+
+  if (!dry_run && !preflight_checked) {
+    # Deferred controllers must check the realized scope, including newly
+    # synchronized subjects and sessions, before touching completion markers.
+    execution <- list(steps = names(steps)[steps], subjects = subject_dirs,
+      scope_deferred = FALSE, work_units = work_units,
+      postprocess_streams = if (isTRUE(steps["postprocess"]) && is.null(postprocess_streams)) {
+        get_postprocess_stream_names(scfg)
+      } else postprocess_streams,
+      extract_streams = if (isTRUE(steps["extract_rois"]) && is.null(extract_streams)) {
+        get_extract_stream_names(scfg)
+      } else extract_streams)
+    bids_lock <- project_bids_lock_issue(scfg, execution$steps)
+    if (!is.null(bids_lock)) stop(bids_lock, call. = FALSE)
+    prepare_project_submission(scfg, execution, current_run_id = sequence_id)
   }
 
   preview_limit <- 20L

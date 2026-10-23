@@ -2,7 +2,7 @@
 % Please edit documentation in R/lifecycle_functions.R
 \name{cancel_project_run}
 \alias{cancel_project_run}
-\title{Cancel queued or running jobs from one run}
+\title{Request cancellation of outstanding allocations from one run}
 \usage{
 cancel_project_run(input = getwd(), run_id = "latest", dry_run = TRUE)
 }
@@ -18,13 +18,22 @@ cancellation.}
 scheduler. If \code{FALSE}, request cancellation immediately.}
 }
 \value{
-A data frame describing each cancellation attempt.
+A data frame describing each cancellation attempt. \code{status} is
+\code{would_cancel} for previews, \code{cancellation_requested} for successful client
+requests, and \code{failed} for client errors. Requests do not mark SQLite rows
+\code{CANCELLED} or authorize immediate duplicate launches.
 }
 \description{
-Cancellation affects only tracked jobs that are still queued or running. It
+Cancellation targets queued, running, or unconfirmed tracked allocations,
+including dependency-blocked jobs without confirmed scheduler termination. It
 does not delete project data, logs, or completed outputs. Calling this
 function with \code{dry_run = FALSE} immediately sends cancellation requests to
 the configured scheduler, so preview the commands first.
+A successful client exit confirms only the request, not that all allocation
+processes have stopped. Tracking remains unchanged until scheduler accounting
+confirms failure/cancellation through \code{\link[=reconcile_project_jobs]{reconcile_project_jobs()}} or the next
+relevant live \code{\link[=run_project]{run_project()}} preflight. Concurrent worker completion is
+preserved. Missing accounting never establishes termination.
 }
 \examples{
 \dontrun{

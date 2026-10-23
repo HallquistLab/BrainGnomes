@@ -22,7 +22,8 @@
 #' @param export_all Whether to export all environment variables to the compute node at runtime. Default: FALSE
 #' @param echo Whether to echo the job submission command to the terminal at the time it is scheduled. Default: TRUE.
 #' @param fail_on_error Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job
-#'      submission fails. Defaults to FALSE (i.e., issue a warning).
+#'      submission fails. Defaults to FALSE for untracked jobs. Tracked submission
+#'      failures always stop to prevent cascading submissions with missing dependencies.
 #' @param wait_jobs a character string of jobs or process ids that should complete before this job is executed
 #' @param wait_signal on torque or slurm clusters, the signal that should indicate that parent jobs have finished.
 #' @param repolling_interval The number of seconds to wait before rechecking job status (used only for local scheduler)
@@ -292,7 +293,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
                                  state = "REJECTED", job_id = NULL, exit_code = 127L),
                             file.path(contract$directory, "submission-ack.json"), "Submission acknowledgement")
     message <- paste("Scheduler executable is unavailable:", scheduler)
-    if (fail_on_error) stop(message, call. = FALSE) else warning(message, call. = FALSE)
+    if (fail_on_error || !is.null(tracking_sqlite_db)) stop(message, call. = FALSE) else warning(message, call. = FALSE)
     return(NULL)
   }
   if (!is.null(contract)) set_job_submission_state(tracking_sqlite_db, contract$contract_id, "SUBMITTING")
@@ -335,8 +336,13 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   }
 
   jobid <- parse_job_submission_id(jobid, scheduler)
+  joberr <- if (file.exists(sub_stderr)) {
+    paste(readLines(sub_stderr, warn = FALSE), collapse = "\n")
+  } else ""
   if (!is.null(contract)) {
-    outcome <- if (jobres == 0L && !is.null(jobid)) "ACCEPTED" else "UNKNOWN"
+    outcome <- if (jobres == 0L && !is.null(jobid)) "ACCEPTED" else if (
+      is_confirmed_submission_rejection(scheduler, jobres, jobid, joberr)
+    ) "REJECTED" else "UNKNOWN"
     write_job_contract_once(list(schema_version = "brain-gnomes-submission-ack-v1",
                                  contract_id = contract$contract_id, recorded_at = job_contract_timestamp(),
                                  state = outcome, job_id = jobid, exit_code = jobres),
@@ -344,22 +350,23 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     if (outcome == "ACCEPTED" && !is.null(tracking_sqlite_db)) {
       bind_job_submission(tracking_sqlite_db, contract$contract_id, jobid)
       if (!is.null(tracking_args$job_obj)) insert_tracked_job(tracking_sqlite_db, jobid, tracking_args)
-    } else if (outcome == "UNKNOWN") {
-      set_job_submission_state(tracking_sqlite_db, contract$contract_id, "UNKNOWN", jobres,
-                               "No unique successful scheduler acknowledgement; confirm before resubmission.")
+    } else {
+      set_job_submission_state(tracking_sqlite_db, contract$contract_id, outcome, jobres,
+        paste0(if (outcome == "REJECTED") "Scheduler explicitly rejected this request. " else {
+          "No unique successful scheduler acknowledgement; confirm before resubmission. "
+        }, "Diagnostics: ", substr(joberr, 1L, 4000L)))
     }
-  }
-
-  joberr <- if (file.exists(sub_stderr)) {
-    paste(scan(file = sub_stderr, what = "char", sep = "\n", quiet = TRUE), collapse = ". ")
-  } else {
-    ""
   }
 
   if (jobres != 0 || is.null(jobid)) {
     jobid <- NULL
-    if (isTRUE(fail_on_error)) {
-      stop("Job submission failed: ", script, ", error: ", joberr, ", errcode: ", jobres)
+    context <- if (!is.null(contract)) paste0(
+      ". Attempt: ", contract$contract_id,
+      ". Submission evidence: ", contract$directory,
+      ". Submission stopped; inspect the existing run before retrying."
+    ) else ""
+    if (isTRUE(fail_on_error) || !is.null(tracking_sqlite_db)) {
+      stop("Job submission failed: ", script, ", error: ", joberr, ", errcode: ", jobres, context)
     } else {
       warning("Job submission failed: ", script, ", error: ", joberr, ", errcode: ", jobres)
     }
@@ -698,20 +705,26 @@ aggregate_slurm_job_status <- function(records, job_ids) {
 #' @param job_ids Requested job identifiers, or NULL to list observed allocations.
 #' @param user Optional usernames to filter accounting records.
 #' @param sacct_format Comma-separated sacct fields including JobID and State.
+#' @param query_timeout Maximum seconds for one scheduler client invocation.
 #' @return A data frame of scheduler observations, not persisted tracking states.
 #' @noRd
 slurm_job_status <- function(job_ids = NULL, user = NULL,
-                             sacct_format = "jobid%100,submit,timelimit,start,end,state%40") {
+                             sacct_format = "jobid%100,submit,timelimit,start,end,state%40",
+                             query_timeout = 15L) {
   if (!is.null(job_ids) && !length(job_ids)) {
     return(data.frame(JobID = character(), State = character(), QueryDetail = character()))
   }
   args <- c("--array", "-X", "-P", "-o", shQuote(sacct_format))
   if (!is.null(job_ids)) args <- c(args, "-j", shQuote(paste(job_ids, collapse = ",")))
+  # A shared lab database can contain another user's allocations. Restrict by
+  # exact IDs, not the invoking user's default accounting filter. Slurm still
+  # enforces the site's accounting privacy settings.
+  if (!is.null(job_ids) && is.null(user)) args <- c(args, "--allusers")
   if (!is.null(user)) args <- c(args, "-u", shQuote(paste(user, collapse = ",")))
   # The timestamp aggregates below require sortable ISO-style timestamps,
   # regardless of a user's interactive SLURM_TIME_FORMAT preference.
   res <- suppressWarnings(system2("sacct", args = args, stdout = TRUE, stderr = TRUE,
-                                  env = "SLURM_TIME_FORMAT=standard"))
+                                  env = "SLURM_TIME_FORMAT=standard", timeout = query_timeout))
   if (!is.null(attr(res, "status")) && attr(res, "status") != 0L) {
     stop("sacct query failed: ", paste(res, collapse = "\n"), call. = FALSE)
   }
@@ -732,9 +745,10 @@ slurm_job_status <- function(job_ids = NULL, user = NULL,
 #'
 #' @param job_ids Requested TORQUE job identifiers.
 #' @param user Optional usernames; defaults to the current user.
+#' @param query_timeout Maximum seconds for one scheduler client invocation.
 #' @return Scheduler observations; retained C jobs require a known exit status.
 #' @noRd
-torque_job_status <- function(job_ids, user = NULL) {
+torque_job_status <- function(job_ids, user = NULL, query_timeout = 15L) {
   job_ids <- as.character(job_ids)
   result <- data.frame(JobID = job_ids, State = rep("MISSING", length(job_ids)),
                        QueryDetail = rep(NA_character_, length(job_ids)))
@@ -744,7 +758,7 @@ torque_job_status <- function(job_ids, user = NULL) {
   lists <- lapply(c("QWH", "ERT", "C"), function(states) {
     res <- suppressWarnings(system2("qselect", args = c(
       "-u", shQuote(paste(user, collapse = ",")), "-s", states
-    ), stdout = TRUE, stderr = TRUE))
+    ), stdout = TRUE, stderr = TRUE, timeout = query_timeout))
     if (!is.null(attr(res, "status")) && attr(res, "status") != 0L) {
       stop("qselect query failed: ", paste(res, collapse = "\n"), call. = FALSE)
     }
@@ -756,11 +770,21 @@ torque_job_status <- function(job_ids, user = NULL) {
     # C means finished, not necessarily successful. Records can also expire
     # between qselect and qstat; preserve uncertainty rather than guess success.
     res <- suppressWarnings(system2("qstat", args = c("-f", shQuote(job_ids[[index]])),
-                                    stdout = TRUE, stderr = TRUE))
+                                    stdout = TRUE, stderr = TRUE, timeout = query_timeout))
+    state_line <- grep("^[[:space:]]*job_state[[:space:]]*=[[:space:]]*[A-Za-z][[:space:]]*$",
+                      res, value = TRUE, ignore.case = TRUE)
+    current_state <- if (length(state_line) == 1L) toupper(trimws(sub(".*=", "", state_line))) else NA_character_
+    query_failed <- !is.null(attr(res, "status")) && attr(res, "status") != 0L
+    if (!query_failed && current_state %in% c("Q", "W", "H", "E", "R", "T", "B")) {
+      # A retained job can be requeued between qselect and qstat. Its old exit
+      # status must not authorize a retry while the allocation is active again.
+      result$State[[index]] <- if (current_state %in% c("Q", "W", "H")) "QUEUED" else if (
+        current_state == "T") "SUSPENDED" else "RUNNING"
+      next
+    }
     exit_line <- grep("^[[:space:]]*exit_status[[:space:]]*=[[:space:]]*-?[0-9]+[[:space:]]*$",
                       res, value = TRUE, ignore.case = TRUE)
-    if ((!is.null(attr(res, "status")) && attr(res, "status") != 0L) ||
-        length(exit_line) != 1L) {
+    if (query_failed || !current_state %in% c("C", "F") || length(exit_line) != 1L) {
       result$State[[index]] <- "UNKNOWN"
       result$QueryDetail[[index]] <- "Retained TORQUE job has no readable exit status."
     } else {

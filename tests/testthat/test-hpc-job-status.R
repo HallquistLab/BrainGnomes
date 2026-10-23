@@ -89,8 +89,9 @@ test_that("array lifecycle waits for active tasks and never hides uncertainty", 
 test_that("sacct expands arrays and preserves long character identifiers", {
   seen_args <- NULL
   local_mocked_bindings(
-    system2 = function(command, args, ...) {
+    system2 = function(command, args, timeout, ...) {
       expect_identical(command, "sacct")
+      expect_equal(timeout, 15L)
       seen_args <<- args
       c("JobID|State", "123456789012345_0|COMPLETED", "123456789012345_1|COMPLETED")
     }, .package = "base"
@@ -111,6 +112,19 @@ test_that("the affected ten-task Slurm array is completed, not missing", {
   status <- aggregate_slurm_job_status(records, "3845511")
   expect_identical(status$State, "COMPLETED")
   expect_identical(status$QueryDetail, "Observed 10 array tasks: COMPLETED=10")
+})
+
+test_that("explicit Slurm job queries include shared-project owners", {
+  captured <- NULL
+  local_mocked_bindings(system2 = function(command, args, ...) {
+    captured <<- args
+    c("JobID|State", "123|CANCELLED")
+  }, .package = "base")
+  expect_identical(slurm_job_status("123")$State, "CANCELLED")
+  expect_true("--allusers" %in% captured)
+  slurm_job_status("123", user = "alice")
+  expect_false("--allusers" %in% captured)
+  expect_true("-u" %in% captured)
 })
 
 test_that("scheduler errors differ from successful empty accounting queries", {
@@ -137,8 +151,8 @@ test_that("TORQUE requires exit status for success and preserves expired jobs", 
                       C = c("3.server", "4.server", "5.server", "6.server")))
       }
       expect_identical(command, "qstat")
-      if (any(grepl("3.server", args, fixed = TRUE))) return("    exit_status = 0")
-      if (any(grepl("4.server", args, fixed = TRUE))) return("    Exit_status = 271")
+      if (any(grepl("3.server", args, fixed = TRUE))) return(c("    job_state = C", "    exit_status = 0"))
+      if (any(grepl("4.server", args, fixed = TRUE))) return(c("    job_state = C", "    Exit_status = 271"))
       if (any(grepl("5.server", args, fixed = TRUE))) return("    job_state = C")
       structure("Unknown Job Id", status = 1L)
     }, .package = "base"
@@ -148,6 +162,23 @@ test_that("TORQUE requires exit status for success and preserves expired jobs", 
                                   "UNKNOWN", "UNKNOWN", "MISSING"))
   expect_match(status$QueryDetail[[4L]], "exit_status=271", fixed = TRUE)
   expect_equal(nrow(torque_job_status(character())), 0L)
+})
+
+test_that("TORQUE requeue races cannot turn an active job into a retryable failure", {
+  current <- "R"
+  local_mocked_bindings(system2 = function(command, args, ...) {
+    if (command == "qselect") {
+      return(if (tail(args, 1L) == "C") "1.server" else character())
+    }
+    c(paste0("    job_state = ", current), "    exit_status = 271")
+  }, .package = "base")
+  for (state in c("R", "Q", "H", "B", "T")) {
+    current <- state
+    expected <- if (state %in% c("Q", "H")) "QUEUED" else if (state == "T") "SUSPENDED" else "RUNNING"
+    expect_identical(torque_job_status("1.server")$State, expected)
+  }
+  current <- "unknown"
+  expect_identical(torque_job_status("1.server")$State, "UNKNOWN")
 })
 
 test_that("each TORQUE list query must succeed", {

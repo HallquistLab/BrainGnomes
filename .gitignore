@@ -42,6 +42,9 @@ vignettes/*.pdf
 # pkgdown site
 docs/
 
+# Keep experimental artwork locally; publish only the approved masters/icons.
+pkgdown/artwork/archive/
+
 # translation temp files
 po/*~
 

@@ -15,7 +15,11 @@ Defaults to the current working directory.}
 recorded run.}
 }
 \value{
-A \code{bg_run_provenance} object.
+A \code{bg_run_provenance} object. \code{submission_preflight} prefers the
+controller's final saved report when available; otherwise it retains the
+initial run assessment. Reading the report never repairs tracking records.
+Its blockers and repairs describe the recorded assessment, not current
+readiness. A missing report does not establish that submission is safe.
 }
 \description{
 Each submitted run records the selected stages, streams, and subjects; an
@@ -32,9 +36,12 @@ provenance <- get_run_provenance(scfg, run$run_id)
 provenance$request
 provenance$execution$subjects
 provenance$configuration$snapshot_file
+provenance$submission_preflight
 }
 }
 \seealso{
 \code{\link[=diagnose_project]{diagnose_project()}} to inspect failures and \code{\link[=retry_project_run]{retry_project_run()}}
-to create a new run from failed work.
+to create a new run from failed work. See
+\code{vignette("diagnosing_pipeline", package = "BrainGnomes")} for reading
+controller reports after deferred Flywheel scope is realized.
 }

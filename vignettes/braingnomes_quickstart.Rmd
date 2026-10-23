@@ -1,7 +1,7 @@
 ---
 title: "BrainGnomes Quickstart"
 author: "Michael Hallquist"
-date: "09 Oct 2026"
+date: "23 Oct 2026"
 output: 
   rmarkdown::html_vignette:
     toc: true
@@ -261,6 +261,14 @@ run_project(scfg, steps = c("flywheel_sync", "bids_conversion", "fmriprep"))
 
 When `flywheel_sync` is in the requested steps, BrainGnomes defers subject-level job scheduling until after the sync job completes. This ensures downstream steps (BIDS conversion, fMRIPrep, etc.) see all current data from Flywheel.
 
+The initial submission preflight checks project-level blockers but explicitly
+marks subject/session scope as deferred. After synchronization, the dependent
+controller checks the discovered scope, including newly arrived data, before
+submitting any subject jobs. Its final report is saved with the run, even when
+it blocks downstream submission; inspect it with
+`get_run_provenance(scfg, run$run_id)$submission_preflight` after the controller
+has executed. The original run handle may still contain the initial report.
+
 
 ## BIDS conversion
 
@@ -419,12 +427,22 @@ The available submitted stages are `"flywheel_sync"`, `"bids_conversion"`,
 BIDS validation is configured with the project but scheduled independently
 through `run_bids_validation()`.
 
+Every live run automatically checks pending tracking metadata for the resolved
+request before directory preparation, container fingerprinting, or job
+submission. It reports automatic repairs when scheduler accounting confirms
+that a previously active job failed or was cancelled. Relevant active jobs and
+uncertain submission outcomes stop the request, even with `force = TRUE` or
+existing completion markers. This gate uses small tracking records and batched
+scheduler queries, not imaging reads, output-tree scans, or manifest checks.
+It does not replace BIDS validation or verification of completed outputs.
+
 Before submitting, preview the selected work without creating directories,
 changing permissions, or contacting the scheduler:
 
 ```{r eval = FALSE}
 preview <- run_project(scfg, steps = "all", dry_run = TRUE)
 preview$preview$work
+preview$submission_preflight$blockers
 ```
 
 Dry runs return a `bg_project_plan` rather than `TRUE`. The preview lists
@@ -438,6 +456,13 @@ expand into image arrays and sentinel jobs, and runtime preflight still applies.
 use `dry_run = TRUE` when you want no jobs submitted.
 Console output shows at most 20 detailed rows; the returned table retains all
 rows. Optional saved plans and retry previews expose the same information.
+
+The dry-run preflight reports pending metadata without scheduler queries,
+automatic repairs, or a saved report file. A plan is still returned when these
+metadata checks find blockers; it is a preview, not a certificate that live
+submission will succeed. A live blocker raises `bg_submission_preflight_error`
+with the complete `$report$blockers` and `$report$repairs` tables. An early
+blocker can stop the call before any new run record is created.
 
 For scripts, keep JSON stdout separate from diagnostic stderr:
 
@@ -468,6 +493,7 @@ status <- inspect_project(scfg)
 status$stages
 status$subjects
 status$active
+status$submissions
 
 # Focus every view and count on one subject.
 subject_status <- inspect_project(scfg, subject_id = "540294")
@@ -479,13 +505,15 @@ refreshed$reconciliation
 # Restrict the same views to this submission.
 run_status <- inspect_project(scfg, run_id = run$run_id)
 provenance <- get_run_provenance(scfg, run$run_id)
+provenance$submission_preflight
 find_run_logs(scfg, run$run_id, failed_only = TRUE)
 ```
 
 ## Step 3: Diagnose when needed
 
 Diagnosis is not a routine prerequisite. In an interactive R session,
-`diagnose_project()` opens the guided dependency and log browser for current
+`diagnose_project()` offers a submission-readiness review when recovery issues
+or a saved preflight exist, then the dependency and log browser for current
 failed, blocked, or cancelled work:
 
 ```{r eval = FALSE}
@@ -507,7 +535,31 @@ This is also the default in scripts, tests, and reports:
 diagnosis <- diagnose_project(scfg, interactive = FALSE)
 diagnosis$failures
 diagnosis$logs
+diagnosis$submission_issues
+diagnosis$active_issues
+diagnosis$submission_preflight
 ```
+
+Use `submission_issues` for uncertain acceptance or scheduler rejections,
+including attempts without job IDs. `active_issues` highlights tracking states
+that need attention; a refreshed inspection adds scheduler observations.
+`submission_preflight` is saved evidence from the selected run (or latest
+tracked run), not a live readiness verdict. Its recorded blockers remain
+historical even after recovery. Inspection and diagnosis never perform repairs.
+
+Two exported R functions support explicit recovery:
+
+| Function | When to use it | Safety boundary |
+| --- | --- | --- |
+| `reconcile_project_jobs(scfg)` | A known allocation has stale active tracking status | Queries accounting without changing SQLite by default. Use `dry_run = FALSE` to apply only confirmed failures/cancellations. |
+| `resolve_project_submission(scfg, contract_id, ...)` | One submission's acceptance is uncertain | Immediately binds a confirmed allocation ID or records authoritative rejection evidence; no dry-run mode. |
+
+Queue absence or missing logs is not evidence of rejection, and scheduler
+completion does not verify outputs. Keep the log directory's `runs/` tree and
+SQLite together. See [Inspecting and Diagnosing Pipeline Runs](diagnosing_pipeline.html)
+for recovery decision tables, mutually exclusive resolution examples, and
+handling a blocked unattended submission. Correct the cause and resolve any
+uncertain acceptance before repeating `run_project()` or submitting a retry.
 
 The configuration object is optional when the project root is the current
 working directory. In that case, `inspect_project()` and `diagnose_project()`
@@ -563,6 +615,9 @@ stopifnot(preflight$ok)
 Pass `deep = TRUE` to also initialize the active reticulate Python and inspect
 optional modules used by template-dependent postprocessing. Doctor never submits
 jobs or changes project files and is not required before `run_project()`.
+It also reports uncertain submissions and missing recovery evidence without
+resolving them. This optional environment review is distinct from the automatic,
+request-scoped submission gate, which can repair confirmed stale failures.
 
 ## Plan: inspect or persist resolved work
 
@@ -631,13 +686,21 @@ retry_run <- retry_project_run(scfg, run$run_id, dry_run = FALSE)
 A retry does not resume or change the original run. It creates a new run and
 reruns the failed or cancelled stages and subjects even if old completion files
 would otherwise cause them to be skipped. The new run's provenance records the
-source run ID. Jobs marked `FAILED_BY_EXT` did not run because an earlier job
-failed. They are not included by default; set `include_blocked = TRUE` when the
+source run ID. Jobs marked `FAILED_BY_EXT` represent work blocked by an earlier
+failure, not confirmed scheduler termination. They are not included by default;
+set `include_blocked = TRUE` when the
 new run should include that affected downstream work too.
 
 Cancellation is separate from retry. Preview it first; the second call below
 immediately asks the scheduler to cancel jobs that are still queued or running.
 It does not delete project data or outputs.
+
+Successful client requests return `cancellation_requested`; they do not mark
+SQLite rows cancelled or authorize an immediate retry. Accounting must confirm
+termination through explicit reconciliation or the next relevant live
+submission preflight. Unconfirmed dependency-blocked allocations can also be
+cancelled. Older outstanding attempts remain visible in `inspect_project()$active`
+even when newer logical work is complete.
 
 ```{r eval = FALSE}
 cancel_project_run(scfg, run$run_id, dry_run = TRUE)

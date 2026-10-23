@@ -46,7 +46,8 @@ use NA as the value of the element in \code{env_variables}. See examples.}
 \item{echo}{Whether to echo the job submission command to the terminal at the time it is scheduled. Default: TRUE.}
 
 \item{fail_on_error}{Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job
-submission fails. Defaults to FALSE (i.e., issue a warning).}
+submission fails. Defaults to FALSE for untracked jobs. Tracked submission
+failures always stop to prevent cascading submissions with missing dependencies.}
 
 \item{wait_jobs}{a character string of jobs or process ids that should complete before this job is executed}
 

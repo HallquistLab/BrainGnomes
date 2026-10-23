@@ -165,12 +165,21 @@ doctor_check_df <- function() {
 #' before [run_project()] and does not submit work, create directories, or modify
 #' the configuration.
 #'
+#' Doctor also reports uncertain submissions, missing recovery evidence, and
+#' BIDS conversion locks without resolving them. It is distinct from the
+#' automatic, request-scoped submission gate in [run_project()], which can
+#' repair confirmed scheduler failures/cancellations. Use [diagnose_project()]
+#' for the recovery decision guide and current submission issues.
+#'
 #' @param input A project configuration object, YAML file, or project directory.
 #'   Defaults to the current working directory.
 #' @param steps Optional stages to check. By default all enabled stages are used.
 #' @param deep Also initialize Python and check optional postprocessing modules.
 #' @param quiet Suppress the printed report.
 #' @return A `bg_project_doctor` object with an `ok` flag and a checks data frame.
+#' @seealso [reconcile_project_jobs()] and [resolve_project_submission()] for
+#'   explicit recovery. See `vignette("diagnosing_pipeline", package = "BrainGnomes")`
+#'   for how environment review, automatic preflight, and recovery fit together.
 #' @export
 doctor_project <- function(input = getwd(), steps = NULL, deep = FALSE, quiet = FALSE) {
   checkmate::assert_character(steps, null.ok = TRUE)
@@ -330,6 +339,27 @@ doctor_project <- function(input = getwd(), steps = NULL, deep = FALSE, quiet = 
     add_check("tracking", "sqlite", "fail", "metadata/sqlite_db is not configured.",
       "Set metadata/sqlite_db to a writable project path.")
   }
+
+  if (checkmate::test_file_exists(sqlite_db)) {
+    submissions <- tryCatch(read_job_submission_attempts(sqlite_db), error = function(error) error)
+    if (inherits(submissions, "error")) {
+      add_check("tracking", "submission_registry", "warn", conditionMessage(submissions),
+        "Restore access to the submission registry before attempting recovery.")
+    } else if (nrow(submissions)) {
+      uncertain <- submissions$submission_state %in% c("UNKNOWN", "SUBMITTING")
+      add_check("tracking", "unconfirmed_submissions", if (any(uncertain)) "fail" else "pass",
+        paste(sum(uncertain), "submission(s) have no confirmed scheduler outcome."),
+        if (any(uncertain)) paste("Inspect inspect_project(input)$submissions, confirm each outcome,",
+          "then use resolve_project_submission(). Do not clear records based on queue absence.") else "")
+      missing <- uncertain & !file.exists(submissions$manifest_path)
+      if (any(missing)) add_check("tracking", "missing_submission_evidence", "warn",
+        paste(sum(missing), "uncertain submission manifest(s) are missing."),
+        "Restore logs/runs from backup; keep run artifacts with the tracking database.")
+    }
+  }
+  bids_lock <- project_bids_lock_issue(scfg, requested)
+  if (!is.null(bids_lock)) add_check("bids", "conversion_lock", "fail", bids_lock,
+    "Finish conversion, investigate stale locks, and validate BIDS before preprocessing.")
 
   if (deep && "postprocess" %in% requested) {
     for (module in c("nibabel", "nilearn", "templateflow")) {
@@ -551,6 +581,8 @@ resolve_project_execution <- function(scfg, steps, subject_filter = NULL,
   selection <- resolve_project_selection(
     scfg, steps, postprocess_streams, extract_streams, force
   )
+  bids_lock <- project_bids_lock_issue(scfg, selection$steps)
+  if (!is.null(bids_lock)) stop(bids_lock, call. = FALSE)
   work_units <- normalize_retry_work_units(attr(scfg, "retry_work_units", exact = TRUE))
   if (!is.null(work_units) &&
       (!setequal(selection$steps, work_units$stage) ||
@@ -930,7 +962,7 @@ submit_project_plan <- function(plan, debug = FALSE, log_level = "INFO") {
 }
 
 new_project_run <- function(scfg, run_id, submitted_ids = NULL, deferred = FALSE,
-                            provenance_file = NULL) {
+                            provenance_file = NULL, submission_preflight = NULL) {
   tracked_ids <- character()
   sqlite_db <- scfg$metadata$sqlite_db
   if (checkmate::test_file_exists(sqlite_db) && sqlite_table_exists(sqlite_db, "job_tracking")) {
@@ -949,7 +981,8 @@ new_project_run <- function(scfg, run_id, submitted_ids = NULL, deferred = FALSE
     deferred_subject_submission = isTRUE(deferred),
     project_directory = scfg$metadata$project_directory,
     sqlite_db = sqlite_db,
-    provenance_file = provenance_file
+    provenance_file = provenance_file,
+    submission_preflight = submission_preflight
   ), class = "bg_project_run")
   tryCatch(
     update_run_provenance_submission(
@@ -1067,13 +1100,27 @@ find_run_logs <- function(input = getwd(), run_id = "latest", failed_only = FALS
   find_logs_for_jobs(scfg, jobs)
 }
 
+#' Locate job logs without confusing subject labels or numeric job-ID prefixes
+#' @param scfg Project configuration, possibly without an accessible log directory.
+#' @param jobs Scoped tracking rows.
+#' @return A data frame of matching stdout/stderr paths, possibly empty.
+#' @noRd
 find_logs_for_jobs <- function(scfg, jobs) {
-  files <- if (dir.exists(scfg$metadata$log_directory)) {
+  files <- if (checkmate::test_string(scfg$metadata$log_directory) &&
+      dir.exists(scfg$metadata$log_directory)) {
     list.files(scfg$metadata$log_directory, recursive = TRUE, full.names = TRUE, pattern = "\\.(out|err)$")
   } else character()
   rows <- lapply(seq_len(nrow(jobs)), function(i) {
     job_id <- as.character(jobs$job_id[[i]])
-    matches <- files[grepl(job_id, basename(files), fixed = TRUE)]
+    filenames <- sub("\\[[0-9]+\\]", "[]", basename(files))
+    marker <- paste0("jobid-", job_id)
+    positions <- regexpr(marker, filenames, fixed = TRUE)
+    following <- substring(filenames, positions + nchar(marker), positions + nchar(marker))
+    marked <- positions > 0L & !grepl("[[:alnum:]]", following)
+    stems <- tools::file_path_sans_ext(filenames)
+    legacy <- !grepl("jobid-", filenames, fixed = TRUE) &
+      (stems == job_id | endsWith(stems, paste0("_", job_id)) | endsWith(stems, paste0("-", job_id)))
+    matches <- files[marked | legacy]
     if (length(matches) == 0L) return(NULL)
     data.frame(
       run_id = jobs$sequence_id[[i]], job_id = job_id,
@@ -1117,9 +1164,13 @@ build_project_diagnosis <- function(input, run_id = NULL,
   }
 
   jobs <- inspection$jobs
+  submission_issues <- diagnosis_submission_issues(inspection, job_id, subject_id)
+  active_issues <- diagnosis_active_issues(inspection, job_id, subject_id)
+  preflight <- scope_submission_preflight(inspection$submission_preflight, subject_id, job_id)
+  has_saved_blockers <- !is.null(preflight) && nrow(preflight$blockers) > 0L
   if (!is.null(job_id)) {
     keep <- !is.na(jobs$job_id) & as.character(jobs$job_id) == job_id
-    if (!any(keep)) {
+    if (!any(keep) && !nrow(submission_issues) && !has_saved_blockers) {
       run_text <- if (is.null(run_id)) "" else paste0(" in run ", inspection$run_id)
       stop("No tracked job has ID ", job_id, run_text, ".", call. = FALSE)
     }
@@ -1127,7 +1178,7 @@ build_project_diagnosis <- function(input, run_id = NULL,
   }
   if (!is.null(subject_id)) {
     keep <- !is.na(jobs$sub_id) & jobs$sub_id == subject_id
-    if (!any(keep)) {
+    if (!any(keep) && !nrow(submission_issues) && !has_saved_blockers) {
       focus_text <- if (is.null(job_id)) "" else paste0(" for job ", job_id)
       stop("No tracked jobs were found for sub-", subject_id, focus_text, ".", call. = FALSE)
     }
@@ -1156,14 +1207,18 @@ build_project_diagnosis <- function(input, run_id = NULL,
     inspection = inspection,
     jobs = jobs,
     failures = failures,
+    submission_issues = submission_issues,
+    active_issues = active_issues,
+    submission_preflight = preflight,
     logs = logs
   ), class = "bg_project_diagnosis")
 }
 
-#' Diagnose failed project work
+#' Diagnose failed work and unresolved project submissions
 #'
-#' Reports unresolved failed, cancelled, and blocked work and locates matching
-#' logs. In an interactive R session, the default opens the guided dependency
+#' Reports unresolved failed, cancelled, and blocked work, submission outcomes
+#' requiring review, and recorded scheduler or timing discrepancies. It locates
+#' matching job logs. In an interactive R session, the default opens the guided dependency
 #' and log browser. In a non-interactive session, the default returns a
 #' structured diagnosis of the current project state assembled by
 #' [inspect_project()] across runs. Select a run for a historical post-mortem or
@@ -1186,7 +1241,12 @@ build_project_diagnosis <- function(input, run_id = NULL,
 #'   subject, job, and historical run selection.
 #' @return When `interactive = FALSE`, a `bg_project_diagnosis` object containing
 #'   the underlying `inspection`, its `jobs`, unresolved `failures`, and matching
-#'   `logs` for the current project state or selected run. Interactive mode
+#'   `logs` for the current project state or selected run. `submission_issues`
+#'   and `active_issues` expose current recovery needs; `submission_preflight`
+#'   contains the latest saved assessment in this scope, including controller
+#'   reports after Flywheel synchronization. Saved reports are historical
+#'   evidence and are not treated as current failures. Diagnosis never resolves
+#'   submissions, repairs tracking rows, or submits jobs. Interactive mode
 #'   returns the selected result from the guided browser, usually invisibly.
 #' @examples
 #' \dontrun{
@@ -1195,6 +1255,9 @@ build_project_diagnosis <- function(input, run_id = NULL,
 #' diagnosis <- diagnose_project(scfg, subject_id = "014", interactive = FALSE)
 #' diagnosis$failures
 #' diagnosis$logs
+#' diagnosis$submission_issues
+#' diagnosis$active_issues
+#' diagnosis$submission_preflight
 #'
 #' diagnose_project(scfg, job_id = "66273010")
 #'
@@ -1202,6 +1265,10 @@ build_project_diagnosis <- function(input, run_id = NULL,
 #' }
 #' @seealso [inspect_project()] for routine progress monitoring and
 #'   [retry_project_run()] to preview a new run after correcting a failure.
+#'   Use [reconcile_project_jobs()] for confirmed scheduler failures and
+#'   [resolve_project_submission()] after confirming an uncertain outcome.
+#'   See `vignette("diagnosing_pipeline", package = "BrainGnomes")` for
+#'   automatic preflight, saved reports, and evidence-based recovery examples.
 #' @export
 diagnose_project <- function(input = getwd(), run_id = NULL,
                              interactive = base::interactive(),
@@ -1241,24 +1308,33 @@ print.bg_project_diagnosis <- function(x, ...) {
   } else {
     rep(TRUE, nrow(x$jobs))
   }
-  counts <- as.data.frame(table(x$jobs$lifecycle_status[current]), stringsAsFactors = FALSE)
-  names(counts) <- c("status", "n_jobs")
+  status_counts <- table(x$jobs$lifecycle_status[current])
+  counts <- data.frame(status = as.character(names(status_counts)),
+                       n_jobs = as.integer(status_counts), stringsAsFactors = FALSE)
   print(counts, row.names = FALSE)
   if (nrow(x$failures) > 0L) {
     cli::cli_alert_danger("{nrow(x$failures)} failed, blocked, or cancelled job{?s}.")
     print(x$failures[, intersect(c("job_id", "job_name", "status", "time_ended"), names(x$failures)), drop = FALSE], row.names = FALSE)
-  } else {
+  } else if (!nrow(x$submission_issues) && !nrow(x$active_issues)) {
     cli::cli_alert_success("No failed jobs were found.")
   }
+  print_diagnosis_recovery(x)
+  print_saved_submission_preflight(x$submission_preflight)
   invisible(x)
 }
 
-#' Cancel queued or running jobs from one run
+#' Request cancellation of outstanding allocations from one run
 #'
-#' Cancellation affects only tracked jobs that are still queued or running. It
+#' Cancellation targets queued, running, or unconfirmed tracked allocations,
+#' including dependency-blocked jobs without confirmed scheduler termination. It
 #' does not delete project data, logs, or completed outputs. Calling this
 #' function with `dry_run = FALSE` immediately sends cancellation requests to
 #' the configured scheduler, so preview the commands first.
+#' A successful client exit confirms only the request, not that all allocation
+#' processes have stopped. Tracking remains unchanged until scheduler accounting
+#' confirms failure/cancellation through [reconcile_project_jobs()] or the next
+#' relevant live [run_project()] preflight. Concurrent worker completion is
+#' preserved. Missing accounting never establishes termination.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
 #'   Defaults to the current working directory.
@@ -1267,7 +1343,10 @@ print.bg_project_diagnosis <- function(x, ...) {
 #'   cancellation.
 #' @param dry_run If `TRUE`, report the commands without contacting the
 #'   scheduler. If `FALSE`, request cancellation immediately.
-#' @return A data frame describing each cancellation attempt.
+#' @return A data frame describing each cancellation attempt. `status` is
+#'   `would_cancel` for previews, `cancellation_requested` for successful client
+#'   requests, and `failed` for client errors. Requests do not mark SQLite rows
+#'   `CANCELLED` or authorize immediate duplicate launches.
 #' @examples
 #' \dontrun{
 #' cancel_project_run(scfg, run$run_id, dry_run = TRUE)
@@ -1281,7 +1360,7 @@ cancel_project_run <- function(input = getwd(), run_id = "latest", dry_run = TRU
   scfg <- project_config_from_input(input)
   resolved <- resolve_run_id(scfg, run_id)
   jobs <- .get_run_jobs_data(scfg, resolved)
-  jobs <- jobs[jobs$status %in% c("QUEUED", "STARTED"), , drop = FALSE]
+  jobs <- jobs[pending_tracked_job_rows(jobs), , drop = FALSE]
   command <- switch(scfg$compute_environment$scheduler,
     slurm = "scancel", torque = "qdel",
     stop("Cancellation is supported only for slurm and torque projects.", call. = FALSE)
@@ -1296,14 +1375,19 @@ cancel_project_run <- function(input = getwd(), run_id = "latest", dry_run = TRU
     if (!dry_run) {
       # Native subprocess output bypasses R's output sinks. Capture it before
       # forwarding diagnostics so cancellation cannot corrupt CLI JSON stdout.
-      output <- suppressWarnings(system2(command, job_id, stdout = TRUE, stderr = TRUE))
+      output <- tryCatch(suppressWarnings(system2(command, shQuote(job_id),
+        stdout = TRUE, stderr = TRUE, timeout = 15L)), error = function(error) {
+          structure(conditionMessage(error), status = 1L)
+        })
       if (length(output)) writeLines(output, stderr())
       exit <- value_or_default(attr(output, "status"), 0L)
     }
-    status <- if (dry_run) "would_cancel" else if (identical(as.integer(exit), 0L)) "cancelled" else "failed"
-    if (!dry_run && status == "cancelled") {
-      update_tracked_job_status(scfg$metadata$sqlite_db, job_id, "CANCELLED")
-    }
+    # The scheduler acknowledges a cancellation request before all processes
+    # necessarily stop. Keep tracking active until accounting confirms failure
+    # or cancellation; otherwise an immediate retry can duplicate live work.
+    status <- if (dry_run) "would_cancel" else if (identical(as.integer(exit), 0L)) {
+      "cancellation_requested"
+    } else "failed"
     data.frame(run_id = resolved, job_id = job_id,
       command = paste(command, job_id), status = status, stringsAsFactors = FALSE)
   })

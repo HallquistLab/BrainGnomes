@@ -34,6 +34,25 @@ parse_job_submission_id <- function(lines, scheduler) {
   if (length(candidates) == 1L) candidates[[1L]] else NULL
 }
 
+#' Identify explicit Slurm rejection without treating transport errors as rejection
+#' @param scheduler Normalized submission executable.
+#' @param exit_code Scheduler client exit code.
+#' @param job_id Parsed acknowledgement, or NULL.
+#' @param stderr Captured scheduler diagnostics.
+#' @return Whether the scheduler explicitly rejected the submission.
+#' @noRd
+is_confirmed_submission_rejection <- function(scheduler, exit_code, job_id, stderr) {
+  # Communication failures may follow acceptance. Only explicit request or
+  # policy rejections permit retry without investigating a lost acknowledgement.
+  identical(scheduler, "sbatch") && exit_code != 0L && is.null(job_id) &&
+    grepl(paste0("Batch job submission failed: (",
+                 "Job violates accounting/QOS policy|Invalid account|Invalid qos|",
+                 "Invalid partition name|Requested node configuration is not available|",
+                 "Invalid dependency|Invalid job id specified|",
+                 "Memory specification can not be satisfied)"),
+          stderr, ignore.case = TRUE)
+}
+
 #' Serialize an attempt transition and its tracking-row changes
 #' @param sqlite_db Existing tracking database path.
 #' @param action Function accepting the transaction connection.
@@ -75,6 +94,10 @@ ensure_job_submission_schema <- function(sqlite_db) {
     "CREATE INDEX IF NOT EXISTS job_submission_unit_state",
     "ON job_submission_attempts (unit_key, job_role, submission_state)"
   ))
+  DBI::dbExecute(con, paste(
+    "CREATE INDEX IF NOT EXISTS job_submission_state_binding",
+    "ON job_submission_attempts (submission_state, contract_id, scheduler_job_id)"
+  ))
   invisible(NULL)
 }
 
@@ -98,7 +121,24 @@ read_job_submission_attempts <- function(sqlite_db) {
 inspect_job_submissions <- function(sqlite_db) {
   records <- read_job_submission_attempts(sqlite_db)
   if (!nrow(records)) return(records)
-  metadata <- lapply(records$tracking_metadata, jsonlite::fromJSON)
+  metadata <- lapply(records$tracking_metadata, function(encoded) {
+    tryCatch({
+      row <- jsonlite::fromJSON(encoded, simplifyVector = FALSE)
+      if (!is.list(row) || (length(row) && is.null(names(row)))) {
+        stop("Submission metadata is not a named object.")
+      }
+      for (field in c("stage", "stream", "sub_id", "ses_id")) {
+        value <- row[[field]]
+        if (!is.null(value) && (length(value) != 1L || is.list(value))) {
+          stop("Submission metadata field is not scalar: ", field)
+        }
+      }
+      row
+    }, error = function(error) structure(list(), metadata_error = conditionMessage(error)))
+  })
+  records$metadata_error <- vapply(metadata, function(row) {
+    value_or_default(attr(row, "metadata_error"), NA_character_)
+  }, character(1))
   for (name in c("stage", "stream", "sub_id", "ses_id")) {
     records[[name]] <- vapply(metadata, function(row) {
       if (is.null(row[[name]])) NA_character_ else as.character(row[[name]])
@@ -108,12 +148,25 @@ inspect_job_submissions <- function(sqlite_db) {
   records
 }
 
+#' Check exact accepted allocation bindings without deserializing worker objects
+#' @param submissions Registered attempts with contract and scheduler IDs.
+#' @param jobs Stored tracking rows with contract and job IDs.
+#' @return Logical vector identifying consistent bindings.
+#' @noRd
+submission_bindings_present <- function(submissions, jobs) {
+  known <- !is.na(submissions$scheduler_job_id) & nzchar(submissions$scheduler_job_id)
+  identities <- paste(submissions$contract_id, submissions$scheduler_job_id, sep = "::")
+  tracked <- paste(jobs$contract_id, jobs$job_id, sep = "::")
+  known & identities %in% tracked
+}
+
 #' Include registered runs that have no scheduler-bound jobs yet
 #' @param runs Existing inspection run summary.
 #' @param submissions Registered submission attempts.
+#' @param jobs Tracking rows used to verify accepted allocation bindings.
 #' @return Run summary ordered newest first, including unconfirmed runs.
 #' @noRd
-project_runs_with_submissions <- function(runs, submissions) {
+project_runs_with_submissions <- function(runs, submissions, jobs) {
   if (!nrow(submissions)) return(runs)
   valid <- !is.na(submissions$run_id) & nzchar(submissions$run_id)
   submissions <- submissions[valid, , drop = FALSE]
@@ -127,13 +180,13 @@ project_runs_with_submissions <- function(runs, submissions) {
                         n_cancelled = 0L, n_unknown = 0L)
       runs <- rbind(runs, row)
     }
-    if (any(group$submission_state %in% c("SUBMITTING", "UNKNOWN"))) {
+    orphaned <- group$submission_state == "ACCEPTED" & !submission_bindings_present(group, jobs)
+    if (any(group$submission_state %in% c("SUBMITTING", "UNKNOWN") | orphaned)) {
       runs$status[runs$run_id == run_id] <- "UNCONFIRMED"
     }
   }
   if (!nrow(runs)) return(runs)
-  timestamps <- sub("T", " ", sub("Z$", "", runs$submitted), fixed = TRUE)
-  parsed <- suppressWarnings(as.numeric(as.POSIXct(timestamps, tz = "UTC")))
+  parsed <- as.numeric(parse_inspection_time(runs$submitted))
   runs[order(parsed, -seq_len(nrow(runs)), decreasing = TRUE, na.last = TRUE), , drop = FALSE]
 }
 
@@ -170,7 +223,8 @@ register_job_submission <- function(sqlite_db, contract, tracking_args) {
                        if (is.null(tracking_args$job_role)) "" else tracking_args$job_role))
       if (nrow(unresolved)) {
         stop("An earlier submission for this work unit is unconfirmed: ",
-             unresolved$contract_id[[1L]], ". Confirm its outcome before resubmitting.", call. = FALSE)
+             unresolved$contract_id[[1L]], ". Confirm its outcome with the scheduler, then use ",
+             "resolve_project_submission() before resubmitting. force does not override this protection.", call. = FALSE)
       }
     }
     DBI::dbExecute(con, paste(
@@ -200,8 +254,24 @@ register_job_submission <- function(sqlite_db, contract, tracking_args) {
 #' @noRd
 set_job_submission_state <- function(sqlite_db, contract_id, state, exit_code = NA_integer_, detail = NA_character_) {
   if (is.null(sqlite_db)) return(invisible(NULL))
+  if (state == "SUBMITTING") {
+    con <- job_submission_connect(sqlite_db)
+    current <- tryCatch(DBI::dbGetQuery(con,
+      "SELECT unit_key, job_role FROM job_submission_attempts WHERE contract_id = ?",
+      params = list(contract_id)), finally = DBI::dbDisconnect(con))
+    if (nrow(current) == 1L && !is.na(current$unit_key[[1L]])) {
+      # Scheduler calls must happen before taking the SQLite write lock.
+      repairs <- reconcile_tracked_jobs(sqlite_db, current$unit_key[[1L]],
+                                           current$job_role[[1L]], dry_run = FALSE)
+      if (any(repairs$applied)) {
+        repaired_ids <- paste(utils::head(repairs$job_id[repairs$applied], 20L), collapse = ", ")
+        cli::cli_alert_info("Final submission check repaired {sum(repairs$applied)} confirmed scheduler failure/cancellation record{?s}: {repaired_ids}.")
+      }
+    }
+  }
   job_submission_transaction(sqlite_db, function(con) {
     if (state == "SUBMITTING") {
+      fields <- DBI::dbListFields(con, "job_tracking")
       unresolved <- DBI::dbGetQuery(con, paste(
         "SELECT other.contract_id FROM job_submission_attempts current",
         "JOIN job_submission_attempts other ON other.unit_key = current.unit_key",
@@ -209,9 +279,20 @@ set_job_submission_state <- function(sqlite_db, contract_id, state, exit_code = 
         "LEFT JOIN job_tracking job ON job.contract_id = other.contract_id",
         "WHERE current.contract_id = ? AND other.contract_id != current.contract_id",
         "AND (other.submission_state IN ('SUBMITTING','UNKNOWN')",
-        "OR (other.submission_state = 'ACCEPTED' AND job.status IN ('QUEUED','STARTED')))"
-      ), params = list(contract_id))
-      if (nrow(unresolved)) stop("An earlier submission is unconfirmed or active; refusing a duplicate launch.", call. = FALSE)
+        "OR (other.submission_state = 'ACCEPTED' AND (job.id IS NULL OR other.scheduler_job_id IS NULL",
+        "OR job.job_id != other.scheduler_job_id OR",
+        pending_tracked_job_clause(fields, "job"), ")))",
+        "UNION ALL SELECT COALESCE(job.contract_id, job.job_id) FROM job_submission_attempts current",
+        "JOIN job_tracking job ON job.unit_key = current.unit_key",
+        "AND COALESCE(job.job_role, '') = COALESCE(current.job_role, '')",
+        "WHERE current.contract_id = ? AND (job.contract_id IS NULL OR job.contract_id != current.contract_id)",
+        "AND", pending_tracked_job_clause(fields, "job")
+      ), params = list(contract_id, contract_id))
+      if (nrow(unresolved)) stop(
+        "An earlier submission is unconfirmed or active; refusing a duplicate launch. Contract: ",
+        unresolved$contract_id[[1L]], ". Inspect with inspect_project(input, refresh = TRUE); ",
+        "use reconcile_project_jobs() for stale scheduler states or resolve_project_submission() ",
+        "for confirmed unbound outcomes. force does not override this protection.", call. = FALSE)
     }
     rows <- DBI::dbExecute(con, paste(
       "UPDATE job_submission_attempts SET submission_state = ?,",
