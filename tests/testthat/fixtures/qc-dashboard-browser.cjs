@@ -110,6 +110,13 @@ async function walkthrough() {
     await page.locator("#qc-filter-metrics-stage").selectOption("postprocess");
     await page.waitForFunction(count => Reactable.getState("bg-qc-metric-review").sortedData.length === count, expected.sources);
     assert.match(await page.locator("#qc-metric-counts").textContent(), /upstream evidence/);
+    const upstreamSource = page.locator('#bg-qc-metric-review [data-qc-record]').first();
+    const upstreamID = await upstreamSource.getAttribute("data-qc-record");
+    await upstreamSource.click();
+    await page.waitForFunction(id => document.querySelector("#qc-detail-output").value === id, upstreamID);
+    assert.match(await page.locator("#qc-participant-detail").innerText(), /Selected upstream measurement/);
+    assert.equal(await page.locator("#qc-filter-metrics-stage").inputValue(), "postprocess");
+    await page.locator('[data-qc-cohort]').click();
     await page.locator('#qc-metrics [data-qc-reset]').click();
 
     // Comparison changes reset axes and keep their own units/source denominators.

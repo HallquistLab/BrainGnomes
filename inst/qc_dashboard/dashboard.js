@@ -395,15 +395,20 @@
       return;
     }
     var rows = scoped(data().inventory);
-    var record = rows.find(function (row) { return row.record_id === selectedRecord; }) || rows[0];
+    var selected = (indexes.records.get(selectedRecord) || [])[0];
+    var record = rows.find(function (row) { return row.record_id === selectedRecord; }) ||
+      (selected && selected.sub_id === participant ? selected : rows[0]);
+    var supporting = record && !rows.some(function (row) { return row.record_id === record.record_id; });
+    var choices = supporting ? [record].concat(rows) : rows;
     var reports = (indexes.participantEvidence.get(participant) || []).filter(function (row) {
       return /\.html?$/i.test(row.path || "");
     });
     pane.innerHTML = "<h3>sub-" + escape(participant) + '</h3><button type="button" data-qc-cohort>Return to cohort</button>' +
       '<details><summary>Original MRIQC / fMRIPrep reports (participant-wide)</summary>' +
       (reports.length ? links(reports) : "<p>No linked HTML reports were recorded.</p>") + "</details>" +
+      (supporting ? '<p class="qc-note">Selected upstream measurement supports the filtered acquisitions. Its original source is shown without changing the output-stage selection.</p>' : "") +
       "<label for='qc-detail-output'>Output / acquisition</label><select id='qc-detail-output'>" +
-      rows.map(function (row) { return '<option value="' + escape(row.record_id) + '"' +
+      choices.map(function (row) { return '<option value="' + escape(row.record_id) + '"' +
         (row.record_id === record?.record_id ? " selected" : "") + ">" + escape([
           row.task && "task-" + row.task, row.run && "run-" + row.run,
           row.echo && "echo-" + row.echo, row.stage, row.stream, row.space, row.atlas && row.atlas.split("/").pop()
