@@ -14,13 +14,13 @@ qc_legacy_streams <- function(streams, stages, configured = NULL) {
 }
 
 #' Describe coverage at raw-acquisition and unresolved workflow-unit grain
-#' @param x QC snapshot containing acquisitions, derivatives, workflow, and metadata.
+#' @param snapshot QC snapshot containing acquisitions, derivatives, workflow, and metadata.
 #' @return Coverage rows with observational denominators and explicit review reasons.
 #' @details Multiple spaces/products do not increase raw acquisition coverage.
 #'   Missing output entities are compatible with a raw acquisition (e.g., combined
 #'   echoes); this is not a claim about the intended number of spatial products.
 #' @noRd
-qc_acquisition_coverage <- function(x) {
+qc_acquisition_coverage <- function(snapshot) {
   identity <- c("sub_id", "ses_id", "task", "run", "acquisition", "reconstruction",
     "direction", "echo", "part")
   template <- as.data.frame(stats::setNames(rep(list(character()), length(identity)), identity))
@@ -28,32 +28,32 @@ qc_acquisition_coverage <- function(x) {
     template$record_ids <- template$source_file <- character()
   template$resolved_outputs <- template$available_outputs <- integer()
   template$attention <- logical()
-  inventory <- x$inventory
-  workflow <- x$workflow
-  stages <- x$metadata$selected_steps
+  inventory <- snapshot$inventory
+  workflow <- snapshot$workflow
+  stages <- snapshot$metadata$selected_steps
   if (is.null(stages)) stages <- unique(c(workflow$stage, inventory$stage))
   stages <- intersect(stages, c("fmriprep", "mriqc", "aroma", "postprocess", "extract_rois"))
   rows <- list()
   for (stage in stages) {
     streams <- if (stage %in% c("postprocess", "extract_rois")) {
-      unique(c(x$metadata$configured_streams[[stage]],
+      unique(c(snapshot$metadata$configured_streams[[stage]],
         inventory$stream[inventory$stage == stage], workflow$stream[workflow$stage == stage]))
     } else NA_character_
     if (stage %in% c("postprocess", "extract_rois")) {
       streams <- streams[!is.na(streams) & !qc_legacy_streams(streams, rep(stage, length(streams)),
-        x$metadata$configured_streams)]
+        snapshot$metadata$configured_streams)]
     }
     for (stream in streams) {
       units <- workflow[workflow$stage == stage &
         ifelse(is.na(workflow$stream), "", workflow$stream) == ifelse(is.na(stream), "", stream), , drop = FALSE]
       products <- inventory[inventory$stage == stage &
         ifelse(is.na(inventory$stream), "", inventory$stream) == ifelse(is.na(stream), "", stream), , drop = FALSE]
-      raw <- x$acquisitions
-      if (identical(x$metadata$scope, "run") && is.data.frame(x$metadata$work_units) &&
-          nrow(x$metadata$work_units)) {
+      raw <- snapshot$acquisitions
+      if (identical(snapshot$metadata$scope, "run") && is.data.frame(snapshot$metadata$work_units) &&
+          nrow(snapshot$metadata$work_units)) {
         raw$stage <- rep(stage, nrow(raw))
         raw$stream <- rep(stream, nrow(raw))
-        raw <- raw[qc_retry_rows(raw, x$metadata$work_units), , drop = FALSE]
+        raw <- raw[qc_retry_rows(raw, snapshot$metadata$work_units), , drop = FALSE]
       }
       # Units without acquisitions still need a visible denominator. They must
       # not acquire fabricated scan identities or a false zero-of-zero pass.
@@ -101,11 +101,11 @@ qc_acquisition_coverage <- function(x) {
 }
 
 #' Supply coverage for saved snapshots without reading or changing study files
-#' @param x Saved QC snapshot, including older snapshots without coverage.
+#' @param snapshot Saved QC snapshot, including older snapshots without coverage.
 #' @return Existing coverage or a derived observational coverage table.
 #' @noRd
-qc_snapshot_coverage <- function(x) {
-  if (is.data.frame(x$coverage)) x$coverage else qc_acquisition_coverage(x)
+qc_snapshot_coverage <- function(snapshot) {
+  if (is.data.frame(snapshot$coverage)) snapshot$coverage else qc_acquisition_coverage(snapshot)
 }
 
 #' Add unresolved coverage and submission problems to the derivative review queue
