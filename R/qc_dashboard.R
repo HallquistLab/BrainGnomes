@@ -288,6 +288,12 @@ qc_reactable <- function(data, columns = NULL, details = NULL, page_size = 12L, 
       definition$style <- list(whiteSpace = "normal", overflowWrap = "anywhere")
       definition$minWidth <- 240
     }
+    if (name %in% c("reason", "attention_reasons")) {
+      definition$cell <- reactable::JS("function(cell) {
+        return React.createElement('div', {style: {whiteSpace: 'normal', overflowWrap: 'anywhere'}},
+          cell.value == null ? 'Unavailable' : cell.value);
+      }")
+    }
     if (name %in% filter_fields) {
       definition$filterInput <- reactable::JS("function(column) {
         var filter = column.filterValue;
@@ -446,6 +452,8 @@ qc_dashboard_widgets <- function(x, output_dir) {
     "task", "run", "available_outputs", "resolved_outputs")
   coverage <- coverage[c(coverage_first, setdiff(names(coverage), coverage_first))]
   attention <- qc_review_queue(inventory, coverage, x$metadata)
+  attention_first <- c("category", "sub_id", "stage", "stream", "task", "run", "reason", "products", "record_ids")
+  attention <- attention[c(attention_first, setdiff(names(attention), attention_first))]
   job_fields <- intersect(c("job_id", "sequence_id", "sub_id", "ses_id", "stage", "stream",
     "job_role", "attempt", "lifecycle_status", "is_current_attempt", "failure_category", "exit_code"), names(x$jobs))
   evidence <- qc_display_identity(x$evidence, inventory)

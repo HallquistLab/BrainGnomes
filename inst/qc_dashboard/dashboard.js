@@ -115,7 +115,8 @@
   function reviewQueue(inventory, coverage, metadata) {
     var result = attention(inventory);
     (coverage || []).filter(function (row) { return row.attention; }).forEach(function (row) {
-      result.push(Object.assign({}, row, {category: "Coverage/workflow unresolved", reason: row.reason,
+      result.push(Object.assign({}, row, {category: "Coverage/workflow unresolved",
+        reason: row.stage + (row.stream ? " / " + row.stream : "") + ": " + row.reason,
         products: row.resolved_outputs, record_ids: row.record_ids || ""}));
     });
     var submission = metadata.submission || {};

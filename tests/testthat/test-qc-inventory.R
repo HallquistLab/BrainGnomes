@@ -558,6 +558,7 @@ test_that("coverage exposes raw acquisitions without resolved upstream outputs",
   expect_true(all(subset(coverage, sub_id == "003")$coverage_status == "inputs_not_observed"))
   queue <- qc_review_queue(snapshot$inventory, coverage, snapshot$metadata)
   expect_true(any(queue$sub_id %in% "002" & queue$products == 0L))
+  expect_match(subset(queue, sub_id == "002" & stage == "fmriprep")$reason, "^fmriprep:")
   expect_gt(subset(qc_dashboard_summary(snapshot)$participants, sub_id == "002")$review_items, 0L)
   expect_equal(subset(qc_dashboard_summary(snapshot)$participants, sub_id == "002")$output_records, 0L)
   expect_true(all(subset(coverage, sub_id == "001" & stage == "fmriprep")$coverage_status == "observed"))
@@ -714,6 +715,8 @@ test_that("large manifest histories have explicit bounded previews and complete 
   original <- snapshot
   widgets <- qc_dashboard_widgets(snapshot, fixture$root)
   expect_match(widgets$exception_note, "200 of 503", fixed = TRUE)
+  attention_columns <- names(jsonlite::fromJSON(widgets$attention$x$tag$attribs$data))
+  expect_identical(attention_columns[1:4], c("category", "sub_id", "stage", "stream"))
   expect_equal(length(jsonlite::fromJSON(widgets$manifest_exceptions$x$tag$attribs$data)$path), 200L)
   output <- file.path(fixture$root, "export")
   write_qc_inventory(snapshot, output)

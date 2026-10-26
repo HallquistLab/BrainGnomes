@@ -121,7 +121,8 @@ qc_review_queue <- function(inventory, coverage, metadata) {
     rows <- result[rep(NA_integer_, nrow(gaps)), , drop = FALSE]
     for (field in intersect(names(rows), names(gaps))) rows[[field]] <- gaps[[field]]
     rows$category <- rep("Coverage/workflow unresolved", nrow(gaps))
-    rows$reason <- gaps$reason
+    rows$reason <- paste0(gaps$stage, ifelse(is.na(gaps$stream), "", paste0(" / ", gaps$stream)),
+      ": ", gaps$reason)
     rows$products <- gaps$resolved_outputs
     result <- rbind(result, rows)
   }

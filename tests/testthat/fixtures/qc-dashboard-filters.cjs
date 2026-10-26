@@ -111,6 +111,7 @@ const gaps = [{sub_id: "missing", stage: "fmriprep", attention: true, resolved_o
 const queue = api.reviewQueue([], gaps, {scope: "run", submission: {state: "submission_started", acknowledged_jobs: 0}});
 assert.equal(queue.length, 2);
 assert.match(queue[0].reason, /no derivative/);
+assert.match(queue[0].reason, /^fmriprep:/);
 assert.equal(queue[1].category, "Submission unconfirmed");
 assert.match(api.detail(queue[0], "attention"), /No resolved derivative association/);
 console.log("Shared filter regression passed");
