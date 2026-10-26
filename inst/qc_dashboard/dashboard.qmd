@@ -13,63 +13,37 @@ totals <- widgets$summary$totals
 
 # Overview
 
-## Row {height=200}
+## Row {height=auto}
 
 ::: {.card title="Explore this snapshot"}
 
 ```{r}
+widgets$payload
+widgets$scope_banner
 widgets$controls
 ```
 
 :::
 
-## Row {height=140}
+## Row {height=auto}
+
+::: {.card title="Current scope — counts use each table's recorded identity fields"}
 
 ```{r}
-#| content: valuebox
-list(icon = "people", color = "#183044", title = "Participants",
-     value = totals$participants)
+widgets$summary_cards
 ```
 
-```{r}
-#| content: valuebox
-list(icon = "file-earmark", color = "#183044", title = "Raw BOLD files",
-     value = totals$raw_bold_files)
-```
+:::
 
-```{r}
-#| content: valuebox
-list(icon = "layers", color = "#127a70", title = "Selected outputs available",
-     value = paste(totals$available_outputs, "of", totals$outputs))
-```
-
-## Row {height=140}
-
-```{r}
-#| content: valuebox
-list(icon = "check-circle", color = "#326eac", title = "Required audits passed",
-     value = paste(totals$passed_required_audits, "of", totals$required_audits))
-```
-
-```{r}
-#| content: valuebox
-list(icon = "exclamation-circle", color = "#b84653", title = "Records needing attention",
-     value = totals$attention_records)
-```
-
-```{r}
-#| content: valuebox
-list(icon = "exclamation-triangle", color = "#b84653", title = "Collection issues",
-     value = totals$collection_issues)
-```
-
-## Row {height=350}
+## Row {height=auto}
 
 ::: {.card title="Outputs by stage and stream"}
 
 Counts describe files and derivative records. Supporting upstream inputs are
 listed separately from the outputs selected by the snapshot configuration.
 One raw BOLD file can yield several spaces, streams, and atlas products.
+These are **resolved-path availability counts, not cohort completion**. Acquisitions
+without resolvable derivatives remain visible in coverage and Needs attention.
 
 ```{r}
 widgets$outputs
@@ -77,12 +51,28 @@ widgets$outputs
 
 :::
 
-## Row {height=390}
+## Row {height=auto}
+
+::: {.card title="Acquisition coverage — raw files by selected stage and stream"}
+
+Each raw acquisition is assessed once per selected stage/stream, regardless of
+the number of derivative spaces or atlas products. Combined-echo derivatives
+can support more than one raw echo; this is not a prediction of product counts.
+Units without raw acquisitions remain explicitly unresolved. AROMA file coverage
+is not inferred from filenames; its recorded workflow remains separate.
+
+```{r}
+widgets$coverage
+```
+
+:::
+
+## Row {height=auto}
 
 ::: {.card title="Participant summary"}
 
-Click a participant to apply its shared table filter. Counts describe the whole
-snapshot; zero output records can mean upstream inputs have not arrived.
+Click a participant to open its scan-level QC and original reports. Counts follow
+the shared scope; zero output records can mean inputs have not arrived.
 
 ```{r}
 widgets$participants
@@ -90,13 +80,16 @@ widgets$participants
 
 :::
 
-## Row {height=410}
+## Row {height=auto}
 
 ::: {.card title="Needs attention"}
 
-Each row explains its flags. Expand it to read saved audit messages and follow
-original evidence. An empty table means there are no flagged derivative
-records; collection issues and untracked workflow units remain separate.
+Rows group contributing products by acquisition, processing context, and reason.
+Computational failures, missing evidence, and descriptive concerns are separate
+review categories, not scientific exclusion decisions. Expand for saved messages
+and original evidence. An empty table means there are no flagged derivative
+records or unresolved coverage/submission items in this scope. Collection issues
+remain separate; no flags never establishes a scientific QC pass.
 
 ```{r}
 widgets$attention
@@ -104,7 +97,7 @@ widgets$attention
 
 :::
 
-## Row {height=440}
+## Row {height=auto}
 
 ### Column {width=65%}
 
@@ -116,18 +109,19 @@ widgets$workflow_plot
 ### Column {width=35%}
 
 ```{r}
-#| title: About this snapshot
+#| title: About this snapshot — whole snapshot context
 tags$div(class = "qc-about",
   tags$p(class = "qc-eyebrow", "BRAINGNOMES / QC SNAPSHOT"),
   tags$h3(qc$metadata$project),
   tags$p(tags$strong("Collected: "), qc$metadata$created_at),
+  tags$p(paste("Collection issues (whole snapshot):", totals$collection_issues)),
   tags$p(tags$strong("Scope: "), if (identical(qc$metadata$scope, "run"))
     paste("Saved run", qc$metadata$run_id) else "Project-wide"),
   tags$p(qc$metadata$expectation_basis),
   tags$p("Current files are observed at collection time. A saved run scope does not reconstruct historical files."),
   tags$p(paste(totals$completed_units, "of", totals$workflow_units,
     "workflow units completed;", totals$job_records, "job records (including controllers and sentinels).")),
-  tags$p(if (qc$metadata$scheduler_refreshed) "Active jobs compared with the scheduler at collection time."
+  tags$p(if (isTRUE(qc$metadata$scheduler_refreshed)) "Active jobs compared with the scheduler at collection time."
     else "Database snapshot; the scheduler was not queried."),
   tags$p("Collect a new snapshot to refresh this dashboard."),
   tags$p(class = "qc-note", "Workflow completion, file availability, and computational QC checks answer different questions. None establishes that an image is scientifically acceptable."),
@@ -138,7 +132,7 @@ tags$div(class = "qc-about",
 )
 ```
 
-## Row {height=350}
+## Row {height=auto}
 
 ::: {.card title="Processing settings"}
 
@@ -151,7 +145,7 @@ widgets$settings
 
 :::
 
-## Row {height=410}
+## Row {height=auto}
 
 ::: {.card title="Workflow inventory"}
 
@@ -167,7 +161,13 @@ widgets$workflow
 
 # Derivatives
 
-## Row {height=620}
+## Row {height=auto}
+
+```{r}
+widgets$controls_derivatives
+```
+
+## Row {height=auto}
 
 ::: {.card title="Explore outputs and evidence"}
 
@@ -186,7 +186,7 @@ widgets$inventory
 
 :::
 
-## Row {height=350}
+## Row {height=auto}
 
 ::: {.card title="Raw BOLD acquisitions"}
 
@@ -202,33 +202,48 @@ widgets$acquisitions
 
 # QC metrics
 
-## Row {height=530}
-
-::: {.card title="QC measurements"}
-
-Mean FD combines all tasks in one view, with one point per confounds file;
-individual scans are not averaged together. Other metrics retain their
-stage/stream/task/atlas comparison groups in the plot menu. Hover for scan
-identities, values, units, and observed/missing denominators. Each evidence
-source appears once within its group. Values are descriptive; no dashboard
-cutoff is applied.
+## Row {height=auto}
 
 ```{r}
+widgets$controls_metrics
+```
+
+## Row {height=auto}
+
+::: {.card title="1. Cohort distribution"}
+
+Histogram and ECDF views scale to large cohorts without hundreds of participant
+labels. FD pools tasks and counts each original confounds source once **after**
+scope filtering. Other groups keep session/task/stream/space/atlas and units
+separate. No exclusion threshold is applied.
+
+```{r}
+tags$div(id = "qc-metric-controls", class = "qc-metric-controls", tabindex = "-1",
+  tags$div(tags$label(`for` = "qc-metric-group", "Metric / comparison group"),
+    tags$select(id = "qc-metric-group", `aria-label` = "Metric comparison group")),
+  tags$div(tags$label(`for` = "qc-metric-view", "View"),
+    tags$select(id = "qc-metric-view", `aria-label` = "Metric view",
+      tags$option(value = "histogram", "Histogram"),
+      tags$option(value = "ecdf", "ECDF"),
+      tags$option(value = "scans", disabled = TRUE, "Participant scans"))))
+tags$p(id = "qc-metric-counts", `aria-live` = "polite")
 widgets$metric_plot
+tags$p(class = "qc-note", "FD describes original fMRIPrep motion. Censor retention is mask-derived and does not show whether volumes were removed. Processing-stage/stream filters retain upstream FD for the selected acquisitions.")
+tags$div(id = "qc-participant-detail", class = "qc-detail",
+  tags$p("Select a participant in the review list to inspect its scans and evidence beside this chart."))
 ```
 
 :::
 
-## Row {height=400}
+## Row {height=auto}
 
-::: {.card title="Metric definitions and sources"}
+::: {.card title="2. Review sources — select a participant"}
 
-FD comes from the original fMRIPrep confounds. Censor retention describes the
-saved mask and does not establish whether volumes were removed. ROI retention
-uses the extraction rule saved in the diagnostics. Structured audit measurements include mask replay errors, smoothness, intensity
-errors, and spectral attenuation when recorded. These are computational
-measurements with their saved units and sampling counts.
-MRIQC metrics retain their upstream names and definitions in a separate group.
+Sort the value column to find extremes; these are review aids, not automatic
+failures. This table shows the selected metric group, one row per recorded
+source (including unavailable values), with units and scan identity first.
+A table search does not change the cohort distribution. Expand for definitions,
+observed/missing frame counts, and source details.
 
 ```{r}
 widgets$metrics
@@ -236,7 +251,7 @@ widgets$metrics
 
 :::
 
-## Row {height=320}
+## Row {height=auto}
 
 ::: {.card title="Postprocessing validation checks"}
 
@@ -247,12 +262,13 @@ Expand a check for its full message, warnings, timings, and scalar details.
 Complete structured details, including arrays, are retained in `checks.tsv`.
 
 ```{r}
+tags$p(widgets$validation_note)
 widgets$checks
 ```
 
 :::
 
-## Row {height=350}
+## Row {height=auto}
 
 ::: {.card title="Regional voxel coverage"}
 
@@ -261,6 +277,7 @@ ROIs with limited usable voxels. The saved reason explains whether a label
 fell outside the mask, contained unusable BOLD signal, or missed its threshold.
 
 ```{r}
+tags$p(widgets$region_note)
 widgets$regions
 ```
 
@@ -268,13 +285,22 @@ widgets$regions
 
 # Workflow & evidence
 
-## Row {.tabset height=520}
+## Row {height=auto}
+
+```{r}
+widgets$controls_workflow
+```
+
+## Row {.tabset height=auto}
 
 ::: {.card title="Job attempts"}
 
 Expand a job for stdout/stderr, its submission manifest, and runtime receipt.
 Historical attempts are retained. A newer attempt does not establish the origin
 of an existing derivative.
+Filename-shaped legacy stream labels are not guessed into a configured stream.
+Their original labels and attribution remain visible in the workflow inventory
+and the full tracking download, rather than crowding the shared Stream selector.
 
 ```{r}
 widgets$jobs
@@ -282,23 +308,33 @@ widgets$jobs
 
 :::
 
-::: {.card title="Active jobs"}
+::: {.card title="Active jobs — whole snapshot"}
+
+These are saved database observations, not a live scheduler query. A scheduler
+comparison, if requested, applies only at collection time. This HTML never polls
+the queue; consult the comparison tab and recollect before making recovery decisions.
 
 ```{r}
+if (!nrow(qc$active)) tags$p("No active job records in the saved database snapshot. This is not a live scheduler query.")
 widgets$active
 ```
 
 :::
 
-::: {.card title="Scheduler comparison"}
+::: {.card title="Scheduler comparison — whole snapshot"}
 
 ```{r}
+if (!isTRUE(qc$metadata$scheduler_refreshed)) {
+  tags$p("Not queried: the scheduler was not contacted when this snapshot was collected.")
+} else if (!nrow(qc$reconciliation)) {
+  tags$p("Scheduler comparison requested; no comparison rows were returned. This does not establish that all jobs agree.")
+}
 widgets$reconciliation
 ```
 
 :::
 
-::: {.card title="Output manifest checks"}
+::: {.card title="Output manifest checks — whole snapshot"}
 
 These checks compare exact paths, sizes, and modification times against saved
 job manifests. They do not verify file contents or scientific quality.
@@ -309,15 +345,17 @@ widgets$manifests
 
 Distinct paths and job/file associations are counted separately. The same file
 can be listed by a controller and an array job. All associations remain in the
-manifest download; exceptions are listed below.
+manifest download. A bounded exception preview is listed below to keep large
+historical projects responsive; its table export includes only the preview.
 
 ```{r}
+tags$p(widgets$exception_note)
 widgets$manifest_exceptions
 ```
 
 :::
 
-## Row {.tabset height=440}
+## Row {.tabset height=auto}
 
 ::: {.card title="Evidence library"}
 
@@ -330,12 +368,13 @@ widgets$evidence
 
 :::
 
-::: {.card title="Collection issues"}
+::: {.card title="Collection issues — whole snapshot"}
 
 Malformed diagnostics and unresolved associations appear here. Other available
 evidence remains accessible; a collection problem does not imply a QC pass.
 
 ```{r}
+if (!nrow(qc$issues)) tags$p("No collection issues were recorded. This is not a scientific QC pass.")
 widgets$issues
 ```
 
@@ -351,6 +390,7 @@ evidence require access to those source files.
 - [Raw acquisitions](acquisitions.tsv)
 - [Derivative inventory](inventory.tsv)
 - [Workflow inventory](workflow.tsv)
+- [Acquisition coverage](coverage.tsv) (newly collected snapshots)
 - [Metric values, definitions, and sources](metrics.tsv)
 - [Regional voxel coverage](regions.tsv)
 - [Validation checks](checks.tsv)
@@ -359,6 +399,11 @@ evidence require access to those source files.
 - [Output manifest checks](manifest_files.tsv)
 - [Collection issues](issues.tsv)
 - [Complete R object](inventory.rds) and [snapshot metadata](snapshot.json)
+
+The links above download the **complete, unfiltered snapshot**, regardless of
+shared controls or table searches. Each table also offers **Export matching
+rows (all pages)** for its current scope, search, and column filters; these
+filtered exports are generated offline and do not require neighboring TSVs.
 
 All downloads describe the same snapshot. Project-wide expectations use the
 current configuration; a saved run scope uses its recorded configuration,

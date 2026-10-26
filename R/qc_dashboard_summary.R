@@ -4,7 +4,7 @@
 #' @return Evidence rows with readable acquisition identities.
 #' @noRd
 qc_display_identity <- function(rows, inventory) {
-  fields <- intersect(c("sub_id", "ses_id", "task", "run", "stage", "stream",
+  fields <- intersect(c("sub_id", "ses_id", "task", "run", "acquisition", "reconstruction", "direction", "echo", "part", "stage", "stream",
     "space", "resolution", "input_stream", "atlas"), names(inventory))
   fields <- setdiff(fields, names(rows))
   identity <- inventory[match(rows$record_id, inventory$record_id), fields, drop = FALSE]
@@ -23,6 +23,8 @@ qc_dashboard_summary <- function(x) {
     inventory$validation_required <- rep(NA, nrow(inventory))
   }
   output <- inventory[inventory$record_role == "output", , drop = FALSE]
+  coverage <- qc_snapshot_coverage(x)
+  review <- qc_review_queue(inventory, coverage, x$metadata)
   participants <- sort(unique(na.omit(c(x$workflow$sub_id, inventory$sub_id,
     x$acquisitions$sub_id))))
   participant_rows <- lapply(participants, function(participant) {
@@ -35,12 +37,14 @@ qc_dashboard_summary <- function(x) {
       available_outputs = sum(rows$output_status == "available"), output_records = nrow(rows),
       passed_required_audits = sum(required & rows$validation_status == "passed"),
       required_audits = sum(required), attention_records = sum(evidence_rows$attention),
+      coverage_gaps = sum(coverage$sub_id == participant & coverage$attention, na.rm = TRUE),
+      review_items = sum(review$sub_id == participant, na.rm = TRUE),
       completed_units = sum(units$status == "COMPLETED"), workflow_units = nrow(units))
   })
   participant_table <- qc_bind_rows(participant_rows, data.frame(sub_id = character(),
     raw_bold_files = integer(), available_outputs = integer(), output_records = integer(),
     passed_required_audits = integer(), required_audits = integer(), attention_records = integer(),
-    completed_units = integer(), workflow_units = integer()))
+    coverage_gaps = integer(), review_items = integer(), completed_units = integer(), workflow_units = integer()))
   groups <- split(seq_len(nrow(inventory)), paste(inventory$record_role,
     inventory$stage, ifelse(is.na(inventory$stream), "", inventory$stream), sep = "\r"))
   stage_rows <- lapply(groups, function(indices) {
@@ -59,7 +63,8 @@ qc_dashboard_summary <- function(x) {
       upstream_inputs = sum(inventory$record_role == "upstream_input"),
       required_audits = sum(output$validation_required %in% TRUE),
       passed_required_audits = sum(output$validation_required %in% TRUE & output$validation_status == "passed"),
-      attention_records = sum(inventory$attention), collection_issues = nrow(x$issues),
+      attention_records = sum(inventory$attention), review_items = nrow(review),
+      collection_issues = nrow(x$issues),
       completed_units = sum(x$workflow$status == "COMPLETED"), workflow_units = nrow(x$workflow),
       job_records = nrow(x$jobs)))
 }
@@ -82,18 +87,24 @@ qc_manifest_summary <- function(files) {
   }), template)
 }
 
-#' Build shared exact-match table controls from the snapshot identities
+#' Build synchronized exact-match scope controls for a dashboard page
 #' @param x Collected QC snapshot.
-#' @return Escaped HTML controls; overview totals and plot selectors stay fixed.
+#' @param page Unique page prefix for accessible control IDs.
+#' @return Escaped HTML controls shared by summaries, distributions, and tables.
 #' @noRd
-qc_dashboard_controls <- function(x) {
+qc_dashboard_controls <- function(x, page = "overview") {
   fields <- c(sub_id = "Participant", ses_id = "Session", task = "Task",
     stage = "Stage", stream = "Stream", space = "Space")
   htmltools::tags$div(class = "qc-controls", lapply(names(fields), function(field) {
     observed <- unlist(lapply(list(x$inventory, x$acquisitions,
       x$workflow), function(rows) rows[[field]]))
+    if (field == "stream") {
+      configured <- unlist(x$metadata$configured_streams, use.names = FALSE)
+      observed <- observed[is.na(observed) | observed %in% configured |
+        !grepl("^sub-|_desc-|_bold(\\.|$)", observed)]
+    }
     values <- sort(unique(na.omit(observed)))
-    id <- paste0("qc-filter-", field)
+    id <- paste0("qc-filter-", page, "-", field)
     htmltools::tags$div(class = "qc-control", htmltools::tags$label(`for` = id, fields[[field]]),
       htmltools::tags$select(id = id, `data-qc-filter` = field,
         htmltools::tags$option(value = "", "All"),
@@ -103,8 +114,8 @@ qc_dashboard_controls <- function(x) {
           htmltools::tags$option(value = value, value)
         })))
   }), htmltools::tags$button(type = "button", `data-qc-reset` = "true", "Reset shared filters"),
-    htmltools::tags$p(class = "qc-filter-note", `aria-live` = "polite", id = "qc-filter-note",
-      "All records shown. These controls filter tables with matching identity columns; snapshot totals and plots retain their own scope."))
+    htmltools::tags$p(class = "qc-filter-note", `aria-live` = "polite", `data-qc-scope-note` = "true",
+      "All records shown. Scope applies where identity fields are recorded: raw acquisitions use participant/session/task; workflow units lack scan task/space. Table searches refine only that table."))
 }
 
 #' Present full audit messages and scalar details in a readable panel

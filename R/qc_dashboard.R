@@ -37,7 +37,7 @@ write_qc_inventory <- function(x, output_dir) {
 #' @param output_dir A new or empty directory for the HTML and its downloadable
 #'   RDS/TSV snapshot. When `x` is an exported directory, defaults to that
 #'   directory. Existing successful HTML reports cannot be replaced.
-#' @param title Optional dashboard title. Defaults to the project name.
+#' @param title Optional dashboard title. Defaults to project and project/run scope.
 #' @param quarto Path to the Quarto executable; defaults to the executable on
 #'   `PATH`. Quarto 1.4 or newer is required.
 #' @param quiet Suppress Quarto progress output.
@@ -47,6 +47,24 @@ write_qc_inventory <- function(x, output_dir) {
 #'   export do not require these packages or Quarto. JavaScript and styles are
 #'   embedded in the HTML; search, filtering, row details, and plots work without
 #'   a server or network connection. Open the saved HTML in a web browser.
+#'   Shared identity controls synchronize scoped counts, source distributions,
+#'   and tables where the corresponding identity fields are recorded. Raw
+#'   acquisitions do not have processing-stage identities, and workflow units
+#'   do not have scan-task identities; each table labels its filter grain.
+#'   Whole-snapshot context is explicitly labeled. Histogram and ECDF views
+#'   support large cohorts; select a participant in the source review list for
+#'   scan-level plots, computational checks, and original report links.
+#'   Row details are generated on demand from indexed embedded evidence, without
+#'   rereading project files. Table exports include all matching rows across
+#'   pages; neighboring TSV links always export the full original snapshot.
+#'   Large manifest exception tables display an explicitly labeled preview of at
+#'   most 200 rows; that table's matching-row export contains only the preview.
+#'   Full association history is preserved in `manifest_files.tsv` and the RDS.
+#'   Acquisition coverage and submission review items expose unresolved work
+#'   even without derivative paths. File counters describe resolved paths, not
+#'   cohort completion. Saved-run scope and acknowledgements appear prominently.
+#'   Downstream stage/stream filters retain upstream FD through selected inputs;
+#'   space filters still require a matching spatial output association.
 #'   TSV/RDS/JSON download links require the exported files beside the HTML;
 #'   those files are not needed to view tables and plots.
 #'   Linked evidence remains in its source
@@ -121,8 +139,12 @@ render_qc_dashboard <- function(x, output_dir = NULL, title = NULL,
     render_failure("Quarto >= 1.4 is required for dashboards.")
   }
   result$quarto_version <- version[1L]
-  if (is.null(title)) title <- paste(x$metadata$project, "| Study QC")
+  if (is.null(title)) title <- paste(x$metadata$project, "|", if (identical(x$metadata$scope, "run"))
+    paste("Run", x$metadata$run_id) else "Project", "| Study QC")
   widgets <- withCallingHandlers(qc_dashboard_widgets(x, output_dir), error = error_handler)
+  result$embedded_detail_bytes <- nchar(as.character(widgets$payload), type = "bytes")
+  cat("Embedded detail index: ", format(result$embedded_detail_bytes, big.mark = ","),
+    " bytes. Complete historical tables remain in TSV/RDS exports.\n", sep = "", file = log, append = TRUE)
   # Serialize already-built widgets: Quarto can render the snapshot without
   # reconnecting to SQLite, rescanning data, or loading a different package build.
   saveRDS(widgets, file.path(output_dir, "dashboard-widgets.rds"))
@@ -186,13 +208,32 @@ render_qc_dashboard <- function(x, output_dir = NULL, title = NULL,
 #' @keywords internal
 #' @noRd
 qc_evidence_href <- function(path, output_dir) {
-  target <- strsplit(normalizePath(path, winslash = "/", mustWork = FALSE), "/", fixed = TRUE)[[1L]]
-  base <- strsplit(normalizePath(output_dir, winslash = "/", mustWork = FALSE), "/", fixed = TRUE)[[1L]]
+  target <- qc_link_parts(path)
+  base <- qc_link_parts(output_dir)
   common <- 0L
   while (common < min(length(target), length(base)) &&
       identical(target[common + 1L], base[common + 1L])) common <- common + 1L
   parts <- c(rep("..", length(base) - common), target[seq_along(target) > common])
   paste(vapply(parts, utils::URLencode, character(1), reserved = TRUE), collapse = "/")
+}
+
+#' Normalize URL path segments lexically without restatting archived evidence
+#' @param path Saved absolute source path or a path relative to the R session.
+#' @return Absolute path segments with dot components resolved, without I/O.
+#' @noRd
+qc_link_parts <- function(path) {
+  path <- path.expand(path)
+  if (.Platform$OS.type == "windows") path <- gsub("\\", "/", path, fixed = TRUE)
+  if (!grepl("^(/|[A-Za-z]:/)", path)) path <- file.path(getwd(), path)
+  segments <- strsplit(path, "/", fixed = TRUE)[[1L]]
+  result <- character()
+  for (segment in segments) {
+    if (segment == ".") next
+    if (segment == "..") {
+      if (length(result) > 1L) result <- head(result, -1L)
+    } else result <- c(result, segment)
+  }
+  result
 }
 
 #' Render safe evidence links and visibly distinguish missing targets
@@ -217,10 +258,12 @@ qc_evidence_links <- function(evidence, output_dir) {
 #' @param details Optional expanded row renderer.
 #' @param page_size Initial page size.
 #' @param id Optional stable widget ID for shared dashboard filters.
+#' @param empty_message Explanation displayed when there are no rows.
 #' @return Reactable widget, optionally registered with dashboard controls.
 #' @keywords internal
 #' @noRd
-qc_reactable <- function(data, columns = NULL, details = NULL, page_size = 12L, id = NULL) {
+qc_reactable <- function(data, columns = NULL, details = NULL, page_size = 12L, id = NULL,
+                         empty_message = "No records match this view") {
   rownames(data) <- NULL
   labels <- c(sub_id = "Participant", ses_id = "Session", run_id = "Workflow run",
     run = "Scan run", sequence_id = "Pipeline run", record_role = "Role",
@@ -230,17 +273,18 @@ qc_reactable <- function(data, columns = NULL, details = NULL, page_size = 12L, 
   defaults <- stats::setNames(lapply(names(data), function(name) {
     label <- if (name %in% names(labels)) labels[[name]] else tools::toTitleCase(gsub("_", " ", name))
     definition <- reactable::colDef(name = label, na = "Unavailable", minWidth = 110,
-      cell = if (is.character(data[[name]])) qc_text_cell else NULL,
+      cell = if (is.character(data[[name]])) reactable::JS("function(cell) {
+        return React.createElement('span', {title: cell.value}, cell.value == null ? 'Unavailable' : cell.value);
+      }") else NULL,
       style = list(whiteSpace = "nowrap", overflow = "hidden", textOverflow = "ellipsis"),
       headerStyle = list(whiteSpace = "nowrap"))
     if (name == "ses_id") {
       definition$na <- "No session label"
       # Render a session value as text, explaining absent BIDS session labels.
-      definition$cell <- function(value) {
-        if (is.na(qc_scalar(value))) "No session label" else qc_text_cell(value)
-      }
+      definition$cell <- reactable::JS("function(cell) { return cell.value == null ? 'No session label' : cell.value; }")
     }
-    if (name %in% c("message", "definition", "attention_reasons", "warnings", "value")) {
+    if (name %in% c("message", "definition", "attention_reasons", "warnings", "reason") ||
+        (name == "value" && is.character(data[[name]]))) {
       definition$style <- list(whiteSpace = "normal", overflowWrap = "anywhere")
       definition$minWidth <- 240
     }
@@ -284,11 +328,11 @@ qc_reactable <- function(data, columns = NULL, details = NULL, page_size = 12L, 
       headerStyle = list(background = "#f3f7f9", fontWeight = 600),
       searchInputStyle = list(borderRadius = "8px")),
     language = reactable::reactableLang(searchPlaceholder = "Search this table...",
-      noData = "No records match this view"))
+      noData = empty_message))
   if (!is.null(id)) widget <- htmlwidgets::onRender(widget,
-    "function(el, x, data) { if (window.bgQC) window.bgQC.register(el.id, data.fields); }",
+    "function(el, x, data) { if (window.bgQC) window.bgQC.register(el.id, data.fields, data.columns); }",
     # Lists retain array shape when htmlwidgets unboxes length-one vectors.
-    data = list(fields = unname(as.list(filter_fields))))
+    data = list(fields = unname(as.list(filter_fields)), columns = unname(as.list(names(data)))))
   widget
 }
 
@@ -316,7 +360,7 @@ qc_status_badge <- function(value) {
 #' @keywords internal
 #' @noRd
 qc_workflow_plot <- function(workflow) {
-  if (!nrow(workflow)) return(htmltools::tags$p("No configured or tracked workflow units yet."))
+  if (!nrow(workflow)) return(plotly::plot_ly(x = numeric(), y = character(), type = "bar"))
   labels <- paste(workflow$stage, ifelse(is.na(workflow$stream), "", workflow$stream))
   counts <- as.data.frame(table(stage = labels, status = workflow$status), stringsAsFactors = FALSE)
   counts <- counts[counts$Freq > 0L, , drop = FALSE]
@@ -331,163 +375,153 @@ qc_workflow_plot <- function(workflow) {
     legend = list(orientation = "h", y = -0.2))
 }
 
-#' Plot comparable metric groups with an explicit selector and denominators
+#' Plot a source-deduplicated cohort distribution with browser drill-down
+#' @param metrics Saved metric rows, including unavailable observations.
+#' @param inventory Derivative identities for metric comparison groups.
+#' @return Plotly histogram with an offline browser scope hook.
 #' @keywords internal
 #' @noRd
 qc_metrics_plot <- function(metrics, inventory) {
-  if (!nrow(metrics)) return(htmltools::tags$p("No numeric QC evidence available. Missing diagnostics are listed in the inventory."))
-  joined <- merge(metrics, inventory[c("record_id", "sub_id", "ses_id", "run", "stage",
-    "stream", "input_stream", "atlas", "task", "space", "resolution")],
-    by = "record_id", all.x = TRUE, sort = FALSE)
-  joined <- joined[is.finite(joined$value), , drop = FALSE]
-  if (!nrow(joined)) return(htmltools::tags$p("Metric files were found, but all values are unavailable."))
-  group_columns <- c("metric", "stage", "stream", "input_stream", "task", "space", "resolution", "atlas")
-  group_fields <- joined[group_columns]
-  # Archived upstream inputs can leave observed ROI products without a known
-  # atlas path. Keep their diagnostic directories separate instead of pooling
-  # every unknown atlas into one distribution.
-  unknown_atlas <- joined$stage == "extract_rois" & is.na(joined$atlas)
-  group_fields$atlas[unknown_atlas] <- dirname(joined$source_file[unknown_atlas])
-  # Mean FD uses the same definition across tasks and comes from original
-  # confounds reused across output spaces. Keep each scan's value/identity.
-  mean_fd <- joined$metric == "mean_fd"
-  group_fields[mean_fd, setdiff(group_columns, "metric")] <- ""
-  group_fields[] <- lapply(group_fields, function(x) ifelse(is.na(x), "", x))
-  # Shared confounds support multiple derivative products. Show each source
-  # once in the pooled FD view; other metrics keep their comparison groups.
-  keep <- !duplicated(cbind(source_file = joined$source_file, group_fields))
-  joined <- joined[keep, , drop = FALSE]
-  group_fields <- group_fields[keep, , drop = FALSE]
-  groups <- do.call(paste, c(group_fields, sep = " / "))
-  fd_groups <- unique(groups[joined$metric == "mean_fd"])
-  labels <- c(fd_groups, setdiff(unique(groups), fd_groups))
-  # Keep full paths in grouping keys, but shorten the visible selector labels.
-  # Distinct full atlas identities still select distinct traces.
-  display_labels <- vapply(labels, function(label) {
-    if (label %in% fd_groups) return("Mean FD (all tasks)")
-    parts <- strsplit(label, " / ", fixed = TRUE)[[1L]]
-    paste(basename(parts[nzchar(parts)]), collapse = " / ")
-  }, character(1))
-  display_labels <- make.unique(display_labels)
-  plot <- plotly::plot_ly()
-  x_categories <- vector("list", length(labels))
-  for (i in seq_along(labels)) {
-    df <- joined[groups == labels[i], , drop = FALSE]
-    hover <- paste0("sub-", df$sub_id, " | task ", df$task,
-      " | session ", ifelse(is.na(df$ses_id), "none", df$ses_id), " | scan run ", df$run,
-      "<br>", df$value, " ", df$unit, "<br>Observed: ", df$n_observations,
-      "; missing: ", df$n_missing)
-    scan_labels <- paste0("sub-", df$sub_id,
-      ifelse(is.na(df$ses_id), "", paste0(" / ses-", df$ses_id)),
-      ifelse(df$metric == "mean_fd" & !is.na(df$task), paste0(" / task-", df$task), ""),
-      ifelse(is.na(df$run), "", paste0(" / run-", df$run)))
-    x_categories[[i]] <- unname(as.list(unique(scan_labels)))
-    plot <- plotly::add_trace(plot, x = scan_labels, y = df$value,
-      type = "scatter", mode = "markers", name = display_labels[i], text = hover,
-      hoverinfo = "text", visible = i == 1L,
-      marker = list(color = "#168b80", size = 10, opacity = 0.85))
-  }
-  buttons <- lapply(seq_along(labels), function(i) list(method = "update",
-    args = list(list(visible = seq_along(labels) == i),
-      list(yaxis = list(title = joined$unit[groups == labels[i]][1L], autorange = TRUE),
-        xaxis = list(categoryorder = "array", categoryarray = x_categories[[i]], autorange = TRUE))),
-    label = display_labels[i]))
-  plotly::layout(plot, showlegend = FALSE,
-    xaxis = list(title = "Scan (participant / session / task / run)", type = "category", automargin = TRUE,
-      categoryorder = "array", categoryarray = x_categories[[1L]], autorange = TRUE),
-    yaxis = list(title = joined$unit[groups == labels[1L]][1L], autorange = TRUE),
-    updatemenus = list(list(buttons = buttons, x = 0, y = 1.22, xanchor = "left")),
-    margin = list(t = 85, b = 55, l = 65, r = 15),
+  rows <- qc_metric_sources(qc_metric_observations(metrics, inventory))
+  first <- rows[rows$group_id %in% head(rows$group_id, 1L) & is.finite(rows$value), , drop = FALSE]
+  plot <- plotly::plot_ly(x = first$value, type = "histogram",
+    marker = list(color = "#168b80"), name = "Observed sources")
+  plot <- plotly::layout(plot, showlegend = FALSE,
+    xaxis = list(title = if (nrow(first)) first$unit[1L] else "Metric value"),
+    yaxis = list(title = "Sources"), margin = list(t = 15, b = 55, l = 60, r = 15),
     paper_bgcolor = "transparent", plot_bgcolor = "transparent")
+  htmlwidgets::onRender(plot,
+    "function(el) { if (window.bgQC) window.bgQC.plot(el, 'metrics'); }")
+}
+
+#' Request browser-only details when a row is expanded
+#' @param kind Detail lookup kind: record, attention, check, or job.
+#' @return JavaScript callback, not an eagerly rendered R callback.
+#' @noRd
+qc_lazy_details <- function(kind) {
+  reactable::JS(paste0("function(row) {
+    return React.createElement('div', {className: 'qc-detail',
+      dangerouslySetInnerHTML: {__html: window.bgQC.detail(row.values, '", kind, "')}});
+  }"))
 }
 
 #' Build all dashboard components from one immutable inventory snapshot
+#' @param x Collected QC inventory.
+#' @param output_dir Report directory for portable evidence links.
+#' @return Display widgets and one canonical lazy-detail payload.
 #' @keywords internal
 #' @noRd
 qc_dashboard_widgets <- function(x, output_dir) {
   inventory <- x$inventory
   if (!"record_role" %in% names(inventory)) inventory$record_role <- rep("output", nrow(inventory))
   if (!"attention_reasons" %in% names(inventory)) inventory$attention_reasons <- rep("", nrow(inventory))
+  if (!"validation_required" %in% names(inventory)) inventory$validation_required <- rep(NA, nrow(inventory))
+  inventory$product <- basename(inventory$derivative_file)
+  metrics <- qc_metric_observations(x$metrics, inventory)
+  sources <- qc_metric_sources(metrics)
+  review <- sources[sources$group_id %in% head(sources$group_id, 1L), , drop = FALSE]
+  metric_fields <- c("sub_id", "value", "unit", "task", "run", "metric", "ses_id", "stage",
+    "stream", "space", "atlas", "n_observations", "n_missing", "definition", "source_file", "record_id")
+  metric_fields <- intersect(metric_fields, names(review))
   summary <- qc_dashboard_summary(x)
-  status_column <- reactable::colDef(cell = qc_status_badge, minWidth = 135)
-  visible <- c("sub_id", "ses_id", "task", "run", "stage", "stream", "space", "resolution",
-    "record_role", "output_status", "validation_status", "diagnostics_status", "attention_reasons")
-  columns <- list(record_role = reactable::colDef(cell = function(value) {
-      if (value == "upstream_input") "Upstream input" else "Selected output"
-    }), output_status = status_column, validation_status = status_column,
-    diagnostics_status = status_column)
-  # Expand a display row using its stable ID; complete evidence remains exported.
-  # Input is the table row index, output is a readable linked evidence panel.
-  details_for <- function(rows) function(index) {
-    row <- rows[index, , drop = FALSE]
-    evidence <- x$evidence[!is.na(x$evidence$record_id) & x$evidence$record_id == row$record_id, ]
-    metrics <- x$metrics[x$metrics$record_id == row$record_id, , drop = FALSE]
-    checks <- x$checks[x$checks$record_id == row$record_id, , drop = FALSE]
-    manifests <- x$manifest_files[x$manifest_files$path == row$derivative_file, , drop = FALSE]
-    htmltools::tags$div(class = "qc-detail",
-      htmltools::tags$h4(basename(row$derivative_file)),
-      htmltools::tags$p("Source: ", row$source_file),
-      htmltools::tags$p("Atlas: ", row$atlas, " | Modified: ", row$modified_at),
-      htmltools::tags$p("Input stream: ", row$input_stream,
-        " | Destination association: ", row$association_status),
-      htmltools::tags$p("Workflow context: ", row$workflow_status, " | Scope: ", row$workflow_scope,
-        " | Pipeline run: ", row$workflow_run_id,
-        ". This context does not identify the attempt that produced the current file."),
-      qc_evidence_links(evidence[!duplicated(evidence[c("kind", "path")]), ], output_dir),
-      if (nrow(metrics)) qc_reactable(metrics[c("metric", "value", "unit", "definition", "n_observations", "n_missing")], page_size = 5L),
-      if (nrow(checks)) qc_check_panels(checks),
-      if (nrow(manifests)) qc_reactable(manifests[c("job_id", "run_id", "attempt", "is_current_attempt", "status")], page_size = 5L))
-  }
-  attention <- inventory[inventory$attention, , drop = FALSE]
+  status_column <- reactable::colDef(cell = reactable::JS("function(cell) {
+    var value = cell.value == null ? 'Unavailable' : cell.value;
+    var tone = /^(FAILED|BLOCKED|CANCELLED|failed|error|invalid|missing|ambiguous)$/.test(value) ? 'red' :
+      /^(COMPLETED|available|passed)$/.test(value) ? 'teal' : 'neutral';
+    return React.createElement('span', {className: 'qc-badge qc-' + tone}, value.replace(/_/g, ' '));
+  }"), minWidth = 135)
+  hidden_id <- reactable::colDef(show = FALSE)
+  participant_cell <- reactable::colDef(cell = reactable::JS("function(cell) {
+    if (cell.value == null) return 'Run-wide';
+    return React.createElement('button', {className: 'qc-participant', type: 'button',
+      'data-qc-participant': cell.value}, 'sub-' + cell.value);
+  }"))
+  columns <- list(record_id = hidden_id, output_status = status_column,
+    validation_status = status_column, diagnostics_status = status_column,
+    product = reactable::colDef(minWidth = 240))
+  visible <- c("sub_id", "ses_id", "task", "run", "product", "stage", "stream", "space",
+    "record_role", "output_status", "validation_status", "diagnostics_status", "attention_reasons", "record_id")
+  coverage <- qc_snapshot_coverage(x)
+  coverage_first <- c("sub_id", "stage", "stream", "coverage_status", "reason",
+    "task", "run", "available_outputs", "resolved_outputs")
+  coverage <- coverage[c(coverage_first, setdiff(names(coverage), coverage_first))]
+  attention <- qc_review_queue(inventory, coverage, x$metadata)
   job_fields <- intersect(c("job_id", "sequence_id", "sub_id", "ses_id", "stage", "stream",
     "job_role", "attempt", "lifecycle_status", "is_current_attempt", "failure_category", "exit_code"), names(x$jobs))
-  # Resolve links for one job row. Missing targets are displayed as plain text.
-  # Input is the job row index; output is an escaped evidence-link list.
-  job_details <- function(index) {
-    job <- x$jobs[index, , drop = FALSE]
-    fields <- c("stdout_log", "stderr_log", "job_manifest_path", "runtime_receipt_path")
-    paths <- vapply(fields, function(field) qc_scalar(job[[field]]), character(1))
-    paths <- paths[!is.na(paths) & nzchar(paths)]
-    if (!is.na(job$sequence_id)) paths <- c(paths, run_provenance = file.path(
-      x$metadata$log_directory, "runs", job$sequence_id, "provenance.json"))
-    qc_evidence_links(data.frame(kind = names(paths), path = unname(paths), exists = file.exists(paths)), output_dir)
-  }
   evidence <- qc_display_identity(x$evidence, inventory)
-  # Repeated associations within an acquisition identity are not separate files.
   evidence <- evidence[!duplicated(evidence[setdiff(names(evidence), c("evidence_id", "record_id"))]), ]
   evidence <- evidence[setdiff(names(evidence), c("evidence_id", "record_id"))]
-  evidence_cols <- list(path = reactable::colDef(minWidth = 400,
-    cell = function(value, index) {
-      if (isTRUE(evidence$exists[index])) htmltools::tags$a(
-        href = qc_evidence_href(value, output_dir), target = "_blank", rel = "noopener", value)
-      else value
-    }))
+  paths <- unique(na.omit(evidence$path))
+  links <- stats::setNames(vapply(paths, qc_evidence_href, character(1), output_dir = output_dir), paths)
+  evidence$href <- unname(links[evidence$path])
+  evidence_cols <- list(href = hidden_id, path = reactable::colDef(minWidth = 400,
+    cell = reactable::JS("function(cell) {
+      var row = cell.row;
+      return row.exists ? React.createElement('a', {href: row.href, target: '_blank', rel: 'noopener'}, cell.value) : cell.value;
+    }")))
   checks <- qc_display_identity(x$checks, inventory)
-  check_fields <- setdiff(names(checks), c("record_id", "details_json", "source_file", "atlas", "input_stream"))
+  regions <- qc_display_identity(x$regions, inventory)
+  region_first <- intersect(c("roi", "proportion_usable", "retained", "exclusion_reason",
+    "sub_id", "ses_id", "task", "run", "stream", "atlas"), names(regions))
+  regions <- regions[c(region_first, setdiff(names(regions), region_first))]
+  check_fields <- intersect(c("step", "status", "message", "sub_id", "ses_id", "task", "run",
+    "stage", "stream", "warnings", "audited_at", "elapsed_seconds", "record_id"), names(checks))
   settings <- x$metadata$settings
   if (!is.data.frame(settings)) settings <- data.frame(stage = character(), stream = character(),
     setting = character(), value = character())
-  list(summary = summary, controls = qc_dashboard_controls(x),
-    participants = qc_reactable(summary$participants, list(sub_id = reactable::colDef(
-      cell = function(value) htmltools::tags$button(type = "button", class = "qc-participant",
-        `data-qc-participant` = value, paste0("sub-", value)))), id = "qc-participants"),
-    outputs = qc_reactable(summary$outputs, columns["record_role"], id = "qc-outputs"),
-    attention = qc_reactable(attention[visible], columns, details_for(attention), id = "qc-attention"),
-    inventory = qc_reactable(inventory[visible], columns, details_for(inventory), id = "qc-inventory"),
-    acquisitions = qc_reactable(x$acquisitions, id = "qc-acquisitions"),
-    workflow = qc_reactable(x$workflow, list(status = status_column), id = "qc-workflow"),
-    workflow_plot = qc_workflow_plot(x$workflow),
-    metrics = qc_reactable(qc_display_identity(x$metrics, inventory), id = "qc-metrics"),
+  controls <- lapply(c("overview", "derivatives", "metrics", "workflow"), function(page) qc_dashboard_controls(x, page))
+  validation_settings <- settings$value[settings$setting == "Validation enabled"]
+  validation_note <- if (length(validation_settings) && all(validation_settings == "FALSE")) {
+    "Validation not enabled in selected settings; any historical checks remain visible."
+  } else if (is.null(x$metadata$selected_steps)) {
+    "Stage selection was not recorded in this legacy snapshot; absent checks are not a pass."
+  } else if (!"postprocess" %in% x$metadata$selected_steps) {
+    "Postprocessing validation not selected; existing saved evidence remains visible."
+  } else "No saved validation checks were collected. Absence is not a pass."
+  region_note <- if (is.null(x$metadata$selected_steps)) {
+    "Stage selection was not recorded in this legacy snapshot; consult saved diagnostics."
+  } else if (!"extract_rois" %in% x$metadata$selected_steps) {
+    "ROI extraction not selected; any existing saved evidence remains visible."
+  } else "No saved regional diagnostics were collected. Check save_diagnostics and evidence availability."
+  exceptions <- x$manifest_files[x$manifest_files$status != "matches_size_and_mtime", , drop = FALSE]
+  exception_note <- paste("Preview:", min(200L, nrow(exceptions)), "of", nrow(exceptions),
+    "exception associations. Shared filters do not apply. Table export contains only this preview; download manifest_files.tsv for every association.")
+  list(summary = summary, summary_cards = qc_summary_cards(summary$totals),
+    scope_banner = qc_scope_banner(x$metadata), validation_note = validation_note, region_note = region_note,
+    exception_note = exception_note,
+    payload = qc_dashboard_payload(x, inventory, metrics, output_dir),
+    controls = controls[[1L]], controls_derivatives = controls[[2L]],
+    controls_metrics = controls[[3L]], controls_workflow = controls[[4L]],
+    participants = qc_reactable(summary$participants, list(sub_id = participant_cell), id = "bg-qc-participants"),
+    outputs = qc_reactable(summary$outputs, id = "bg-qc-outputs"),
+    coverage = qc_reactable(coverage, list(record_ids = hidden_id, sub_id = participant_cell),
+      id = "bg-qc-coverage", empty_message = "No selected acquisition coverage expectations; consult workflow scope."),
+    attention = qc_reactable(attention, list(record_ids = hidden_id, sub_id = participant_cell,
+      category = reactable::colDef(minWidth = 180)),
+      qc_lazy_details("attention"), id = "bg-qc-attention"),
+    inventory = qc_reactable(inventory[visible], columns, qc_lazy_details("record"), id = "bg-qc-inventory"),
+    acquisitions = qc_reactable(x$acquisitions, id = "bg-qc-acquisitions"),
+    workflow = qc_reactable(x$workflow, list(status = status_column), id = "bg-qc-workflow"),
+    workflow_plot = htmlwidgets::onRender(qc_workflow_plot(x$workflow),
+      "function(el) { if (window.bgQC) window.bgQC.plot(el, 'workflow'); }"),
+    metrics = qc_reactable(review[metric_fields], list(record_id = hidden_id,
+      sub_id = reactable::colDef(cell = reactable::JS("function(cell) {
+        return React.createElement('button', {className: 'qc-participant', type: 'button',
+          'data-qc-record': cell.row.record_id}, 'sub-' + cell.value);
+      }"))), qc_lazy_details("record"), id = "bg-qc-metric-review"),
     metric_plot = qc_metrics_plot(x$metrics, inventory),
-    evidence = qc_reactable(evidence, evidence_cols, id = "qc-evidence"),
-    checks = qc_reactable(checks[check_fields], list(status = status_column),
-      details = function(index) qc_check_panels(checks[index, , drop = FALSE]), id = "qc-checks"),
-    regions = qc_reactable(qc_display_identity(x$regions, inventory), id = "qc-regions"),
-    jobs = qc_reactable(x$jobs[job_fields], details = job_details, id = "qc-jobs"),
-    manifests = qc_reactable(qc_manifest_summary(x$manifest_files), id = "qc-manifests"),
-    manifest_exceptions = qc_reactable(x$manifest_files[x$manifest_files$status != "matches_size_and_mtime", ],
-      id = "qc-manifest-exceptions"),
-    settings = qc_reactable(settings, id = "qc-settings"),
-    issues = qc_reactable(x$issues), active = qc_reactable(x$active),
-    reconciliation = qc_reactable(x$reconciliation))
+    evidence = qc_reactable(evidence, evidence_cols, id = "bg-qc-evidence"),
+    checks = qc_reactable(checks[check_fields], list(status = status_column, record_id = hidden_id),
+      details = qc_lazy_details("check"), id = "bg-qc-checks",
+      empty_message = if (!nrow(checks)) validation_note else "No saved checks match these filters"),
+    regions = qc_reactable(regions, list(record_id = hidden_id), id = "bg-qc-regions",
+      empty_message = if (!nrow(regions)) region_note else "No regional diagnostics match these filters"),
+    jobs = qc_reactable(x$jobs[job_fields], details = qc_lazy_details("job"), id = "bg-qc-jobs"),
+    manifests = qc_reactable(qc_manifest_summary(x$manifest_files), id = "bg-qc-manifests"),
+    manifest_exceptions = qc_reactable(utils::head(exceptions, 200L),
+      id = "bg-qc-manifest-exceptions"),
+    settings = qc_reactable(settings, id = "bg-qc-settings"),
+    issues = qc_reactable(x$issues, id = "bg-qc-issues"),
+    active = qc_reactable(x$active, id = "bg-qc-active"),
+    reconciliation = qc_reactable(x$reconciliation, id = "bg-qc-reconciliation"))
 }
