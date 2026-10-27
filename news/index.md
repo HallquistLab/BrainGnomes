@@ -1,5 +1,41 @@
 # Changelog
 
+## BrainGnomes (development version)
+
+- Make QC coverage and execution uncertainty visible instead of treating
+  an empty output denominator as completion. Add
+  raw-acquisition/stage/stream coverage, unresolved-work and submission
+  review items, prominent saved-run scope/acknowledgements, and exact
+  retry scope for AROMA as well as native stages. Preserve uncertain
+  legacy stream labels for diagnosis without guessing their attribution
+  or filling the main selector with acquisition filenames.
+
+- Retain upstream FD when filtering downstream outputs, keep participant
+  evidence beside the chart, restore cohort navigation, and put
+  participant identity first in source review. Explain disabled
+  validation/ROI stages and mask-derived retention, including scrubbing
+  application/interpolation settings. Clarify local evidence access and
+  report privacy. Read only the FD column and reuse source summaries
+  within collection; show phase/count progress (`quiet = TRUE`
+  suppresses it). Cache manifest file metadata and bound the embedded
+  exception preview while preserving complete TSV/RDS history and
+  explicit preview labels.
+
+- Redesign offline study QC around cohort distributions, a metric-first
+  source review list, and participant/acquisition drill-down with
+  original report links. Add histogram/ECDF views and
+  observed/unavailable source denominators; retain compatible comparison
+  groups and deduplicate shared FD sources after filtering. Synchronize
+  shared scope across pages, applicable counters, plots, and tables;
+  explicitly label table grain and whole-snapshot context. Group
+  attention by acquisition/context/reason, distinguish
+  scheduler-not-queried empty states, and export all matching table rows
+  separately from full-snapshot downloads. Build indexed evidence
+  details only on demand, avoid per-row nested widgets, improve mobile
+  controls, and eliminate dashboard/table ID collisions. Keep unused
+  serialized job manifests and unrelated file associations out of
+  embedded detail indexes; retain complete tracking/manifest downloads.
+
 ## BrainGnomes 1.01 (2026-10-23)
 
 ### Job submission, tracking, and recovery

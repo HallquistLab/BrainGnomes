@@ -73,9 +73,9 @@
                         <h4 data-toc-skip class="author">BrainGnomes
 developers</h4>
             
-            <h4 data-toc-skip class="date">23 Oct 2026</h4>
+            <h4 data-toc-skip class="date">26 Oct 2026</h4>
       
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.01/vignettes/study_qc.Rmd" class="external-link"><code>vignettes/study_qc.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/study_qc.Rmd" class="external-link"><code>vignettes/study_qc.Rmd</code></a></small>
       <div class="d-none name"><code>study_qc.Rmd</code></div>
     </div>
 
@@ -101,17 +101,23 @@ workflow attempts.</p>
 <span>  subjects <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>sub_id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"001"</span>, <span class="st">"002"</span><span class="op">)</span>, ses_id <span class="op">=</span> <span class="st">"baseline"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Optional: use a completed run's saved settings and realized scope.</span></span>
+<span><span class="co"># Optional: use a saved request's settings and realized scope (not proof it ran).</span></span>
 <span><span class="va">run_qc</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/collect_qc_inventory.html">collect_qc_inventory</a></span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="st">"latest"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">qc</span><span class="op">$</span><span class="va">inventory</span>, <span class="va">output_status</span> <span class="op">==</span> <span class="st">"missing"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">qc</span><span class="op">$</span><span class="va">workflow</span>, <span class="va">status</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"FAILED"</span>, <span class="st">"BLOCKED"</span>, <span class="st">"NOT_TRACKED"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">qc</span><span class="op">$</span><span class="va">workflow</span>, <span class="va">status</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"FAILED"</span>, <span class="st">"BLOCKED"</span>, <span class="st">"NOT_TRACKED"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">qc</span><span class="op">$</span><span class="va">coverage</span>, <span class="va">attention</span><span class="op">)</span></span></code></pre></div>
 <p>Collection reads the configuration, tracking database, file metadata,
 and small diagnostic files. It does not read image arrays, rerun
 processing, submit work, or update the database. By default, job states
 come from the tracking database. Use <code>refresh = TRUE</code> to also
 request the existing read-only scheduler comparison for active jobs. The
-report identifies whether that comparison was performed.</p>
+report identifies whether that comparison was performed. Collection
+reports its phases and derivative counts; use <code>quiet = TRUE</code>
+to suppress these messages. Only the original FD column is read from
+wide confounds tables, with each source summarized once per collection.
+Manifest size/mtime observations are reused across repeated historical
+associations.</p>
 <p>The returned <code>bg_qc_inventory</code> object includes these
 tables:</p>
 <table class="table">
@@ -141,44 +147,49 @@ convenient numeric QC columns</td>
 tracked work units, including project setup jobs</td>
 </tr>
 <tr class="even">
+<td><code>coverage</code></td>
+<td>Raw-acquisition/stage/stream observations and unresolved units,
+including raw BOLD without resolved derivatives</td>
+</tr>
+<tr class="odd">
 <td><code>metrics</code></td>
 <td>Numeric values with units, definitions, source files, and
 available/missing observation counts</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>regions</code></td>
 <td>Per-label usable voxel proportions, retention status, and recorded
 exclusion reasons</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>evidence</code></td>
 <td>Source/report/diagnostic paths, availability, size, and modification
 time</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>checks</code></td>
 <td>Saved postprocessing checks, full messages, warnings, timestamps,
 elapsed seconds, and structured details as JSON</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>
 <code>jobs</code>, <code>attempts</code>
 </td>
 <td>Historical job records and logical attempts, preserving
 current-attempt indicators</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>manifest_files</code></td>
 <td>Exact paths in historical output manifests and current size/mtime
 comparisons</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>
 <code>active</code>, <code>reconciliation</code>
 </td>
 <td>Active-job timing and optional scheduler comparisons</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>issues</code></td>
 <td>Collection errors and ambiguous or unsupported evidence</td>
 </tr>
@@ -218,30 +229,94 @@ without rescanning the project:</p>
 <code class="sourceCode R"><span><span class="va">html</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/render_qc_dashboard.html">render_qc_dashboard</a></span><span class="op">(</span><span class="st">"/path/to/reports/qc-snapshot-01"</span><span class="op">)</span></span></code></pre></div>
 <p>A successful HTML report cannot be overwritten. Rendering also
 accepts an exported directory and a different new output directory.</p>
-<p>The overview starts with selected output counts, required audits,
-participant summaries, and attention reasons. It separates supporting
-upstream inputs, raw BOLD files, workflow units, and job records. Shared
-participant, session, task, stage, stream, and space controls apply
-exact matches across tables with those identity columns. Click a
-participant in the summary to apply its filter. Snapshot totals and
-plots keep their own scope and selectors.</p>
+<div class="section level3">
+<h3 id="cohort-review-list-participant">Cohort → review list → participant<a class="anchor" aria-label="anchor" href="#cohort-review-list-participant"></a>
+</h3>
+<ol style="list-style-type: decimal">
+<li>Start with the scope banner and <strong>Acquisition
+coverage</strong>, then resolved-path availability, required audits, and
+grouped attention reasons. Failures, missing/invalid evidence, and
+descriptive concerns are separate review categories. Multiple derivative
+products supporting the same acquisition/context/reason are grouped;
+expand to inspect their evidence. Coverage/workflow review items can
+have no derivative to expand: these are unresolved expectations, not
+zero-of-zero successes. Submission uncertainty is a separate review
+item. Collection issues remain separately available.</li>
+<li>On <strong>QC metrics</strong>, choose a compatible comparison
+group. The default <strong>histogram</strong> shows a cohort
+distribution without hundreds of participant labels.
+<strong>ECDF</strong> shows the cumulative fraction of recorded source
+values. Counts report observed sources, participants, and unavailable
+recorded values. A missing diagnostic file is not a recorded metric
+value: consult the attention list for missing evidence. Neither view
+applies exclusion cutoffs.</li>
+<li>Sort the <strong>review sources</strong> table by value to locate
+extremes. Participant identity, value, and unit appear first. Select a
+participant to switch to its <strong>participant scans</strong> plot and
+open original MRIQC/fMRIPrep reports and saved computational checks.
+Click a scan point or choose a derivative output for exact source and
+manifest associations. <strong>Return to cohort</strong> clears the
+participant selection while preserving other shared filters and returns
+the chart to view. Participant details sit directly beneath the changing
+chart.</li>
+</ol>
+<p>The same participant/session/task/stage/stream/space controls are
+available on every page and stay synchronized. A pinned scope bar shows
+the current selection, collection time, and scheduler-query status;
+<strong>Edit scope</strong> returns to the current page’s selectors, and
+<strong>Reset</strong> clears shared filters. Scoped counts,
+distributions, and tables use the fields actually recorded at their own
+grain. For example, raw acquisitions respond to participant/session/task
+but do not have processing stream or stage; workflow units can cover
+multiple scans and do not respond to task/space. FD is an upstream
+acquisition measurement: downstream stage/stream selections retain FD
+through the selected outputs’ input chain or raw coverage identities,
+rather than discarding it because it was produced by fMRIPrep. Space
+selections still require a matching spatial output association. Each
+table lists its scope fields. Settings and participant-wide report links
+are context, not acquisition-level measurements. Whole-snapshot
+collection issues, manifest comparisons, and active/scheduler context
+are explicitly labeled and do not change with the shared scope.
+Scheduler <strong>not queried</strong> is distinct from having no active
+database records or no comparison rows.</p>
+<p>Table searches and column filters refine only that table, not the
+charts or headline counts. <strong>Export matching rows (all
+pages)</strong> downloads all currently matching table rows, including
+off-page rows, directly from the embedded data. The TSV/RDS links in
+<strong>Downloads &amp; interpretation</strong> always download the
+complete, unfiltered snapshot. Neither type of export changes the
+collected inventory.</p>
 <p>The four dashboard pages cover the overview, derivative exploration,
 QC metrics, and workflow/evidence details. Manifest views show grouped
-association counts, distinct paths, and exceptions; the download retains
-every association. Tables use <a href="https://glin.github.io/reactable/" class="external-link">reactable</a>, with client-side
+association counts, distinct paths, and a labeled preview of at most 200
+exceptions; the preview’s table export contains only displayed preview
+rows. The full <code>manifest_files.tsv</code> and RDS retain every
+association. Tables use <a href="https://glin.github.io/reactable/" class="external-link">reactable</a>, with client-side
 filtering, sorting, pagination, and expandable rows. Plotly charts
-provide hover values and selection among metric/stage/stream/task/atlas
-groups. Grouped metric plots deduplicate shared diagnostic files so
-multiple derivative representations do not multiply a source
-observation. Missing values remain visible in tables.</p>
+provide hover values and source distributions. Compatible groups retain
+units, processing stage, stream, session, task, space, resolution, and
+atlas identity. Unknown atlases in separate diagnostic directories are
+not pooled. Mean FD has the same definition across tasks and is pooled;
+each original confounds source is counted once <strong>after</strong>
+scope filtering, so selecting a different output space does not lose its
+observations. Individual scans are not averaged together. Missing values
+remain visible in the review table.</p>
 <p>The HTML embeds its JavaScript and styles and does not require a
 running R session, web server, or network connection for those
-interactions. Keep the HTML with its neighboring TSV/RDS files for
-downloads. Evidence links point to original project files using paths
-relative to the report directory: moving only the report does not copy
-upstream HTML, its assets, logs, or imaging data. Browser or hosting
-policies may restrict links to local files. The table retains the full
-source paths so users can still locate the evidence.</p>
+interactions. Evidence, checks, and manifest associations are indexed
+once; expanded detail panels are built only when requested, rather than
+pre-rendering thousands of nested tables. Keep the HTML with its
+neighboring TSV/RDS files for downloads. Evidence links point to
+original project files using paths relative to the report directory:
+moving only the report does not copy upstream HTML, its assets, logs, or
+imaging data. On a remote cluster, download the report bundle and open
+the HTML locally; a desktop browser may not be able to open a remote
+<code>file://</code> URL. Native report links still require the source
+filesystem, and those upstream reports may use external interactive
+dependencies even though the dashboard itself is offline. Browser or
+hosting policies may restrict links to local files. The table retains
+the full source paths so users can still locate the evidence.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="interpret-counts-and-metrics">Interpret counts and metrics<a class="anchor" aria-label="anchor" href="#interpret-counts-and-metrics"></a>
@@ -250,7 +325,15 @@ source paths so users can still locate the evidence.</p>
 denominators. A participant-level fMRIPrep job can cover several
 sessions and acquisitions. A BOLD acquisition can generate several
 spatial representations, postprocessing streams, atlas time series, and
-connectivity matrices. The dashboard labels these counts separately.</p>
+connectivity matrices. The dashboard labels these counts separately.
+<strong>Resolved output paths available</strong> does not measure cohort
+completion: participants with raw BOLD but no resolved fMRIPrep paths
+remain visible in coverage and Needs attention. Coverage counts raw
+files once per selected stage/stream, not once per spatial
+representation. Missing echo entities can represent combined-echo
+outputs; coverage does not guess the intended number of spatial/echo
+products. AROMA has workflow context but no inferred file-coverage
+guarantee.</p>
 <p>Expected native derivative paths are resolved from discovered
 upstream images and the <strong>current stream configuration</strong>,
 following the production filename conventions. Before an upstream image
@@ -262,7 +345,15 @@ Historical scope remains visible even if the current configuration has
 changed.</p>
 <p>With <code>run_id</code>, expectations instead use the saved
 configuration and realized participant/session scope, selected stages
-and streams, and exact retry units. The snapshot records the run ID,
+and streams, and exact retry units. Subject-wide retry stages such as
+AROMA follow the same exact-unit selection as submission; they are not
+crossed with every selected participant. The scope banner and browser
+title identify the run. Recorded submission state and counts of
+acknowledged/tracked jobs distinguish a saved retry request from a
+confirmed execution. Missing acknowledgements require inspection of
+provenance and job recovery; do not blindly resubmit, since an
+allocation may have been accepted without an acknowledgement. Available
+files may predate that request. The snapshot records the run ID,
 provenance path, selected stages, and settings. This mode requires
 resolved run provenance and cannot be combined with
 <code>subjects</code>, which adds project-wide expectations. Files and
@@ -278,7 +369,11 @@ timestamps remain available because an audit can outlive the derivative
 it describes. Output manifests provide exact historical path
 associations, using size and modification time checks rather than
 content hashes. A subsequent failed attempt does not acquire ownership
-of an older output.</p>
+of an older output. Filename-shaped historical stream labels remain in
+the tracking download and the workflow’s
+<code>reported_stream</code>/<code>stream_attribution</code> columns.
+They are excluded from the shared Stream selector rather than guessed
+into a configured stream.</p>
 <p>The <code>attention</code> field highlights missing/empty
 derivatives, invalid or failed audits, malformed diagnostics, saved ROI
 loss, shared destination paths, and failed/blocked/cancelled workflow
@@ -303,7 +398,9 @@ definitions</a>. Their observation denominators are unavailable when not
 recorded by MRIQC.</li>
 <li>Censor metrics count ones in the saved binary mask, where one means
 retain. A saved mask does not establish that physical volume removal was
-executed.</li>
+executed. Processing settings separately show scrubbing enabled,
+application to volumes, interpolation, and its rule; configured settings
+do not prove execution.</li>
 <li>ROI metrics summarize the recorded extraction retention rule and
 usable voxel proportions. The regional table preserves label-level
 losses and their recorded reasons, including <code>outside_mask</code>,
@@ -317,15 +414,38 @@ records are wanted for future processing. Absent evidence is
 <code>not_applicable</code> when its check is disabled or does not apply
 to that stage, <code>missing</code> when required, and
 <code>unavailable</code> when the requirement is unknown. Existing
-evidence is retained even if its setting is now disabled. Expanding a
-saved check shows full messages, warnings, timings, and scalar
-measurements; arrays remain in the JSON details in
-<code>checks.tsv</code>. Selected mask replay, smoothness, intensity,
-and spectral measurements are also available as numeric metrics with
-units and saved sampling counts. No human ratings, review lifecycle,
-inclusion decisions, or automatic motion thresholds are implemented.</p>
+evidence is retained even if its setting is now disabled. The header
+explicitly identifies disabled validation instead of showing a
+misleading zero-of-zero pass. Empty check/ROI sections distinguish
+stages not selected from absent saved evidence. Expanding checks shows
+full messages, warnings, timings, and scalar measurements; arrays remain
+in <code>checks.tsv</code> JSON. Selected mask replay, smoothness,
+intensity, and spectral measurements are also available as numeric
+metrics with units and saved sampling counts. No human ratings, review
+lifecycle, inclusion decisions, or automatic motion thresholds are
+implemented.</p>
 <p>The exports contain participant identifiers and source paths. Share
 them with the same access controls as the study’s existing reports.</p>
+</div>
+<div class="section level2">
+<h2 id="maintainer-browser-regression">Maintainer browser regression<a class="anchor" aria-label="anchor" href="#maintainer-browser-regression"></a>
+</h2>
+<p>Regular unit tests exercise grouping, source deduplication,
+empty/legacy snapshots, inert JSON encoding, and the shipped JavaScript
+without a browser. The opt-in walkthrough renders 500 synthetic
+participants with two scans each and opens the HTML directly from disk,
+checking desktop/mobile scope, histogram and ECDF views, participant
+navigation, lazy evidence, original HTML links, all-page and empty
+filtered exports, and scheduler empty states. It uses locally installed
+tooling and never downloads a browser or contacts the scheduler:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">BRAINGNOMES_TEST_QC_BROWSER</span><span class="op">=</span>true</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="bu">export</span> <span class="va">BRAINGNOMES_PLAYWRIGHT_MODULE</span><span class="op">=</span>/path/to/node_modules/playwright-core</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="bu">export</span> <span class="va">BRAINGNOMES_CHROMIUM</span><span class="op">=</span>/path/to/chromium</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">'devtools::test(filter = "qc-inventory")'</span></span></code></pre></div>
+<p>Quarto and Node must be on <code>PATH</code>; optional rendering
+packages must be installed. Run this only where local Chromium launches
+are permitted. The fixtures contain placeholder images, not real imaging
+data or evidence of scientific quality.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

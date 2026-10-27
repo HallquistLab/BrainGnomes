@@ -12,7 +12,8 @@ collect_qc_inventory(
   input = getwd(),
   subjects = NULL,
   refresh = FALSE,
-  run_id = NULL
+  run_id = NULL,
+  quiet = FALSE
 )
 ```
 
@@ -43,14 +44,19 @@ collect_qc_inventory(
   configuration. Files are observed at collection time, not
   reconstructed.
 
+- quiet:
+
+  Suppress collection phase and record-count messages. No image arrays
+  are read; repeated FD sources are summarized once per collection.
+
 ## Value
 
 A `bg_qc_inventory` list with `metadata`, `acquisitions`, `inventory`
-(one row per derivative/stage/stream), `workflow`, `metrics`,
-`evidence`, `checks`, `jobs`, `attempts`, `manifest_files`, `active`,
-`reconciliation`, and `issues`. Missing diagnostics are explicit; an
-available file is not evidence of scientific quality or a successful
-producing attempt.
+(one row per derivative/stage/stream), `workflow`, `coverage`,
+`metrics`, `evidence`, `checks`, `jobs`, `attempts`, `manifest_files`,
+`active`, `reconciliation`, and `issues`. Missing diagnostics are
+explicit; an available file is not evidence of scientific quality or a
+successful producing attempt.
 
 ## Details
 
@@ -71,7 +77,11 @@ preserves an unknown requirement. Existing evidence remains visible even
 when the current setting is disabled. `attention_reasons` explains
 flags, and `checks` preserves warnings, timing, and structured details
 as JSON. Saved-run collection requires resolved provenance and cannot be
-combined with additional `subjects`.
+combined with additional `subjects`. `coverage` retains raw acquisitions
+without resolved derivatives, as well as configured units with no raw
+inputs. Its review flags are not image-quality exclusions. Saved
+submission state and acknowledgement counts are recorded in metadata
+independently of observed file availability.
 
 ## Examples
 
