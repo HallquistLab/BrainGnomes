@@ -9,7 +9,7 @@ qc_collection_context <- function(scfg, run_id, subjects) {
   checkmate::assert_string(run_id, null.ok = TRUE, min.chars = 1L)
   context <- list(config = scfg, subjects = subjects, run_id = NULL,
     steps = status_spec(scfg)$steps, recorded_at = NULL, provenance_file = NULL,
-    work_units = NULL)
+    work_units = NULL, submission = NULL)
   if (is.null(run_id)) return(context)
   if (!is.null(subjects)) stop("subjects adds project expectations; do not combine it with run_id.", call. = FALSE)
   saved <- get_run_provenance(scfg, run_id)
@@ -43,7 +43,13 @@ qc_collection_context <- function(scfg, run_id, subjects) {
   context$steps <- steps
   context$recorded_at <- saved$recorded_at
   context$provenance_file <- saved$provenance_file
-  context$work_units <- saved$request$work_units
+  context$work_units <- normalize_retry_work_units(saved$request$work_units)
+  recorded_state <- qc_scalar(saved$state)
+  context$submission <- list(state = if (is.na(recorded_state)) "unknown" else recorded_state,
+    acknowledged_jobs = if (is.null(saved$submission$submitted_job_ids)) NA_integer_ else
+      length(unique(unlist(saved$submission$submitted_job_ids, use.names = FALSE))),
+    tracked_jobs = if (is.data.frame(saved$submission$tracked_jobs)) nrow(saved$submission$tracked_jobs) else
+      if (is.list(saved$submission$tracked_jobs) && !length(saved$submission$tracked_jobs)) 0L else NA_integer_)
   context
 }
 
@@ -79,22 +85,30 @@ qc_scope_rows <- function(rows, context, subject_evidence = FALSE) {
     units <- context$work_units
     if (is.data.frame(units) && nrow(units)) {
       # Exact retry units must not become a subject x session x stream product.
-      for (stage in intersect(c("postprocess", "extract_rois"), context$steps)) {
+      for (stage in context$steps) {
         indices <- which(rows$stage == stage)
         stage_units <- units[units$stage == stage, , drop = FALSE]
-        allowed <- rep(FALSE, length(indices))
-        for (i in seq_len(nrow(stage_units))) {
-          unit <- stage_units[i, , drop = FALSE]
-          allowed <- allowed | (rows$sub_id[indices] == unit$sub_id &
-            ifelse(is.na(rows$ses_id[indices]), "", rows$ses_id[indices]) ==
-              ifelse(is.na(unit$ses_id), "", unit$ses_id) & rows$stream[indices] == unit$stream)
-        }
+        allowed <- qc_retry_rows(rows[indices, , drop = FALSE], stage_units)
         keep[indices] <- keep[indices] & allowed
       }
     }
   }
   keep[is.na(keep)] <- FALSE
   keep
+}
+
+#' Match exact retry identities using the production stage-specific scope rules
+#' @param rows Workflow or derivative rows with stage and participant identities.
+#' @param units Saved exact work units for the selected stages.
+#' @return Logical selection; subject-wide stages intentionally ignore sessions.
+#' @noRd
+qc_retry_rows <- function(rows, units) {
+  vapply(seq_len(nrow(rows)), function(index) {
+    row <- rows[index, , drop = FALSE]
+    if (is.na(row$sub_id)) return(any(units$stage == row$stage & is.na(units$sub_id)))
+    retry_includes_unit(units, row$stage, row$sub_id, row$ses_id,
+      if ("stream" %in% names(row)) row$stream else NA_character_)
+  }, logical(1))
 }
 
 #' Preserve unknown diagnostic requirements rather than assuming a setting
@@ -158,7 +172,10 @@ qc_report_settings <- function(scfg, steps) {
         "Intensity normalization enabled" = cfg$intensity_normalize$enable,
         "Intensity normalization mode" = cfg$intensity_normalize$mode,
         "Validation enabled" = cfg$validate_postproc_steps,
-        "Scrubbing enabled" = cfg$scrubbing$enable) else list(
+        "Scrubbing enabled" = cfg$scrubbing$enable,
+        "Apply scrubbing to volumes" = cfg$scrubbing$apply,
+        "Interpolate scrubbed volumes" = cfg$scrubbing$interpolate,
+        "Scrubbing rule" = cfg$scrubbing$expression) else list(
         "Input streams" = cfg$input_streams, "Atlases" = cfg$atlases,
         "Minimum voxels per ROI" = cfg$min_vox_per_roi,
         "Save diagnostics" = cfg$save_diagnostics)

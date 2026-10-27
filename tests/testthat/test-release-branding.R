@@ -5,7 +5,10 @@ test_that("release metadata and changelog identify the same release", {
   skip_if_not(file.exists(description) && file.exists(news),
     "Source release metadata is not installed with the package")
   metadata <- read.dcf(description)[1L, ]
-  expect_identical(readLines(news, n = 1L),
+  headings <- grep("^# ", readLines(news), value = TRUE)
+  # Unreleased work may precede the latest dated release without rewriting it.
+  if (identical(headings[1L], "# BrainGnomes (development version)")) headings <- headings[-1L]
+  expect_identical(headings[1L],
     paste0("# BrainGnomes ", metadata[["Version"]], " (", metadata[["Date"]], ")"))
   expect_false(is.na(as.Date(metadata[["Date"]])))
 })

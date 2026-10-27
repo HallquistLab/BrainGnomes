@@ -12,19 +12,18 @@ test_that("mean FD combines tasks and deduplicates shared confounds across space
       "/001/ridl.tsv", "/002/ridl.tsv", "/002/rest.tsv"),
     value = c(0.1, 0.1, 0.2, 0.2, 0.3, 0.4), unit = "mm",
     n_observations = 100L, n_missing = 1L)
+  rows <- qc_metric_sources(qc_metric_observations(metrics, inventory))
+  expect_equal(length(unique(rows$group_id)), 1L)
+  expect_equal(unique(rows$group_label), "Mean FD (all tasks) / mm")
+  expect_equal(sort(rows$value), c(0.1, 0.2, 0.3, 0.4))
+  expect_setequal(rows$task, c("rest", "ridl"))
+  expect_true(all(rows$n_observations == 100L & rows$n_missing == 1L))
   plot <- plotly::plotly_build(qc_metrics_plot(metrics, inventory))
-  expect_length(plot$x$data, 1L)
-  trace <- plot$x$data[[1L]]
-  expect_equal(trace$name, "Mean FD (all tasks)")
-  expect_equal(sort(as.numeric(trace$y)), c(0.1, 0.2, 0.3, 0.4))
-  expect_length(unique(trace$x), 4L)
-  expect_true(any(grepl("task-rest", trace$x, fixed = TRUE)))
-  expect_true(any(grepl("task-ridl", trace$x, fixed = TRUE)))
-  expect_true(any(grepl("Observed: 100; missing: 1", trace$text, fixed = TRUE)))
-  expect_setequal(unlist(plot$x$layout$xaxis$categoryarray), as.character(trace$x))
+  expect_equal(plot$x$data[[1L]]$type, "histogram")
+  expect_equal(sort(as.numeric(plot$x$data[[1L]]$x)), sort(rows$value))
 })
 
-test_that("other metric groups retain task scope and reset their horizontal categories", {
+test_that("other metric groups retain task scope", {
   skip_if_not_installed("plotly")
   inventory <- data.frame(record_id = c("rest", "ridl"), sub_id = "001",
     ses_id = NA_character_, run = c(NA, "01"), stage = "postprocess", stream = "clean",
@@ -35,18 +34,60 @@ test_that("other metric groups retain task scope and reset their horizontal cate
     source_file = c("/rest-mask.tsv", "/ridl-mask.tsv", "/rest-confounds.tsv", "/ridl-confounds.tsv"),
     value = c(90, 95, 0.1, 0.2), unit = c("%", "%", "mm", "mm"),
     n_observations = 100L, n_missing = 0L)
-  plot <- plotly::plotly_build(qc_metrics_plot(metrics, inventory))
-  expect_length(plot$x$data, 3L)
-  expect_equal(plot$x$data[[1L]]$name, "Mean FD (all tasks)")
-  expect_length(plot$x$data[[1L]]$y, 2L)
-  expect_true(isTRUE(plot$x$data[[1L]]$visible))
-  expect_true(all(vapply(plot$x$data[-1L], function(trace) !trace$visible, logical(1))))
-  expect_setequal(unlist(plot$x$layout$xaxis$categoryarray), as.character(plot$x$data[[1L]]$x))
-  buttons <- plot$x$layout$updatemenus[[1L]]$buttons
-  for (i in seq_along(buttons)) {
-    axis <- buttons[[i]]$args[[2L]]$xaxis
-    expect_true(axis$autorange)
-    expect_equal(axis$categoryorder, "array")
-    expect_setequal(unlist(axis$categoryarray), as.character(plot$x$data[[i]]$x))
-  }
+  rows <- qc_metric_sources(qc_metric_observations(metrics, inventory))
+  expect_length(unique(rows$group_id), 3L)
+  fd <- subset(rows, metric == "mean_fd")
+  expect_equal(nrow(fd), 2L)
+  expect_length(unique(fd$group_id), 1L)
+  expect_length(unique(subset(rows, metric != "mean_fd")$group_id), 2L)
+  expect_true(all(nzchar(rows$group_label)))
+})
+
+test_that("scope selection precedes source deduplication and unavailable values survive", {
+  inventory <- data.frame(record_id = letters[1:4], sub_id = "001", ses_id = NA_character_,
+    task = "rest", run = "01", stage = "fmriprep", stream = NA_character_,
+    space = c("MNI1", "MNI2", "MNI1", "MNI1"))
+  metrics <- data.frame(record_id = letters[1:4], metric = "mean_fd", unit = "mm",
+    source_file = c("/shared.tsv", "/shared.tsv", NA, NA), value = c(.1, .1, NA, .3))
+  rows <- qc_metric_observations(metrics, inventory)
+  expect_equal(nrow(rows), 4L)
+  expect_equal(nrow(qc_metric_sources(rows)), 3L)
+  expect_equal(qc_metric_sources(subset(rows, space == "MNI2"))$value, .1)
+  expect_true(anyNA(qc_metric_sources(rows)$value))
+  expect_length(unique(rows$group_id), 1L)
+  metrics$unit[4L] <- "different unit"
+  expect_length(unique(qc_metric_observations(metrics, inventory)$group_id), 2L)
+  expect_equal(nrow(qc_metric_observations(metrics[FALSE, ], inventory)), 0L)
+})
+
+test_that("comparison keys distinguish missing identities and separator-like labels", {
+  inventory <- data.frame(record_id = letters[1:4], sub_id = "001",
+    ses_id = c(NA, "", "A", "B"), task = "rest / nback", run = "01",
+    stage = "postprocess", stream = "clean / MNI", space = "MNI")
+  metrics <- data.frame(record_id = letters[1:4], metric = "censor_retained_percent", unit = "%",
+    source_file = paste0("/", letters[1:4]), value = 95)
+  expect_length(unique(qc_metric_observations(metrics, inventory)$group_id), 4L)
+})
+
+test_that("attention review groups products but keeps acquisition and reason identities", {
+  rows <- data.frame(record_id = letters[1:3], sub_id = "001", ses_id = "A", task = "rest",
+    run = c("01", "01", "02"), stage = "extract_rois", stream = "network",
+    space = c("MNI1", "MNI2", "MNI1"), attention = TRUE,
+    attention_reasons = "Saved audit failed; Diagnostics missing; Recorded ROI loss")
+  review <- qc_attention_groups(rows)
+  expect_equal(nrow(review), 6L)
+  expect_true(all(subset(review, run == "01")$products == 2L))
+  expect_setequal(review$category, c("Computational/workflow failure", "Missing/invalid evidence", "Descriptive review"))
+  expect_equal(nrow(qc_attention_groups(rows[FALSE, ])), 0L)
+  rows$echo <- c("1", "2", "1")
+  expect_equal(nrow(qc_attention_groups(rows)), 9L)
+  rows$attention_reasons <- "Diagnostics invalid; Saved audit ambiguous"
+  expect_true(all(qc_attention_groups(rows)$category == "Missing/invalid evidence"))
+})
+
+test_that("relative evidence URLs resolve dot segments without requiring files", {
+  expect_identical(qc_evidence_href("/unmounted/study/a & b.html", "/unmounted/study/report"),
+    "../a%20%26%20b.html")
+  expect_identical(qc_evidence_href("/unmounted/study/other/../a.html", "/unmounted/study/report/."),
+    "../a.html")
 })

@@ -20,7 +20,7 @@ to a previously exported snapshot directory to resume rendering.}
 RDS/TSV snapshot. When \code{x} is an exported directory, defaults to that
 directory. Existing successful HTML reports cannot be replaced.}
 
-\item{title}{Optional dashboard title. Defaults to the project name.}
+\item{title}{Optional dashboard title. Defaults to project and project/run scope.}
 
 \item{quarto}{Path to the Quarto executable; defaults to the executable on
 \code{PATH}. Quarto 1.4 or newer is required.}
@@ -39,6 +39,24 @@ Rendering requires optional packages \code{reactable}, \code{plotly},
 export do not require these packages or Quarto. JavaScript and styles are
 embedded in the HTML; search, filtering, row details, and plots work without
 a server or network connection. Open the saved HTML in a web browser.
+Shared identity controls synchronize scoped counts, source distributions,
+and tables where the corresponding identity fields are recorded. Raw
+acquisitions do not have processing-stage identities, and workflow units
+do not have scan-task identities; each table labels its filter grain.
+Whole-snapshot context is explicitly labeled. Histogram and ECDF views
+support large cohorts; select a participant in the source review list for
+scan-level plots, computational checks, and original report links.
+Row details are generated on demand from indexed embedded evidence, without
+rereading project files. Table exports include all matching rows across
+pages; neighboring TSV links always export the full original snapshot.
+Large manifest exception tables display an explicitly labeled preview of at
+most 200 rows; that table's matching-row export contains only the preview.
+Full association history is preserved in \code{manifest_files.tsv} and the RDS.
+Acquisition coverage and submission review items expose unresolved work
+even without derivative paths. File counters describe resolved paths, not
+cohort completion. Saved-run scope and acknowledgements appear prominently.
+Downstream stage/stream filters retain upstream FD through selected inputs;
+space filters still require a matching spatial output association.
 TSV/RDS/JSON download links require the exported files beside the HTML;
 those files are not needed to view tables and plots.
 Linked evidence remains in its source

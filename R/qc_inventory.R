@@ -13,8 +13,10 @@
 #' @param run_id Optional recorded run ID, or `"latest"`. Restricts the snapshot
 #'   to that run's saved participants, stages, and streams, using its recorded
 #'   configuration. Files are observed at collection time, not reconstructed.
+#' @param quiet Suppress collection phase and record-count messages. No image
+#'   arrays are read; repeated FD sources are summarized once per collection.
 #' @return A `bg_qc_inventory` list with `metadata`, `acquisitions`, `inventory`
-#'   (one row per derivative/stage/stream), `workflow`, `metrics`, `evidence`,
+#'   (one row per derivative/stage/stream), `workflow`, `coverage`, `metrics`, `evidence`,
 #'   `checks`, `jobs`, `attempts`, `manifest_files`, `active`, `reconciliation`,
 #'   and `issues`. Missing diagnostics are explicit; an available file is not
 #'   evidence of scientific quality or a successful producing attempt.
@@ -35,6 +37,10 @@
 #'   `attention_reasons` explains flags, and `checks` preserves warnings, timing,
 #'   and structured details as JSON. Saved-run collection requires resolved
 #'   provenance and cannot be combined with additional `subjects`.
+#'   `coverage` retains raw acquisitions without resolved derivatives, as well as
+#'   configured units with no raw inputs. Its review flags are not image-quality
+#'   exclusions. Saved submission state and acknowledgement counts are recorded
+#'   in metadata independently of observed file availability.
 #' @examples
 #' \dontrun{
 #' qc <- collect_qc_inventory("/path/to/project")
@@ -44,7 +50,9 @@
 #' }
 #' @export
 collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FALSE,
-                                 run_id = NULL) {
+                                 run_id = NULL, quiet = FALSE) {
+  checkmate::assert_flag(quiet)
+  if (!quiet) cli::cli_inform("QC: reading configuration and recorded workflow scope{if (refresh) ' (scheduler comparison requested)' else ' (no scheduler query)'}.")
   started_at <- qc_time(Sys.time())
   scfg <- project_config_from_input(input)
   checkmate::assert_data_frame(subjects, null.ok = TRUE)
@@ -58,9 +66,11 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
   state$metrics <- list()
   state$checks <- list()
   state$regions <- list()
+  state$motion_cache <- new.env(parent = emptyenv())
 
   # Scan known output roots once. Never read image arrays or invoke a pipeline.
   roots <- scfg$metadata
+  if (!quiet) cli::cli_inform("QC: discovering acquisition and diagnostic paths (no image arrays).")
   raw <- qc_list_files(roots$bids_directory, "_bold\\.nii(\\.gz)?$")
   if (length(raw)) {
     # A BIDS root can contain derivatives/ and sourcedata/. Only subject folders
@@ -112,6 +122,9 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
   }
 
   for (i in seq_len(nrow(inventory))) {
+    if (!quiet && (i == 1L || i %% 100L == 0L)) {
+      cli::cli_inform("QC: collecting small-file evidence for derivative {i} of {nrow(inventory)}.")
+    }
     row <- inventory[i, , drop = FALSE]
     record <- row$record_id
     qc_add_evidence(state, record, "derivative", row$derivative_file)
@@ -178,12 +191,17 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
   workflow <- qc_workflow(scfg, inspection, acquisitions, inventory, subjects, state,
     run_scope = !is.null(context$run_id))
   if (!is.null(context$run_id)) {
-    keep <- is.na(workflow$sub_id) | (workflow$stage %in% context$steps &
+    keep <- (is.na(workflow$sub_id) & !workflow$stage %in% supported_project_steps()) | (workflow$stage %in% context$steps &
       qc_scope_rows(workflow, context, subject_evidence = TRUE))
+    if (is.data.frame(context$work_units) && nrow(context$work_units)) {
+      project <- is.na(workflow$sub_id) & workflow$stage %in% context$steps
+      keep[project] <- qc_retry_rows(workflow[project, , drop = FALSE], context$work_units)
+    }
     workflow <- workflow[keep, , drop = FALSE]
   }
   inventory <- qc_attach_workflow(inventory, workflow)
   inventory$attention_reasons <- qc_attention_reasons(inventory)
+  if (!quiet) cli::cli_inform("QC: comparing {nrow(inspection$jobs)} recorded job manifests (size/mtime only).")
   manifests <- qc_manifest_files(inspection$jobs, state)
   evidence <- qc_bind_rows(state$evidence, qc_empty_evidence())
   metrics <- qc_bind_rows(state$metrics, qc_empty_metrics())
@@ -199,7 +217,7 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
   checks <- qc_bind_rows(state$checks, qc_empty_checks())
   issues <- qc_bind_rows(state$issues, qc_empty_issues())
   regions <- qc_bind_rows(state$regions, qc_empty_regions())
-  structure(list(
+  result <- structure(list(
     metadata = list(schema_version = "brain-gnomes-qc-v1", snapshot_id = uuid::UUIDgenerate(),
       created_at = qc_time(Sys.time()), project = inspection$project,
       collection_started_at = started_at, tracking_retrieved_at = qc_time(inspection$retrieved_at),
@@ -209,6 +227,9 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
       scheduler_refreshed = isTRUE(refresh),
       scope = if (is.null(context$run_id)) "project" else "run", run_id = context$run_id,
       selected_steps = context$steps, recorded_at = context$recorded_at,
+      work_units = context$work_units, submission = context$submission,
+      configured_streams = list(postprocess = setdiff(names(scfg$postprocess), "enable"),
+        extract_rois = setdiff(names(scfg$extract_rois), "enable")),
       provenance_file = context$provenance_file,
       settings = qc_report_settings(scfg, context$steps),
       expectation_basis = if (is.null(context$run_id))
@@ -220,6 +241,9 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
     manifest_files = manifests, active = inspection$active,
     reconciliation = inspection$reconciliation, issues = issues
   ), class = "bg_qc_inventory")
+  result$coverage <- qc_acquisition_coverage(result)
+  if (!quiet) cli::cli_inform("QC: snapshot complete: {nrow(acquisitions)} raw files, {nrow(inventory)} derivative records, {nrow(issues)} collection issues.")
+  result
 }
 
 #' Format snapshot timestamps consistently, retaining missing values
@@ -500,11 +524,23 @@ qc_find_confounds <- function(path) {
 }
 
 #' Read a headed TSV without changing identifiers or treating filenames as commands
+#' @param path Headed TSV path.
+#' @param state Collector environment receiving parse issues.
+#' @param columns Optional source columns to select without loading other columns.
+#' @return Character-column data frame or NULL on a parse failure.
 #' @keywords internal
 #' @noRd
-qc_read_tsv <- function(path, state) {
-  tryCatch(as.data.frame(data.table::fread(file = path, sep = "\t", header = TRUE, colClasses = "character",
-    na.strings = c("n/a", "NA", ""), showProgress = FALSE)), error = function(e) {
+qc_read_tsv <- function(path, state, columns = NULL) {
+  tryCatch({
+    if (!is.null(columns)) {
+      header <- names(data.table::fread(file = path, sep = "\t", header = TRUE,
+        nrows = 0L, colClasses = "character", showProgress = FALSE))
+      columns <- intersect(columns, header)
+      if (!length(columns)) return(data.frame())
+    }
+    as.data.frame(data.table::fread(file = path, sep = "\t", header = TRUE, colClasses = "character",
+      select = columns, na.strings = c("n/a", "NA", ""), showProgress = FALSE))
+  }, error = function(e) {
       qc_issue(state, path, conditionMessage(e)); NULL
     })
 }
@@ -538,15 +574,21 @@ qc_collect_mriqc <- function(state, record, path) {
 qc_collect_motion <- function(state, record, path) {
   qc_add_evidence(state, record, "fmriprep_confounds", path)
   if (!file.exists(path)) return("unavailable")
-  df <- qc_read_tsv(path, state)
-  if (is.null(df)) return("invalid")
-  if (!"framewise_displacement" %in% names(df)) return("unavailable")
-  fd <- suppressWarnings(as.numeric(df$framewise_displacement))
-  good <- is.finite(fd)
-  qc_add_metric(state, record, "mean_fd", if (any(good)) mean(fd[good]) else NA_real_,
+  if (is.null(state$motion_cache)) state$motion_cache <- new.env(parent = emptyenv())
+  if (!exists(path, state$motion_cache, inherits = FALSE)) {
+    df <- qc_read_tsv(path, state, "framewise_displacement")
+    status <- if (is.null(df)) "invalid" else if (!"framewise_displacement" %in% names(df)) "unavailable" else "available"
+    fd <- if (status == "available") suppressWarnings(as.numeric(df$framewise_displacement)) else numeric()
+    good <- is.finite(fd)
+    assign(path, list(status = status, value = if (any(good)) mean(fd[good]) else NA_real_,
+      observed = sum(good), missing = sum(!good)), state$motion_cache)
+  }
+  summary <- get(path, state$motion_cache, inherits = FALSE)
+  if (summary$status != "available") return(summary$status)
+  qc_add_metric(state, record, "mean_fd", summary$value,
     "mm", "Mean original fMRIPrep framewise_displacement over finite frames; no dashboard threshold applied.",
-    path, sum(good), sum(!good))
-  if (any(good)) "available" else "unavailable"
+    path, summary$observed, summary$missing)
+  if (summary$observed) "available" else "unavailable"
 }
 
 #' Collect censor-mask counts without claiming that censoring was executed
@@ -677,8 +719,13 @@ qc_workflow <- function(scfg, inspection, acquisitions, inventory, subjects, sta
   people$ses_id <- sub("^ses-", "", as.character(people$ses_id))
   people <- people[!is.na(people$sub_id) & nzchar(people$sub_id), , drop = FALSE]
   # A subject-wide tracking row is context, not an extra no-session acquisition.
-  people <- people[!(is.na(people$ses_id) & people$sub_id %in%
-    people$sub_id[!is.na(people$ses_id)]), , drop = FALSE]
+  if (run_scope && !is.null(subjects)) {
+    people <- unique(data.frame(sub_id = sub("^sub-", "", as.character(subjects$sub_id)),
+      ses_id = sub("^ses-", "", as.character(subjects$ses_id))))
+  } else {
+    people <- people[!(is.na(people$ses_id) & people$sub_id %in%
+      people$sub_id[!is.na(people$ses_id)]), , drop = FALSE]
+  }
   expected <- list()
   for (stage in status_spec(scfg)$steps) {
     streams <- switch(stage, postprocess = get_postprocess_stream_names(scfg),
@@ -696,6 +743,16 @@ qc_workflow <- function(scfg, inspection, acquisitions, inventory, subjects, sta
   result <- qc_bind_rows(expected, empty)
   current <- inspection$attempts[inspection$attempts$is_current,
     c("sub_id", "ses_id", "stage", "stream", "status", "run_id"), drop = FALSE]
+  # Filename-shaped legacy labels are not inferred processing streams. Preserve
+  # the original label for diagnosis without letting it replace a configured unit.
+  legacy <- qc_legacy_streams(current$stream, current$stage, list(
+    postprocess = setdiff(names(scfg$postprocess), "enable"),
+    extract_rois = setdiff(names(scfg$extract_rois), "enable")))
+  current$reported_stream <- current$stream
+  current$stream_attribution <- ifelse(legacy, "unresolved_legacy", "recorded")
+  current$stream[legacy] <- NA_character_
+  result$reported_stream <- rep(NA_character_, nrow(result))
+  result$stream_attribution <- rep("configured", nrow(result))
   # Keep each real work unit, including project-level setup/controller jobs.
   result <- result[!qc_workflow_key(result) %in% qc_workflow_key(current), , drop = FALSE]
   unique(rbind(result, current))
@@ -739,6 +796,7 @@ qc_attach_workflow <- function(inventory, workflow) {
 #' @noRd
 qc_manifest_files <- function(jobs, state) {
   rows <- list()
+  observed <- new.env(parent = emptyenv())
   for (i in seq_len(nrow(jobs))) {
     job <- jobs[i, , drop = FALSE]
     if (is.na(job$output_manifest) || !nzchar(job$output_manifest)) next
@@ -756,7 +814,8 @@ qc_manifest_files <- function(jobs, state) {
         next
       }
       path <- file.path(manifest$output_dir, entry$path)
-      info <- file.info(path)
+      if (!exists(path, observed, inherits = FALSE)) assign(path, file.info(path), observed)
+      info <- get(path, observed, inherits = FALSE)
       match <- !is.na(info$size) && !isTRUE(info$isdir) &&
         isTRUE(all.equal(as.numeric(info$size), as.numeric(entry$size))) &&
         isTRUE(all.equal(as.numeric(info$mtime), as.numeric(entry$mtime), tolerance = 1e-10))
