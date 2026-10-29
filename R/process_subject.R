@@ -1,3 +1,37 @@
+#' Describe incomplete upstream evidence when postprocessing inputs are available
+#'
+#' @param check Completion evidence returned by `is_step_complete()`.
+#' @return Log level and reason for proceeding with existing inputs. Missing
+#'   legacy markers alone are informational; adverse evidence remains a warning.
+#' @noRd
+postprocess_fmriprep_diagnostic <- function(check) {
+  source <- check$verification_source
+  level <- "warn"
+  reason <- if (identical(source, "db_status_failed")) {
+    paste("the latest fMRIPrep tracking status is", check$db_status)
+  } else if (identical(source, "db_manifest_failed")) {
+    "fMRIPrep output manifest verification failed"
+  } else if (identical(source, "db_status_dir_missing")) {
+    paste("the recorded fMRIPrep output directory is missing:", check$dir)
+  } else if (identical(source, "db_query_error")) {
+    # is_step_complete already issued the actionable database warning.
+    level <- "info"
+    "fMRIPrep completion could not be verified because the tracking database could not be read"
+  } else if (file.exists(sub("_complete$", "_fail", check$complete_file))) {
+    paste("the fMRIPrep failure marker is not superseded by a newer completion marker:",
+      sub("_complete$", "_fail", check$complete_file))
+  } else if (checkmate::test_string(check$db_status)) {
+    paste("the latest fMRIPrep tracking status is", check$db_status,
+      "and completion is unverified")
+  } else if (!file.exists(check$complete_file)) {
+    level <- "info"
+    paste("no fMRIPrep completion marker is available at", check$complete_file)
+  } else {
+    paste("fMRIPrep completion is unverified (evidence:", source, ")")
+  }
+  list(level = level, reason = reason)
+}
+
 get_postprocess_stream_names <- function(scfg) {
   if (is.null(scfg$postprocess)) {
     # warning("No postprocess streams available because $postprocess is not populated")
@@ -129,10 +163,11 @@ collect_submit_permission_issues <- function(scfg, step_name, sub_id, ses_id = N
 #' @return A logical value indicating whether the preprocessing was successful
 #' @details
 #' When postprocessing is requested without running `fmriprep`, the function verifies
-#' that the expected fMRIPrep outputs exist. If the configured fMRIPrep directory lies
-#' outside the project directory, only the existence of the subject's directory is
-#' required. For fMRIPrep directories inside the project directory, a `.complete`
-#' file in the project's log directory is still necessary.
+#' that NIfTI inputs matching the selected streams exist. Existing inputs may be
+#' used without a legacy `.complete` marker; this is logged as information.
+#' For internal fMRIPrep directories, failed tracking states, invalid manifests,
+#' and failure markers remain warnings with the actual cause. Input discovery
+#' does not itself verify that the upstream fMRIPrep run completed successfully.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
@@ -392,30 +427,12 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
   if (isTRUE(steps["postprocess"])) {
-    missing_fmriprep <- FALSE
-    ## If postprocessing is requested without running fmriprep, validate that the expected fmriprep outputs exist before scheduling jobs
-    if (!isTRUE(steps["fmriprep"])) {
-      if (is_external_path(scfg$metadata$fmriprep_directory,
-                           scfg$metadata$project_directory)) {
-        fp_dir <- file.path(scfg$metadata$fmriprep_directory,
-                            glue("sub-{sub_id}"))
-        if (!checkmate::test_directory_exists(fp_dir)) {
-          to_log(lg, "warn", "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {fp_dir})")
-          missing_fmriprep <- TRUE
-        }
-      } else {
-        chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
-        if (!chk$complete) {
-          if (!checkmate::test_directory_exists(chk$dir)) {
-            to_log(lg, "warn", "Missing fmriprep output directory: {chk$dir}")
-          }
-          if (!checkmate::test_file_exists(chk$complete_file)) {
-            to_log(lg, "warn", "Missing {basename(chk$complete_file)} in {dirname(chk$complete_file)}")
-          }
-          to_log(lg, "warn", "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})")
-          missing_fmriprep <- TRUE
-        }
-      }
+    # Completion evidence and input availability are different checks. Decide
+    # whether to proceed before describing an exit or a missing marker.
+    fmriprep_check <- NULL
+    if (!isTRUE(steps["fmriprep"]) &&
+        !is_external_path(scfg$metadata$fmriprep_directory, scfg$metadata$project_directory)) {
+      fmriprep_check <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
     }
 
     all_streams <- get_postprocess_stream_names(scfg)
@@ -472,12 +489,14 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       if (!has_inputs) {
         input_dirs_txt <- if (length(input_dirs) > 0L) paste(input_dirs, collapse = ", ") else "<none>"
         rx_label <- paste(unique(input_regexes), collapse = "; ")
-        to_log(lg, "warn", "no fmriprep NIfTI inputs matched expected patterns in {input_dirs_txt} (patterns: {rx_label})")
+        to_log(lg, "warn", "Skipping postprocessing for {sub_id}: no fmriprep NIfTI inputs matched expected patterns in {input_dirs_txt} (patterns: {rx_label})")
       }
 
       if (!has_inputs) return(TRUE)
-      if (missing_fmriprep) {
-        to_log(lg, "warn", "Proceeding with postprocessing for {sub_id} because inputs were found even though fmriprep .complete markers are missing.")
+      if (!is.null(fmriprep_check) && !isTRUE(fmriprep_check$complete)) {
+        diagnostic <- postprocess_fmriprep_diagnostic(fmriprep_check)
+        to_log(lg, diagnostic$level,
+          "Proceeding with postprocessing for {sub_id} using matching NIfTI inputs; {diagnostic$reason}. Input availability does not establish successful fMRIPrep completion.")
       }
     }
     # loop over inputs and processing streams

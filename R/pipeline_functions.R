@@ -340,7 +340,7 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
   if (!is.null(sqlite_db) && checkmate::test_file_exists(sqlite_db)) {
     db_record <- tryCatch({
       # Query for the most recent job matching this step/subject pattern
-      con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+      con <- tracking_db_connect(sqlite_db)
       on.exit(try(DBI::dbDisconnect(con)), add = TRUE)
       
       db_cols <- DBI::dbGetQuery(con, "PRAGMA table_info(job_tracking)")

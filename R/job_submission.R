@@ -9,9 +9,7 @@ job_submission_connect <- function(sqlite_db) {
   }
   # Use durable rollback-journal commits. Never enable cross-host WAL on a
   # shared filesystem, and do not inherit RSQLite's synchronous=off default.
-  con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = "full")
-  RSQLite::sqliteSetBusyHandler(con, 10000L)
-  con
+  tracking_db_connect(sqlite_db, read_only = FALSE)
 }
 
 #' Parse a unique scheduler acknowledgement without mistaking diagnostics for IDs
