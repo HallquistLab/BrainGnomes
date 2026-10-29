@@ -60,7 +60,9 @@ for (peer_state in c("completed", "failed", "reused")) {
         if (peer_state == "failed") {
           expect_error(postprocess_subject(fixture$bold, peer), "tr field")
         } else {
-          expect_identical(postprocess_subject(fixture$bold, peer), peer_file)
+          peer_result <- postprocess_subject(fixture$bold, peer)
+          # Windows temp paths may contain short names and mixed separators.
+          expect_identical(peer_result, normalizePath(peer_file, winslash = "/", mustWork = TRUE))
         }
         expect_true(file.exists(out_file))
         expect_equal(unname(tools::md5sum(out_file)), unname(tools::md5sum(in_file)))
