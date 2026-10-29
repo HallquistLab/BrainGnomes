@@ -71,6 +71,8 @@ test_that("postprocess_subject stages outputs in scratch workspace", {
   expected_final <- norm_path(file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"), mustWork = TRUE)
   expect_true(file.exists(expected_final))
   expect_identical(final_file, expected_final)
+  expect_identical(norm_path(dirname(dirname(recorded_paths$apply_mask))), workspace_dir)
+  workspace_dir <- dirname(recorded_paths$apply_mask)
   expected_staged_final <- file.path(
     workspace_dir,
     "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"
@@ -175,6 +177,8 @@ test_that("postprocess_subject moves intermediates when requested", {
   expected_final <- norm_path(file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"), mustWork = TRUE)
   expect_true(file.exists(expected_final))
   expect_identical(final_file, expected_final)
+  expect_identical(norm_path(dirname(dirname(recorded_paths$apply_mask))), workspace_dir)
+  workspace_dir <- dirname(recorded_paths$apply_mask)
   expected_staged_final <- file.path(
     workspace_dir,
     "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"
@@ -286,5 +290,6 @@ test_that("postprocess_subject cleans scratch workspace and temp mask after erro
   expect_true(exists("apply_mask", envir = recorded_paths, inherits = FALSE))
   expect_false(file.exists(recorded_paths$brain_mask))
   expect_false(file.exists(recorded_paths$apply_mask))
-  expect_false(dir.exists(workspace_dir))
+  expect_identical(norm_path(dirname(dirname(recorded_paths$apply_mask))), workspace_dir)
+  expect_false(dir.exists(dirname(recorded_paths$apply_mask)))
 })

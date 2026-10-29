@@ -24,6 +24,9 @@
 #' @param mask_file Optional path to a mask NIfTI file. Voxels outside of this mask
 #'   are excluded from ROI extraction and connectivity calculation. Note that
 #'   constant and zero voxels are always automatically removed by extract_rois.
+#'   The mask must match the BOLD spatial grid, including voxel sizes, spatial
+#'   units, and qform/sform transforms and codes. Mismatched masks are rejected;
+#'   `allow_atlas_resampling` applies only to atlases, not to this mask.
 #'   All positive atlas labels remain in the outputs; fully masked ROIs have
 #'   all-`NA` time series and connectivity rows and columns.
 #' @param min_vox_per_roi Minimum ROI size requirement. Supply a positive integer
@@ -130,6 +133,11 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
       to_log(lg, "fatal", "mask_file must be a valid NIfTI file or NULL")
     }
 
+    grid <- pp_compare_nifti_grid(
+      bold_file, mask_file, reference_label = "BOLD image",
+      candidate_label = "ROI mask"
+    )
+    if (!isTRUE(grid$passed)) stop(grid$message, call. = FALSE)
     mask_img <- RNifti::readNifti(mask_file)
     mask_dims <- dim(mask_img)
     if (length(mask_dims) > 3L) mask_dims <- mask_dims[1:3]
