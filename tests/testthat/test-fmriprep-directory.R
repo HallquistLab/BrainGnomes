@@ -7,7 +7,7 @@ test_that("is_external_path identifies directories", {
   expect_true(is_external_path(outside, proj))
 })
 
-test_that("process_subject warns on missing complete file and validates inputs for internal fmriprep", {
+test_that("process_subject warns once and skips when internal fmriprep inputs are absent", {
   root <- tempfile("proj_int_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
@@ -38,7 +38,8 @@ test_that("process_subject warns on missing complete file and validates inputs f
       invokeRestart("muffleWarning")
     }
   )
-  expect_true(any(grepl("Missing .*_complete", warns)))
+  expect_length(warns, 1L)
+  expect_match(warns, "Skipping postprocessing for 01")
   expect_true(any(grepl("no fmriprep NIfTI inputs matched expected patterns", warns)))
 })
 
@@ -73,7 +74,14 @@ test_that("process_subject proceeds when inputs exist but fmriprep complete file
              postprocess = TRUE, extract_rois = FALSE)
 
   submit_calls <- 0
+  buffer <- lgr::AppenderBuffer$new()
+  logger <- lgr::get_logger_glue(tempfile("fmriprep-input-log-"))
+  logger$set_threshold("info")
+  logger$set_propagate(FALSE)
+  logger$add_appender(buffer, "buffer")
+  withr::defer(logger$remove_appender("buffer"))
   local_mocked_bindings(
+    get_subject_logger = function(...) logger,
     get_job_script = function(...) "mock_script",
     get_job_sched_args = function(...) "--mock",
     submit_postprocess = function(...) {
@@ -92,8 +100,10 @@ test_that("process_subject proceeds when inputs exist but fmriprep complete file
     }
   )
 
-  expect_true(any(grepl("Missing .*_complete", warns)))
-  expect_true(any(grepl("Proceeding with postprocessing", warns)))
+  expect_length(warns, 0L)
+  log_text <- buffer$data$msg
+  expect_true(any(grepl("Proceeding with postprocessing.*no fMRIPrep completion marker", log_text)))
+  expect_false(any(grepl("Exiting process_subject", log_text)))
   expect_gt(submit_calls, 0)
 })
 

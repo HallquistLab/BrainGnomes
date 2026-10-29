@@ -1,3 +1,35 @@
+#' Open an existing tracking database with contention-safe initialization
+#'
+#' @param sqlite_db Path to an existing SQLite tracking database.
+#' @param read_only Whether the connection is only used to read tracking state.
+#' @param busy_timeout Maximum lock wait in seconds.
+#' @return An SQLite connection owned by the caller, which must disconnect it.
+#' @noRd
+tracking_db_connect <- function(sqlite_db, read_only = TRUE, busy_timeout = 10) {
+  # Also embedded in the minimal worker bootstrap, which needs only DBI and
+  # RSQLite even if the full BrainGnomes namespace cannot be loaded.
+  stopifnot(is.character(sqlite_db), length(sqlite_db) == 1L, !is.na(sqlite_db),
+    nzchar(sqlite_db), is.logical(read_only), length(read_only) == 1L, !is.na(read_only),
+    is.numeric(busy_timeout), length(busy_timeout) == 1L, is.finite(busy_timeout),
+    busy_timeout >= 0, busy_timeout <= .Machine$integer.max / 1000)
+  # RSQLite otherwise sets synchronous mode before a busy handler exists.
+  # Avoid that eager PRAGMA, then install the handler before any SQL is run.
+  con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL,
+    flags = if (read_only) RSQLite::SQLITE_RO else RSQLite::SQLITE_RW)
+  initialized <- FALSE
+  on.exit({
+    if (!initialized) DBI::dbDisconnect(con)
+  }, add = TRUE)
+  RSQLite::sqliteSetBusyHandler(con, as.integer(busy_timeout * 1000))
+  if (!read_only) {
+    # Keep submission commits durable. A lock timeout here must fail opening
+    # the connection, rather than warn and continue with unverified settings.
+    DBI::dbExecute(con, "PRAGMA synchronous = FULL")
+  }
+  initialized <- TRUE
+  con
+}
+
 #' helper function to insert a keyed data.frame into the sqlite storage database
 #' 
 #' @param gpa A \code{glm_pipeline_arguments} object used to lookup location of SQLite database for this insert

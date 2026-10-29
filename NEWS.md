@@ -1,5 +1,13 @@
 # BrainGnomes (development version)
 
+* Clarify postprocessing messages when reusing existing fMRIPrep inputs. Missing
+  legacy completion markers alone are informational; database failures, failed
+  upstream jobs, and invalid output manifests retain accurate diagnostics.
+  Only skipped work is described as skipped, without contradictory exit messages.
+* Wait for concurrent SQLite writers before querying completion or prefetch state
+  and before configuring durable submission connections. Avoid premature
+  synchronous-mode warnings and close connections when initialization fails.
+
 * Make QC coverage and execution uncertainty visible instead of treating an
   empty output denominator as completion. Add raw-acquisition/stage/stream
   coverage, unresolved-work and submission review items, prominent saved-run

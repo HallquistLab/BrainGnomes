@@ -1110,7 +1110,7 @@ prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NU
   on.exit(try(if (!is.null(con)) DBI::dbDisconnect(con), silent = TRUE), add = TRUE)
 
   record <- tryCatch({
-    con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+    con <- tracking_db_connect(sqlite_db)
     cols <- DBI::dbGetQuery(con, "PRAGMA table_info(job_tracking)")
     if (!"output_manifest" %in% cols$name) return(NULL)
 
