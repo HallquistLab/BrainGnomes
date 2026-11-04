@@ -1,3 +1,51 @@
+#' Acquire the current user's Python dependency installation lock
+#'
+#' Use one persistent lock across subjects and projects because their jobs may
+#' install into the same user-owned Python environment. Subject logs and atlas
+#' caches can belong to other lab members and must not determine this lock path.
+#'
+#' @param timeout Maximum wait in milliseconds; `Inf` waits indefinitely.
+#' @return A filelock handle that the caller must release with `filelock::unlock()`.
+#' @noRd
+acquire_python_dependency_lock <- function(
+    timeout = getOption("BrainGnomes.py_install_lock_timeout", 600000)) {
+  checkmate::assert_number(timeout, lower = 0, finite = FALSE)
+  lock_directory <- file.path(tools::R_user_dir("BrainGnomes", "cache"), "locks")
+  dir.create(lock_directory, recursive = TRUE, showWarnings = FALSE, mode = "0700")
+  if (!dir.exists(lock_directory)) {
+    stop(
+      "Cannot create Python dependency lock directory: ", lock_directory,
+      call. = FALSE
+    )
+  }
+  lock_file <- file.path(lock_directory, "brain_gnomes_python_dependencies.lock")
+  lock_handle <- tryCatch(
+    filelock::lock(lock_file, timeout = timeout),
+    error = function(e) {
+      stop(
+        "Unable to open Python dependency installation lock at ", lock_file,
+        ". Check read/write permissions on the file and access to its directory. ",
+        "Original error: ", conditionMessage(e),
+        call. = FALSE
+      )
+    }
+  )
+  # filelock returns NULL on contention timeout rather than raising an error.
+  # Never continue into package installation without owning the lock.
+  if (is.null(lock_handle)) {
+    stop(
+      "Timed out waiting for Python dependency installation lock at ", lock_file,
+      ". Another process may still be installing Python packages. ",
+      "Increase option 'BrainGnomes.py_install_lock_timeout' ",
+      "(in milliseconds) to wait longer.",
+      call. = FALSE
+    )
+  }
+  # Keep the file after unlocking: deleting it can let waiting and new jobs
+  # acquire locks on different inodes and enter installation simultaneously.
+  lock_handle
+}
+
 #' Load the Python image-resampling backend
 #'
 #' This centralizes dependency handling for the TemplateFlow and atlas
@@ -8,13 +56,11 @@
 #' @noRd
 load_image_resampling_backend <- function(required_modules,
                                           install_dependencies = TRUE,
-                                          lg = NULL,
-                                          lock_directory = NULL) {
+                                          lg = NULL) {
   checkmate::assert_character(
     required_modules, min.len = 1L, any.missing = FALSE, unique = TRUE
   )
   checkmate::assert_flag(install_dependencies)
-  checkmate::assert_string(lock_directory, null.ok = TRUE)
 
   install_dependencies <- isTRUE(getOption(
     "BrainGnomes.install_py_deps", install_dependencies
@@ -22,29 +68,6 @@ load_image_resampling_backend <- function(required_modules,
   force_managed_env <- isTRUE(getOption(
     "BrainGnomes.py_force_managed_env", FALSE
   ))
-
-  logger_logs_dir <- function(logger) {
-    log_dir <- path.expand("~")
-    if (!checkmate::test_class(logger, "Logger")) return(log_dir)
-    primary_dest <- tryCatch(
-      logger$appenders$postprocess_log$destination,
-      error = function(...) NULL
-    )
-    if (is.null(primary_dest) || !nzchar(primary_dest)) return(log_dir)
-
-    tryCatch(
-      suppressWarnings(normalizePath(
-        dirname(primary_dest), winslash = "/", mustWork = FALSE
-      )),
-      error = function(...) {
-        to_log(
-          lg, "warn",
-          "Cannot find log root for Python dependency lock based on {primary_dest}"
-        )
-        log_dir
-      }
-    )
-  }
 
   python_env_root <- function() {
     reticulate_python <- Sys.getenv("RETICULATE_PYTHON", "")
@@ -106,42 +129,13 @@ load_image_resampling_backend <- function(required_modules,
 
   missing <- character()
   if (install_dependencies) {
-    if (is.null(lock_directory)) lock_directory <- logger_logs_dir(lg)
-    if (!dir.exists(lock_directory)) {
-      dir.create(lock_directory, recursive = TRUE, showWarnings = FALSE)
-    }
-    if (!dir.exists(lock_directory)) {
-      stop(
-        "Cannot create Python dependency lock directory: ", lock_directory,
-        call. = FALSE
-      )
-    }
-
-    lock_file <- file.path(
-      lock_directory, "brain_gnomes_python_dependencies.lock"
-    )
-    lock_handle <- NULL
+    lock_handle <- acquire_python_dependency_lock()
     release_lock <- function() {
       if (!is.null(lock_handle)) {
         filelock::unlock(lock_handle)
         lock_handle <<- NULL
       }
     }
-    lock_timeout <- getOption("BrainGnomes.py_install_lock_timeout", 600)
-    lock_handle <- tryCatch(
-      filelock::lock(lock_file, timeout = lock_timeout),
-      error = function(e) {
-        stop(
-          glue::glue(
-            "Unable to acquire dependency installation lock at {lock_file}. ",
-            "Another process may still be installing Python packages. ",
-            "Increase option 'BrainGnomes.py_install_lock_timeout' to wait ",
-            "longer if needed. Original error: {conditionMessage(e)}"
-          ),
-          call. = FALSE
-        )
-      }
-    )
     on.exit(release_lock(), add = TRUE)
 
     if (use_managed_env && !py_initialized) {
@@ -457,8 +451,7 @@ resample_atlas_to_bold <- function(atlas_file, bold_file, cache_dir, lg = NULL) 
   backend <- load_image_resampling_backend(
     required_modules = c("nibabel", "nilearn"),
     install_dependencies = TRUE,
-    lg = lg,
-    lock_directory = cache_dir
+    lg = lg
   )
   temp_output <- tempfile(
     pattern = paste0(".", safe_name, "-"),

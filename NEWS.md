@@ -1,5 +1,12 @@
 # BrainGnomes (development version)
 
+* Move Python dependency installation locks from shared subject logs/atlas caches
+  to the current user's BrainGnomes cache so reruns by another lab member do not
+  fail on a previous user's lock-file permissions. Coordinate that user's jobs
+  across subjects/projects, retain lock files safely after unlocking, and stop
+  on lock timeouts before attempting installation. Use a ten-minute default wait
+  and distinguish file-access errors from contention (timeouts are milliseconds).
+
 * Make QC coverage and execution uncertainty visible instead of treating an
   empty output denominator as completion. Add raw-acquisition/stage/stream
   coverage, unresolved-work and submission review items, prominent saved-run

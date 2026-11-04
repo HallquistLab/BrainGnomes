@@ -1,6 +1,7 @@
 test_that("resample_template_to_img falls back to a managed env when Python is not writable", {
   skip_on_os("windows")
   skip_if_not_installed("reticulate")
+  withr::local_envvar(R_USER_CACHE_DIR = withr::local_tempdir())
 
   pkg_state <- new.env(parent = emptyenv())
   pkg_state$installed <- character()
