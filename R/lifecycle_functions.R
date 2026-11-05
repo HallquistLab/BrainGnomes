@@ -325,7 +325,7 @@ doctor_project <- function(input = getwd(), steps = NULL, deep = FALSE, quiet = 
     parent_ok <- dir.exists(db_parent) && file.access(db_parent, 2L) == 0L
     db_ok <- if (file.exists(sqlite_db)) {
       tryCatch({
-        con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+        con <- tracking_db_connect(sqlite_db)
         on.exit(DBI::dbDisconnect(con), add = TRUE)
         DBI::dbGetQuery(con, "PRAGMA quick_check")[[1L]][1L] == "ok"
       }, error = function(e) FALSE)
@@ -1017,7 +1017,7 @@ resolve_run_id <- function(scfg, run_id = "latest") {
   if (!checkmate::test_file_exists(sqlite_db) || !sqlite_table_exists(sqlite_db, "job_tracking")) {
     stop("No job-tracking database is available for this project.", call. = FALSE)
   }
-  con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+  con <- tracking_db_connect(sqlite_db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   latest <- DBI::dbGetQuery(con,
     "SELECT sequence_id FROM job_tracking WHERE sequence_id IS NOT NULL ORDER BY datetime(time_submitted) DESC, id DESC LIMIT 1")

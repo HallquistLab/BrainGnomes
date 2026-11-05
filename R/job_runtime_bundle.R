@@ -106,7 +106,8 @@ prepare_job_runtime_bundle <- function(contract, env_variables) {
   }
   copy_job_runtime_files(if (source) file.path(package_path, "inst") else package_path,
                          staging, c("worker_bootstrap.R", "worker_runtime_load.R"))
-  core_functions <- c("job_submission_connect", "job_submission_transaction", "bind_job_submission", "record_job_bootstrap_failure")
+  core_functions <- c("tracking_db_connect", "job_submission_connect", "job_submission_transaction",
+    "bind_job_submission", "record_job_bootstrap_failure")
   core <- unlist(lapply(core_functions, function(name) {
     c(paste0(name, " <- ", paste(deparse(get(name, envir = asNamespace("BrainGnomes"))), collapse = "\n")), "")
   }), use.names = FALSE)
