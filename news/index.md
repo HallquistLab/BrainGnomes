@@ -2,6 +2,12 @@
 
 ## BrainGnomes (development version)
 
+- Respect stream input selectors in acquisition coverage. Keep
+  deliberately excluded scans visible without missing-work flags, and
+  inherit the union of input selections for ROI streams. Preserve
+  genuine gaps and uncertain selection when upstream evidence or saved
+  selector metadata is unavailable.
+
 - Move Python dependency installation locks from shared subject
   logs/atlas caches to the current user’s BrainGnomes cache so reruns by
   another lab member do not fail on a previous user’s lock-file
