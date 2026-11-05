@@ -136,3 +136,8 @@ Voxels with missing, all-zero, or constant BOLD time series are
 excluded. This signal-validity mask is not an anatomical brain
 segmentation. Supply `mask_file` to restrict extraction to a chosen
 spatial mask.
+
+Associated censor files must contain one numeric zero or one per line.
+Fractional, missing, nonfinite, and nonnumeric values are rejected
+before conversion to integers, so malformed values cannot silently
+remove volumes.
