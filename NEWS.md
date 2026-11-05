@@ -1,5 +1,12 @@
 # BrainGnomes (development version)
 
+* Stop atlas resampling when its cache lock times out, before reusing or
+  publishing a resampled atlas.
+* Validate censor files as binary numbers before integer conversion throughout
+  ROI extraction, postprocessing, and provenance. Fractional values now raise an
+  error instead of silently changing which volumes are retained.
+* Forward the CIFTI-defaults option during PBS TemplateFlow prefetch, matching
+  Slurm so offline CIFTI runs receive their required cached resources.
 * Respect stream input selectors in acquisition coverage. Keep deliberately
   excluded scans visible without missing-work flags, and inherit the union of
   input selections for ROI streams. Preserve genuine gaps and uncertain selection

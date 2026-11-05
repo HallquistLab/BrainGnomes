@@ -368,8 +368,7 @@ derivative_provenance_attempt <- function(tracker, status, error = NULL) {
 #' @noRd
 derivative_provenance_censor <- function(file, n_input = NULL) {
   if (!checkmate::test_file_exists(file)) return(list(Available = FALSE))
-  values <- suppressWarnings(as.integer(readLines(file, warn = FALSE)))
-  if (anyNA(values) || any(!values %in% c(0L, 1L))) stop("Invalid censor vector: ", file)
+  values <- read_censor_file(file)
   list(
     Available = TRUE, File = derivative_provenance_fingerprint(file, "censor"),
     Convention = "1 = retained; 0 = censored", IndexBase = 1L,

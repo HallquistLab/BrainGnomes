@@ -420,6 +420,7 @@ resample_atlas_to_bold <- function(atlas_file, bold_file, cache_dir, lg = NULL) 
   lock_timeout <- getOption(
     "BrainGnomes.atlas_resample_lock_timeout", 600000
   )
+  checkmate::assert_number(lock_timeout, lower = 0, finite = FALSE)
   lock_file <- paste0(output, ".lock")
   lock <- tryCatch(
     filelock::lock(lock_file, timeout = lock_timeout),
@@ -430,6 +431,15 @@ resample_atlas_to_bold <- function(atlas_file, bold_file, cache_dir, lg = NULL) 
       )
     }
   )
+  # filelock returns NULL on timeout; no cached file or backend is safe to
+  # access until this invocation owns the publication lock.
+  if (is.null(lock)) {
+    stop(
+      "Timed out waiting for atlas-resampling cache lock at ", lock_file,
+      ". Increase option 'BrainGnomes.atlas_resample_lock_timeout' ",
+      "(in milliseconds) to wait longer.", call. = FALSE
+    )
+  }
   on.exit(filelock::unlock(lock), add = TRUE)
 
   if (file.exists(output)) {
