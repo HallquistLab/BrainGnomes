@@ -1,4 +1,4 @@
-# BrainGnomes 1.01 (2026-10-23)
+# BrainGnomes 1.0-1 (2026-10-23)
 
 ## Job submission, tracking, and recovery
 
