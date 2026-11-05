@@ -58,6 +58,11 @@ widgets$outputs
 Each raw acquisition is assessed once per selected stage/stream, regardless of
 the number of derivative spaces or atlas products. Combined-echo derivatives
 can support more than one raw echo; this is not a prediction of product counts.
+Scans excluded by configured stream selectors remain visible as
+`excluded_by_configuration` and do not create missing-work review items. ROI
+streams inherit their postprocessing inputs. Selection that cannot be established
+from recorded evidence remains unresolved; this can occur with custom regular
+expressions when no matching upstream input is observed.
 Units without raw acquisitions remain explicitly unresolved. AROMA file coverage
 is not inferred from filenames; its recorded workflow remains separate.
 
