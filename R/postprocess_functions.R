@@ -90,7 +90,7 @@ scrub_interpolate <- function(in_file, censor_file, out_file,
   to_log(lg, "debug", "in_file: {in_file}")
   to_log(lg, "debug", "censor_file: {censor_file}")
 
-  censor <- as.integer(readLines(censor_file))
+  censor <- read_censor_file(censor_file)
   t_interpolate <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
   
   if (!any(t_interpolate)) {
@@ -175,7 +175,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
     to_log(lg, "fatal", msg)
   }
 
-  censor <- as.integer(readLines(censor_file))
+  censor <- read_censor_file(censor_file)
   t_scrub <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
 
   if (!any(t_scrub)) {
@@ -912,7 +912,7 @@ intensity_reference_frames <- function(in_file, confounds_file = NULL,
   }
 
   if (checkmate::test_file_exists(censor_file)) {
-    censor <- suppressWarnings(as.numeric(readLines(censor_file, warn = FALSE)))
+    censor <- read_censor_file(censor_file)
     if (length(censor) == n_volumes && all(is.finite(censor))) {
       include <- include & censor > 0
     } else if (!is.null(lg)) {
@@ -1614,7 +1614,7 @@ confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file 
     Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE)
     good_vols <- rep(TRUE, nrow(Xmat))
     if (checkmate::test_file_exists(censor_file)) {
-      good_vols <- as.logical(as.integer(readLines(censor_file))) # bad timepoints are 0 in the censor file
+      good_vols <- as.logical(read_censor_file(censor_file)) # bad timepoints are 0 in the censor file
       if (sum(good_vols) < length(good_vols)) {
         to_log(
           lg,
@@ -1727,6 +1727,19 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 #'
 #' This function depends on a companion Python script (\code{fetch_matched_template_image.py})
 #' that is bundled with the BrainGnomes package and sourced at runtime.
+#'
+#' Automatic Python dependency checks/installations are serialized across the
+#' current user's jobs using `brain_gnomes_python_dependencies.lock` in the
+#' `locks` subdirectory of `tools::R_user_dir("BrainGnomes", "cache")`, rather
+#' than a shared subject log directory. The default lock wait is ten minutes;
+#' `options(BrainGnomes.py_install_lock_timeout = 600000)` sets it in milliseconds.
+#' The lock is released after dependency setup, including on errors, but the
+#' empty lock file is retained to allow waiting jobs to coordinate safely.
+#' Its presence alone does not indicate a running installation. Do not delete
+#' it while jobs may be using it. Set `options(BrainGnomes.install_py_deps = FALSE)`
+#' to skip automatic installation and its lock when dependencies are already
+#' installed in the selected Python environment. For an environment shared
+#' across user accounts, preinstall dependencies and disable automatic installation.
 #'
 #' @return Invisibly returns \code{TRUE} on success. A new NIfTI file is written to \code{output}.
 #'

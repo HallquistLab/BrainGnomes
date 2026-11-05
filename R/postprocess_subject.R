@@ -994,7 +994,7 @@ postprocess_subject_impl <- function(in_file, cfg, provenance) {
       validation_context$censor_vec <- if (
         checkmate::test_file_exists(censor_file)
       ) {
-        as.integer(readLines(censor_file))
+        read_censor_file(censor_file)
       } else {
         integer()
       }

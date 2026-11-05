@@ -60,4 +60,17 @@ will lead to selection of the MNI152NLin2009cAsym template.
 
 This function depends on a companion Python script (\code{fetch_matched_template_image.py})
 that is bundled with the BrainGnomes package and sourced at runtime.
+
+Automatic Python dependency checks/installations are serialized across the
+current user's jobs using \code{brain_gnomes_python_dependencies.lock} in the
+\code{locks} subdirectory of \code{tools::R_user_dir("BrainGnomes", "cache")}, rather
+than a shared subject log directory. The default lock wait is ten minutes;
+\code{options(BrainGnomes.py_install_lock_timeout = 600000)} sets it in milliseconds.
+The lock is released after dependency setup, including on errors, but the
+empty lock file is retained to allow waiting jobs to coordinate safely.
+Its presence alone does not indicate a running installation. Do not delete
+it while jobs may be using it. Set \code{options(BrainGnomes.install_py_deps = FALSE)}
+to skip automatic installation and its lock when dependencies are already
+installed in the selected Python environment. For an environment shared
+across user accounts, preinstall dependencies and disable automatic installation.
 }

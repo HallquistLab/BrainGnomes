@@ -61,7 +61,11 @@ and structured details as JSON. Saved-run collection requires resolved
 provenance and cannot be combined with additional \code{subjects}.
 \code{coverage} retains raw acquisitions without resolved derivatives, as well as
 configured units with no raw inputs. Its review flags are not image-quality
-exclusions. Saved submission state and acknowledgement counts are recorded
+exclusions. Acquisitions excluded by a stream's input selectors remain visible
+as \code{excluded_by_configuration} without missing-work flags. ROI streams inherit
+the union of their postprocessing inputs. Selection that cannot be established
+from recorded evidence remains unresolved, including custom regular expressions
+without matching upstream inputs. Saved submission state and acknowledgement counts are recorded
 in metadata independently of observed file availability.
 }
 \examples{
