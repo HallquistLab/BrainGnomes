@@ -7,6 +7,24 @@
 * Wait for concurrent SQLite writers before querying completion or prefetch state
   and before configuring durable submission connections. Avoid premature
   synchronous-mode warnings and close connections when initialization fails.
+* Stop atlas resampling when its cache lock times out, before reusing or
+  publishing a resampled atlas.
+* Validate censor files as binary numbers before integer conversion throughout
+  ROI extraction, postprocessing, and provenance. Fractional values now raise an
+  error instead of silently changing which volumes are retained.
+* Forward the CIFTI-defaults option during PBS TemplateFlow prefetch, matching
+  Slurm so offline CIFTI runs receive their required cached resources.
+* Respect stream input selectors in acquisition coverage. Keep deliberately
+  excluded scans visible without missing-work flags, and inherit the union of
+  input selections for ROI streams. Preserve genuine gaps and uncertain selection
+  when upstream evidence or saved selector metadata is unavailable.
+
+* Move Python dependency installation locks from shared subject logs/atlas caches
+  to the current user's BrainGnomes cache so reruns by another lab member do not
+  fail on a previous user's lock-file permissions. Coordinate that user's jobs
+  across subjects/projects, retain lock files safely after unlocking, and stop
+  on lock timeouts before attempting installation. Use a ten-minute default wait
+  and distinguish file-access errors from contention (timeouts are milliseconds).
 
 * Make QC coverage and execution uncertainty visible instead of treating an
   empty output denominator as completion. Add raw-acquisition/stage/stream

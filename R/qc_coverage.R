@@ -13,6 +13,102 @@ qc_legacy_streams <- function(streams, stages, configured = NULL) {
   }, logical(1))
 }
 
+#' Match derivative products to a raw acquisition without requiring output-only entities
+#' @param products Derivative inventory rows.
+#' @param target One raw acquisition or unresolved workflow-unit row.
+#' @return Logical vector identifying compatible product rows.
+#' @noRd
+qc_coverage_matches <- function(products, target) {
+  compatible <- !is.na(products$sub_id) & products$sub_id == target$sub_id &
+    ifelse(is.na(products$ses_id), "", products$ses_id) == ifelse(is.na(target$ses_id), "", target$ses_id)
+  for (field in c("task", "run", "acquisition", "reconstruction", "direction", "echo", "part")) {
+    compatible <- compatible & (is.na(products[[field]]) | is.na(target[[field]]) |
+      products[[field]] == target[[field]])
+  }
+  compatible %in% TRUE
+}
+
+#' Assess input selectors using recorded acquisition identities and upstream paths
+#' @param specs Postprocessing input specifications, combined as alternatives.
+#' @param acquisitions Raw acquisition rows with source_file and BIDS entities.
+#' @param upstream Recorded fMRIPrep inventory rows; no filesystem reads are made.
+#' @return TRUE for eligible inputs, FALSE for definite exclusions, NA if unresolved.
+#' @noRd
+qc_selector_applicability <- function(specs, acquisitions, upstream) {
+  if (!checkmate::test_character(specs, min.len = 1L, any.missing = FALSE)) {
+    return(rep(NA, nrow(acquisitions)))
+  }
+  # Inspect one alternative at a time. Custom regexes can confirm selection from
+  # observed inputs, but a nonmatch cannot prove exclusion of a missing product.
+  evaluate_spec <- function(spec) {
+    tryCatch({
+      pattern <- construct_bids_regex(spec)
+      suppressWarnings(grepl(pattern, "", perl = TRUE)) # Validate even without upstream files.
+      # A full regex (including regex-valued entities) can depend on output-only
+      # fields or cross entity boundaries. Only observed matches prove selection;
+      # a missing/nonmatching filename must never prove an acquisition excluded.
+      tokens <- strsplit(trimws(spec), "\\s+")[[1L]]
+      values <- sub("^[^:]+:", "", tokens)
+      if (grepl("^regex:", trimws(spec)) || any(!grepl("^[A-Za-z0-9]+$", values))) {
+        selected <- upstream[grepl(pattern, basename(upstream$derivative_file), perl = TRUE), , drop = FALSE]
+        return(vapply(seq_len(nrow(acquisitions)), function(index) {
+          if (any(qc_coverage_matches(selected, acquisitions[index, , drop = FALSE]))) TRUE else NA
+        }, logical(1)))
+      }
+      keys <- tolower(sub(":.*$", "", tokens))
+      fields <- c(sub = "sub_id", subject = "sub_id", ses = "ses_id", session = "ses_id",
+        task = "task", acq = "acquisition", acquisition = "acquisition",
+        rec = "reconstruction", reconstruction = "reconstruction", dir = "direction",
+        direction = "direction", run = "run", echo = "echo")
+      # Space, resolution, and description constrain derivative products. They
+      # must not exclude raw scans whose task/run identities are eligible.
+      keep <- keys %in% names(fields)
+      values <- values[keep]
+      mapped <- unname(fields[keys[keep]])
+      first <- !duplicated(mapped)
+      values <- values[first]
+      mapped <- mapped[first]
+      result <- rep(TRUE, nrow(acquisitions))
+      for (index in seq_along(values)) {
+        matches <- acquisitions[[mapped[index]]] == values[index]
+        # A definite mismatch wins even if another required entity is absent.
+        result <- result & matches
+      }
+      result
+    }, error = function(e) rep(NA, nrow(acquisitions)))
+  }
+  selected <- rep(FALSE, nrow(acquisitions))
+  for (spec in specs) selected <- selected | evaluate_spec(spec)
+  selected
+}
+
+#' Resolve a native stream's acquisition applicability from frozen snapshot settings
+#' @param snapshot QC snapshot with optional input_selection metadata.
+#' @param acquisitions Raw acquisition and unresolved-unit rows.
+#' @param stage Processing stage.
+#' @param stream Stream name.
+#' @return Logical eligibility vector; unknown selectors remain NA, never exclusions.
+#' @noRd
+qc_stream_applicability <- function(snapshot, acquisitions, stage, stream) {
+  selection <- snapshot$metadata$input_selection
+  if (!stage %in% c("postprocess", "extract_rois") || is.null(selection)) {
+    # Older snapshots have no selector evidence. Preserve their conservative
+    # coverage behavior rather than consulting today's mutable configuration.
+    return(rep(TRUE, nrow(acquisitions)))
+  }
+  parents <- if (stage == "postprocess") stream else selection$extract_rois[[stream]]
+  upstream <- snapshot$inventory[snapshot$inventory$stage == "fmriprep", , drop = FALSE]
+  result <- rep(FALSE, nrow(acquisitions))
+  if (!length(parents)) result[] <- NA
+  for (parent in parents) {
+    result <- result | qc_selector_applicability(selection$postprocess[[parent]], acquisitions, upstream)
+  }
+  # A synthetic unit has no acquisition identity to exclude. Keep its missing
+  # inputs visible, including expected participants whose data have not arrived.
+  result[is.na(acquisitions$source_file)] <- TRUE
+  result
+}
+
 #' Describe coverage at raw-acquisition and unresolved workflow-unit grain
 #' @param snapshot QC snapshot containing acquisitions, derivatives, workflow, and metadata.
 #' @return Coverage rows with observational denominators and explicit review reasons.
@@ -66,24 +162,21 @@ qc_acquisition_coverage <- function(snapshot) {
       for (field in setdiff(identity, names(absent))) absent[[field]] <- rep(NA_character_, nrow(absent))
       absent$source_file <- rep(NA_character_, nrow(absent))
       targets <- unique(rbind(raw[c(identity, "source_file")], absent[c(identity, "source_file")]))
+      applicable <- qc_stream_applicability(snapshot, targets, stage, stream)
       for (index in seq_len(nrow(targets))) {
         target <- targets[index, , drop = FALSE]
-        compatible <- !is.na(products$sub_id) & products$sub_id == target$sub_id &
-          ifelse(is.na(products$ses_id), "", products$ses_id) == ifelse(is.na(target$ses_id), "", target$ses_id)
-        for (field in setdiff(identity, c("sub_id", "ses_id"))) {
-          compatible <- compatible & (is.na(products[[field]]) | is.na(target[[field]]) |
-            products[[field]] == target[[field]])
-        }
-        matched <- products[which(compatible), , drop = FALSE]
+        matched <- products[qc_coverage_matches(products, target), , drop = FALSE]
         tracked <- units[!is.na(units$sub_id) & units$sub_id == target$sub_id &
           (is.na(units$ses_id) | (!is.na(target$ses_id) & units$ses_id == target$ses_id)), , drop = FALSE]
         available <- sum(matched$output_status == "available")
-        status <- if (is.na(target$source_file)) "inputs_not_observed" else if (nrow(matched)) {
+        status <- if (isFALSE(applicable[index])) "excluded_by_configuration" else if (is.na(target$source_file)) "inputs_not_observed" else if (nrow(matched)) {
           if (available == nrow(matched)) "observed" else "missing_outputs"
-        } else if (stage == "aroma") "workflow_only" else "unresolved_outputs"
-        problem <- status %in% c("inputs_not_observed", "missing_outputs", "unresolved_outputs")
-        workflow_problem <- any(tracked$status %in% c("NOT_TRACKED", "FAILED", "BLOCKED", "CANCELLED", "UNKNOWN"))
+        } else if (is.na(applicable[index])) "selection_unresolved" else if (stage == "aroma") "workflow_only" else "unresolved_outputs"
+        problem <- status %in% c("inputs_not_observed", "missing_outputs", "unresolved_outputs", "selection_unresolved")
+        workflow_problem <- !isFALSE(applicable[index]) && any(tracked$status %in% c("NOT_TRACKED", "FAILED", "BLOCKED", "CANCELLED", "UNKNOWN"))
         reason <- switch(status,
+          excluded_by_configuration = "Acquisition excluded by this stream's configured input selectors; no output expected",
+          selection_unresolved = "Input selection cannot be established from recorded acquisition/upstream evidence; not a confirmed missing output",
           inputs_not_observed = "No raw BOLD acquisition observed for this configured unit; output scope unresolved",
           missing_outputs = "Some resolved output paths are missing or empty",
           unresolved_outputs = "Raw BOLD present but no derivative paths resolved for this stage/stream",

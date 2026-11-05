@@ -298,3 +298,78 @@ test_that("atlas resampling rejects label loss", {
     "lost labels: 2"
   )
 })
+
+test_that("atlas lock timeout stops before cache validation or backend access", {
+  root <- withr::local_tempdir()
+  bold <- file.path(root, "bold.nii.gz")
+  atlas <- file.path(root, "atlas.nii.gz")
+  RNifti::writeNifti(array(1, c(2L, 2L, 2L, 3L)), bold)
+  RNifti::writeNifti(array(1L, c(2L, 2L, 2L)), atlas)
+  withr::local_options(BrainGnomes.atlas_resample_lock_timeout = 0)
+  local_mocked_bindings(lock = function(...) NULL,
+    unlock = function(...) stop("Must not unlock an unacquired lock"), .package = "filelock")
+  local_mocked_bindings(
+    pp_compare_nifti_grid = function(...) stop("Must not inspect cached outputs without a lock"),
+    load_image_resampling_backend = function(...) stop("Must not load backend without a lock")
+  )
+  expect_error(resample_atlas_to_bold(atlas, bold, file.path(root, "cache")),
+    "Timed out waiting for atlas-resampling cache lock.*milliseconds")
+  expect_length(list.files(file.path(root, "cache"), pattern = "[.]nii"), 0L)
+})
+
+test_that("a real atlas lock excludes another process and is released on errors", {
+  skip_on_os("windows")
+  root <- withr::local_tempdir()
+  bold <- file.path(root, "bold.nii.gz")
+  atlas <- file.path(root, "atlas.nii.gz")
+  cache <- file.path(root, "cache")
+  ready <- file.path(root, "ready")
+  release <- file.path(root, "release")
+  RNifti::writeNifti(array(1, c(2L, 2L, 2L, 3L)), bold)
+  RNifti::writeNifti(array(1L, c(2L, 2L, 2L)), atlas)
+  dir.create(cache)
+  lock_file <- file.path(cache, paste0("atlas_source-",
+    substr(unname(tools::md5sum(atlas)), 1L, 12L), "_grid-",
+    substr(nifti_grid_checksum(bold), 1L, 12L), ".nii.gz.lock"))
+  # Hold the same publication lock from an independent worker until released.
+  worker <- parallel::mcparallel({
+    handle <- filelock::lock(lock_file, timeout = 0)
+    if (is.null(handle)) stop("Worker could not acquire lock")
+    file.create(ready)
+    deadline <- Sys.time() + 20
+    while (!file.exists(release) && Sys.time() < deadline) Sys.sleep(0.01)
+    filelock::unlock(handle)
+  }, silent = TRUE)
+  collected <- FALSE
+  withr::defer({
+    if (!collected) {
+      file.create(release)
+      parallel::mccollect(worker)
+    }
+  })
+  deadline <- Sys.time() + 10
+  while (!file.exists(ready) && Sys.time() < deadline) Sys.sleep(0.01)
+  expect_true(file.exists(ready))
+  if (!file.exists(ready)) stop("Worker did not acquire lock")
+  withr::local_options(BrainGnomes.atlas_resample_lock_timeout = 0)
+  backend_calls <- 0L
+  local_mocked_bindings(load_image_resampling_backend = function(...) {
+    backend_calls <<- backend_calls + 1L
+    stop("simulated backend failure")
+  })
+  expect_error(resample_atlas_to_bold(atlas, bold, cache), "Timed out")
+  expect_identical(backend_calls, 0L)
+  file.create(release)
+  parallel::mccollect(worker)
+  collected <- TRUE
+  expect_error(resample_atlas_to_bold(atlas, bold, cache), "simulated backend failure")
+  expect_identical(backend_calls, 1L)
+  # A fresh process can acquire the lock after the failing invocation exits.
+  probe <- parallel::mcparallel({
+    handle <- filelock::lock(lock_file, timeout = 0)
+    available <- !is.null(handle)
+    if (available) filelock::unlock(handle)
+    available
+  }, silent = TRUE)
+  expect_true(parallel::mccollect(probe)[[1L]])
+})

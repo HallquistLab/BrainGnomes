@@ -746,3 +746,146 @@ test_that("a 500-participant offline report supports real desktop and mobile rev
   expect_match(paste(output, collapse = "\n"), "QC browser walkthrough passed", fixed = TRUE)
   expect_identical(readRDS(file.path(dirname(html), "inventory.rds")), original)
 })
+
+test_that("coverage excludes unselected tasks without hiding genuinely missing work", {
+  fixture <- make_qc_fixture()
+  withr::defer(unlink(fixture$root, recursive = TRUE))
+  paths <- populate_qc_fixture(fixture)
+  fixture$cfg$postprocess$clean$input_regex <-
+    "task:rest space:MNI152NLin6Asym desc:preproc suffix:bold"
+  write_qc_fixture_file(sub("task-rest", "task-nback", paths$raw))
+  write_qc_fixture_file(sub("task-rest", "task-nback", paths$preproc))
+  # An old output from a broader configuration remains evidence, but does not
+  # make that scan eligible under the current rest-only selector.
+  old_output <- write_qc_fixture_file(sub("task-rest", "task-nback", paths$pp))
+  # A subject with only excluded scans must not acquire fabricated missing work.
+  write_qc_fixture_file(file.path(fixture$cfg$metadata$bids_directory, "sub-002", "func",
+    "sub-002_task-nback_bold.nii.gz"))
+  # An eligible raw input without any upstream derivative remains unresolved.
+  write_qc_fixture_file(file.path(fixture$cfg$metadata$bids_directory, "sub-004", "func",
+    "sub-004_task-rest_bold.nii.gz"))
+  snapshot <- collect_qc_inventory(fixture$cfg, subjects = data.frame(sub_id = "003"), quiet = TRUE)
+  native <- subset(snapshot$coverage, stage %in% c("postprocess", "extract_rois"))
+  excluded <- subset(native, task == "nback")
+  expect_equal(nrow(excluded), 4L)
+  expect_true(all(excluded$coverage_status == "excluded_by_configuration"))
+  expect_false(any(excluded$attention))
+  expect_true(old_output %in% snapshot$inventory$derivative_file)
+  expect_true(all(subset(native, sub_id == "001" & task == "rest")$coverage_status == "observed"))
+  expect_true(all(subset(native, sub_id == "004")$coverage_status == "unresolved_outputs"))
+  expect_true(all(subset(native, sub_id == "004")$attention))
+  expect_true(all(subset(native, sub_id == "003")$coverage_status == "inputs_not_observed"))
+  queue <- qc_review_queue(snapshot$inventory, snapshot$coverage, snapshot$metadata)
+  expect_false(any(queue$task %in% "nback" & queue$stage %in% c("postprocess", "extract_rois") &
+    queue$category == "Coverage/workflow unresolved"))
+
+  unlink(c(paths$pp, paths$rois))
+  missing <- collect_qc_inventory(fixture$cfg, quiet = TRUE)
+  gaps <- subset(missing$coverage, sub_id == "001" & task == "rest" &
+    stage %in% c("postprocess", "extract_rois"))
+  expect_true(all(gaps$coverage_status == "missing_outputs"))
+  expect_true(all(gaps$attention))
+  # Exclusions do not erase the project's raw acquisition inventory.
+  expect_equal(nrow(missing$acquisitions), 4L)
+  output <- file.path(fixture$root, "selector-export")
+  write_qc_inventory(snapshot, output)
+  saved <- readRDS(file.path(output, "inventory.rds"))
+  saved$coverage <- NULL
+  expect_equal(qc_snapshot_coverage(saved), snapshot$coverage)
+  # Legacy snapshots retain uncertainty instead of borrowing current settings.
+  saved$metadata$input_selection <- NULL
+  expect_true(all(subset(qc_snapshot_coverage(saved), sub_id == "002" & task == "nback" &
+    stage %in% c("postprocess", "extract_rois"))$attention))
+})
+
+test_that("coverage combines selector alternatives and ROI parent streams", {
+  fixture <- make_qc_fixture()
+  withr::defer(unlink(fixture$root, recursive = TRUE))
+  paths <- populate_qc_fixture(fixture)
+  fixture$cfg$postprocess$clean$input_regex <- c(
+    "task:rest run:01 desc:preproc suffix:bold", "task:nback run:02 desc:preproc suffix:bold")
+  fixture$cfg$postprocess$taskonly <- modifyList(fixture$cfg$postprocess$clean,
+    list(bids_desc = "taskonly", input_regex = "task:nback desc:preproc suffix:bold"))
+  fixture$cfg$extract_rois$network$input_streams <- c("clean", "taskonly")
+  nback <- sub("task-rest", "task-nback", paths$raw)
+  write_qc_fixture_file(nback)
+  write_qc_fixture_file(sub("run-01", "run-02", nback))
+  snapshot <- collect_qc_inventory(fixture$cfg, quiet = TRUE)
+  clean <- subset(snapshot$coverage, stage == "postprocess" & stream == "clean")
+  expect_equal(subset(clean, task == "nback" & run == "01")$coverage_status,
+    "excluded_by_configuration")
+  expect_equal(subset(clean, task == "nback" & run == "02")$coverage_status,
+    "unresolved_outputs")
+  network <- subset(snapshot$coverage, stage == "extract_rois" & stream == "network")
+  expect_false(any(network$coverage_status == "excluded_by_configuration"))
+  expect_true(all(subset(network, task == "nback")$attention))
+  # Failing one ROI parent does not override eligibility through another parent.
+  snapshot$metadata$input_selection$postprocess$taskonly <- NULL
+  snapshot$coverage <- NULL
+  expect_false(any(subset(qc_snapshot_coverage(snapshot), stage == "extract_rois" &
+    task == "rest")$coverage_status == "excluded_by_configuration"))
+  snapshot$metadata$input_selection$postprocess$clean <- "regex:.*task-rest.*_bold[.]nii[.]gz$"
+  unknown <- subset(qc_snapshot_coverage(snapshot), stage == "postprocess" &
+    stream == "clean" & task == "nback")
+  expect_true(all(unknown$coverage_status == "selection_unresolved"))
+  expect_true(all(unknown$attention))
+})
+
+test_that("selector uncertainty never becomes a definite exclusion", {
+  raw <- c("sub-01_task-rest_run-01_bold.nii.gz", "sub-01_task-nback_run-02_bold.nii.gz",
+    "sub-01_task-rest_bold.nii.gz")
+  acquisitions <- qc_entities(raw)
+  acquisitions$source_file <- raw
+  upstream <- qc_entities(character())
+  upstream$derivative_file <- character()
+  expect_identical(qc_selector_applicability("task:rest run:01 space:MNI152NLin6Asym desc:preproc suffix:bold",
+    acquisitions, upstream), c(TRUE, FALSE, NA))
+  expect_identical(qc_selector_applicability("task:rest run:[[:digit:]]+ suffix:bold",
+    acquisitions, upstream), rep(NA, 3L))
+  expect_identical(qc_selector_applicability("task:rest space:Missing desc:preproc suffix:bold",
+    acquisitions, upstream), c(TRUE, FALSE, TRUE))
+  expect_identical(qc_selector_applicability("task:[ suffix:bold", acquisitions, upstream),
+    rep(NA, 3L))
+  expect_identical(qc_selector_applicability("regex:.*task-rest.*space-MNI.*_bold[.]nii[.]gz$",
+    acquisitions, upstream), rep(NA, 3L))
+  path <- "sub-01_task-rest_run-01_space-MNI_desc-preproc_bold.nii.gz"
+  upstream <- qc_entities(path)
+  upstream$derivative_file <- path
+  expect_identical(qc_selector_applicability("regex:.*task-rest.*space-MNI.*_bold[.]nii[.]gz$",
+    acquisitions, upstream), c(TRUE, NA, TRUE))
+  expect_identical(qc_selector_applicability("task:rest run:[[:digit:]]+ suffix:bold",
+    acquisitions, upstream), c(TRUE, NA, TRUE))
+  echoes <- qc_entities(c("sub-01_task-rest_run-01_echo-1_bold.nii.gz",
+    "sub-01_task-rest_run-01_echo-2_bold.nii.gz"))
+  echoes$source_file <- c("sub-01_task-rest_run-01_echo-1_bold.nii.gz",
+    "sub-01_task-rest_run-01_echo-2_bold.nii.gz")
+  expect_identical(qc_selector_applicability("regex:.*task-rest.*space-MNI.*_bold[.]nii[.]gz$",
+    echoes, upstream), c(TRUE, TRUE))
+})
+
+test_that("saved-run coverage uses recorded selectors rather than current configuration", {
+  fixture <- make_qc_fixture()
+  withr::defer(unlink(fixture$root, recursive = TRUE))
+  paths <- populate_qc_fixture(fixture)
+  write_qc_fixture_file(sub("task-rest", "task-nback", paths$raw))
+  recorded <- fixture$cfg
+  recorded$postprocess$clean$input_regex <- "task:rest desc:preproc suffix:bold"
+  saved <- list(schema_version = "brain-gnomes-run-provenance-v1", run_id = "run-current",
+    state = "submitted", recorded_at = "2026-11-05T10:00:00Z",
+    configuration = list(values = unclass(recorded)),
+    request = list(steps = c("postprocess", "extract_rois"), postprocess_streams = "clean",
+      extract_streams = "network", work_units = data.frame(stage = c("postprocess", "extract_rois"),
+        sub_id = "001", ses_id = "A", stream = c("clean", "network"))),
+    submission = list(submitted_job_ids = "12345", tracked_jobs = data.frame()),
+    execution = list(scope_status = "resolved", subjects = data.frame(sub_id = "001", ses_id = "A")))
+  path <- file.path(fixture$cfg$metadata$log_directory, "runs", "run-current", "provenance.json")
+  dir.create(dirname(path), recursive = TRUE)
+  jsonlite::write_json(saved, path, auto_unbox = TRUE, na = "null")
+  fixture$cfg$postprocess$clean$input_regex <- "task:nback desc:preproc suffix:bold"
+  snapshot <- collect_qc_inventory(fixture$cfg, run_id = "run-current", quiet = TRUE)
+  excluded <- subset(snapshot$coverage, task == "nback")
+  expect_equal(nrow(excluded), 2L)
+  expect_true(all(excluded$coverage_status == "excluded_by_configuration"))
+  expect_false(any(excluded$attention))
+  expect_true(all(subset(snapshot$coverage, task == "rest")$coverage_status == "observed"))
+})
