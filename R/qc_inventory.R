@@ -39,7 +39,11 @@
 #'   provenance and cannot be combined with additional `subjects`.
 #'   `coverage` retains raw acquisitions without resolved derivatives, as well as
 #'   configured units with no raw inputs. Its review flags are not image-quality
-#'   exclusions. Saved submission state and acknowledgement counts are recorded
+#'   exclusions. Acquisitions excluded by a stream's input selectors remain visible
+#'   as `excluded_by_configuration` without missing-work flags. ROI streams inherit
+#'   the union of their postprocessing inputs. Selection that cannot be established
+#'   from recorded evidence remains unresolved, including custom regular expressions
+#'   without matching upstream inputs. Saved submission state and acknowledgement counts are recorded
 #'   in metadata independently of observed file availability.
 #' @examples
 #' \dontrun{
@@ -230,6 +234,11 @@ collect_qc_inventory <- function(input = getwd(), subjects = NULL, refresh = FAL
       work_units = context$work_units, submission = context$submission,
       configured_streams = list(postprocess = setdiff(names(scfg$postprocess), "enable"),
         extract_rois = setdiff(names(scfg$extract_rois), "enable")),
+      input_selection = list(
+        postprocess = lapply(scfg$postprocess[setdiff(names(scfg$postprocess), "enable")],
+          function(cfg) if (is.null(cfg$input_regex)) "desc:preproc suffix:bold" else cfg$input_regex),
+        extract_rois = lapply(scfg$extract_rois[setdiff(names(scfg$extract_rois), "enable")],
+          function(cfg) cfg$input_streams)),
       provenance_file = context$provenance_file,
       settings = qc_report_settings(scfg, context$steps),
       expectation_basis = if (is.null(context$run_id))

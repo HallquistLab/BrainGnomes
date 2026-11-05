@@ -7,6 +7,10 @@
   error instead of silently changing which volumes are retained.
 * Forward the CIFTI-defaults option during PBS TemplateFlow prefetch, matching
   Slurm so offline CIFTI runs receive their required cached resources.
+* Respect stream input selectors in acquisition coverage. Keep deliberately
+  excluded scans visible without missing-work flags, and inherit the union of
+  input selections for ROI streams. Preserve genuine gaps and uncertain selection
+  when upstream evidence or saved selector metadata is unavailable.
 
 * Move Python dependency installation locks from shared subject logs/atlas caches
   to the current user's BrainGnomes cache so reruns by another lab member do not
