@@ -34,7 +34,9 @@ make_postprocess_integrity_fixture <- function(root = tempfile("postprocess-inte
 
 for (peer_state in c("completed", "failed", "reused")) {
   test_that(paste("scratch survives an overlapping", peer_state, "stream"), {
-    fixture <- make_postprocess_integrity_fixture()
+    # Exercise the temporary-path alias spelling used on macOS on every OS.
+    fixture <- make_postprocess_integrity_fixture(
+      file.path(withr::local_tempdir(), "T", "Rtmp-integrity"))
     withr::defer(unlink(fixture$root, recursive = TRUE))
     withr::local_envvar(log_file = file.path(fixture$root, "worker.log"))
     cfg <- fixture$cfg
@@ -61,8 +63,8 @@ for (peer_state in c("completed", "failed", "reused")) {
           expect_error(postprocess_subject(fixture$bold, peer), "tr field")
         } else {
           peer_result <- postprocess_subject(fixture$bold, peer)
-          # Windows temp paths may contain short names and mixed separators.
-          expect_identical(peer_result, normalizePath(peer_file, winslash = "/", mustWork = TRUE))
+          # Resolve macOS temp aliases and Windows short paths on both sides.
+          expect_path_identical(peer_result, peer_file)
         }
         expect_true(file.exists(out_file))
         expect_equal(unname(tools::md5sum(out_file)), unname(tools::md5sum(in_file)))
