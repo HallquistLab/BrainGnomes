@@ -7,6 +7,13 @@
   a rerun no longer leaves an old censor file active during ROI extraction.
 * Reject ROI masks with mismatched spatial grids, including affine transforms,
   voxel sizes, spatial units, and qform/sform codes, before writing outputs.
+* Clarify postprocessing messages when reusing existing fMRIPrep inputs. Missing
+  legacy completion markers alone are informational; database failures, failed
+  upstream jobs, and invalid output manifests retain accurate diagnostics.
+  Only skipped work is described as skipped, without contradictory exit messages.
+* Wait for concurrent SQLite writers before querying completion or prefetch state
+  and before configuring durable submission connections. Avoid premature
+  synchronous-mode warnings and close connections when initialization fails.
 * Stop atlas resampling when its cache lock times out, before reusing or
   publishing a resampled atlas.
 * Validate censor files as binary numbers before integer conversion throughout
