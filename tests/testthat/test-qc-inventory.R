@@ -755,6 +755,9 @@ test_that("coverage excludes unselected tasks without hiding genuinely missing w
     "task:rest space:MNI152NLin6Asym desc:preproc suffix:bold"
   write_qc_fixture_file(sub("task-rest", "task-nback", paths$raw))
   write_qc_fixture_file(sub("task-rest", "task-nback", paths$preproc))
+  # An old output from a broader configuration remains evidence, but does not
+  # make that scan eligible under the current rest-only selector.
+  old_output <- write_qc_fixture_file(sub("task-rest", "task-nback", paths$pp))
   # A subject with only excluded scans must not acquire fabricated missing work.
   write_qc_fixture_file(file.path(fixture$cfg$metadata$bids_directory, "sub-002", "func",
     "sub-002_task-nback_bold.nii.gz"))
@@ -767,12 +770,14 @@ test_that("coverage excludes unselected tasks without hiding genuinely missing w
   expect_equal(nrow(excluded), 4L)
   expect_true(all(excluded$coverage_status == "excluded_by_configuration"))
   expect_false(any(excluded$attention))
+  expect_true(old_output %in% snapshot$inventory$derivative_file)
   expect_true(all(subset(native, sub_id == "001" & task == "rest")$coverage_status == "observed"))
   expect_true(all(subset(native, sub_id == "004")$coverage_status == "unresolved_outputs"))
   expect_true(all(subset(native, sub_id == "004")$attention))
   expect_true(all(subset(native, sub_id == "003")$coverage_status == "inputs_not_observed"))
   queue <- qc_review_queue(snapshot$inventory, snapshot$coverage, snapshot$metadata)
-  expect_false(any(queue$task %in% "nback" & queue$stage %in% c("postprocess", "extract_rois")))
+  expect_false(any(queue$task %in% "nback" & queue$stage %in% c("postprocess", "extract_rois") &
+    queue$category == "Coverage/workflow unresolved"))
 
   unlink(c(paths$pp, paths$rois))
   missing <- collect_qc_inventory(fixture$cfg, quiet = TRUE)
@@ -789,7 +794,7 @@ test_that("coverage excludes unselected tasks without hiding genuinely missing w
   expect_equal(qc_snapshot_coverage(saved), snapshot$coverage)
   # Legacy snapshots retain uncertainty instead of borrowing current settings.
   saved$metadata$input_selection <- NULL
-  expect_true(all(subset(qc_snapshot_coverage(saved), task == "nback" &
+  expect_true(all(subset(qc_snapshot_coverage(saved), sub_id == "002" & task == "nback" &
     stage %in% c("postprocess", "extract_rois"))$attention))
 })
 

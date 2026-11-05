@@ -169,9 +169,6 @@ qc_acquisition_coverage <- function(snapshot) {
         tracked <- units[!is.na(units$sub_id) & units$sub_id == target$sub_id &
           (is.na(units$ses_id) | (!is.na(target$ses_id) & units$ses_id == target$ses_id)), , drop = FALSE]
         available <- sum(matched$output_status == "available")
-        # Expected derivative paths are stronger selection evidence than a
-        # projection onto raw entities, even when the output file is missing.
-        if (nrow(matched)) applicable[index] <- TRUE
         status <- if (isFALSE(applicable[index])) "excluded_by_configuration" else if (is.na(target$source_file)) "inputs_not_observed" else if (nrow(matched)) {
           if (available == nrow(matched)) "observed" else "missing_outputs"
         } else if (is.na(applicable[index])) "selection_unresolved" else if (stage == "aroma") "workflow_only" else "unresolved_outputs"
