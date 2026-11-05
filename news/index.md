@@ -2,6 +2,19 @@
 
 ## BrainGnomes (development version)
 
+- Isolate native postprocessing scratch files by invocation so
+  concurrent streams and retries cannot reuse or delete one another’s
+  staged files.
+
+- Remove obsolete stream-specific censor, scrub, confound, and regressor
+  files when recomputing an output without those companions. Disabling
+  scrubbing on a rerun no longer leaves an old censor file active during
+  ROI extraction.
+
+- Reject ROI masks with mismatched spatial grids, including affine
+  transforms, voxel sizes, spatial units, and qform/sform codes, before
+  writing outputs.
+
 - Clarify postprocessing messages when reusing existing fMRIPrep inputs.
   Missing legacy completion markers alone are informational; database
   failures, failed upstream jobs, and invalid output manifests retain

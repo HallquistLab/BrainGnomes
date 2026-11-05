@@ -46,7 +46,10 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="braingnomes-development-version">BrainGnomes (development version)<a class="anchor" aria-label="anchor" href="#braingnomes-development-version"></a></h2>
-<ul><li><p>Clarify postprocessing messages when reusing existing fMRIPrep inputs. Missing legacy completion markers alone are informational; database failures, failed upstream jobs, and invalid output manifests retain accurate diagnostics. Only skipped work is described as skipped, without contradictory exit messages.</p></li>
+<ul><li><p>Isolate native postprocessing scratch files by invocation so concurrent streams and retries cannot reuse or delete one another’s staged files.</p></li>
+<li><p>Remove obsolete stream-specific censor, scrub, confound, and regressor files when recomputing an output without those companions. Disabling scrubbing on a rerun no longer leaves an old censor file active during ROI extraction.</p></li>
+<li><p>Reject ROI masks with mismatched spatial grids, including affine transforms, voxel sizes, spatial units, and qform/sform codes, before writing outputs.</p></li>
+<li><p>Clarify postprocessing messages when reusing existing fMRIPrep inputs. Missing legacy completion markers alone are informational; database failures, failed upstream jobs, and invalid output manifests retain accurate diagnostics. Only skipped work is described as skipped, without contradictory exit messages.</p></li>
 <li><p>Wait for concurrent SQLite writers before querying completion or prefetch state and before configuring durable submission connections. Avoid premature synchronous-mode warnings and close connections when initialization fails.</p></li>
 <li><p>Stop atlas resampling when its cache lock times out, before reusing or publishing a resampled atlas.</p></li>
 <li><p>Validate censor files as binary numbers before integer conversion throughout ROI extraction, postprocessing, and provenance. Fractional values now raise an error instead of silently changing which volumes are retained.</p></li>

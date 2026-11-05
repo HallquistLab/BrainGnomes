@@ -63,9 +63,12 @@ extract_rois(
   Optional path to a mask NIfTI file. Voxels outside of this mask are
   excluded from ROI extraction and connectivity calculation. Note that
   constant and zero voxels are always automatically removed by
-  extract_rois. All positive atlas labels remain in the outputs; fully
-  masked ROIs have all-`NA` time series and connectivity rows and
-  columns.
+  extract_rois. The mask must match the BOLD spatial grid, including
+  voxel sizes, spatial units, and qform/sform transforms and codes.
+  Mismatched masks are rejected; `allow_atlas_resampling` applies only
+  to atlases, not to this mask. All positive atlas labels remain in the
+  outputs; fully masked ROIs have all-`NA` time series and connectivity
+  rows and columns.
 
 - min_vox_per_roi:
 

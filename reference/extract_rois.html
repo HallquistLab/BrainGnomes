@@ -114,6 +114,9 @@ ROI. Options are "mean" (default), "median", "pca", or "huber".</p></dd>
 <dd><p>Optional path to a mask NIfTI file. Voxels outside of this mask
 are excluded from ROI extraction and connectivity calculation. Note that
 constant and zero voxels are always automatically removed by extract_rois.
+The mask must match the BOLD spatial grid, including voxel sizes, spatial
+units, and qform/sform transforms and codes. Mismatched masks are rejected;
+<code>allow_atlas_resampling</code> applies only to atlases, not to this mask.
 All positive atlas labels remain in the outputs; fully masked ROIs have
 all-<code>NA</code> time series and connectivity rows and columns.</p></dd>
 
