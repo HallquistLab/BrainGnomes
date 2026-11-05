@@ -1,5 +1,13 @@
 # BrainGnomes (development version)
 
+* Stop atlas resampling when its cache lock times out, before reusing or
+  publishing a resampled atlas.
+* Validate censor files as binary numbers before integer conversion throughout
+  ROI extraction, postprocessing, and provenance. Fractional values now raise an
+  error instead of silently changing which volumes are retained.
+* Forward the CIFTI-defaults option during PBS TemplateFlow prefetch, matching
+  Slurm so offline CIFTI runs receive their required cached resources.
+
 * Move Python dependency installation locks from shared subject logs/atlas caches
   to the current user's BrainGnomes cache so reruns by another lab member do not
   fail on a previous user's lock-file permissions. Coordinate that user's jobs

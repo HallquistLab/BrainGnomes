@@ -326,6 +326,21 @@ pp_compare_nifti_identity <- function(reference_path, candidate_path,
   )
 }
 
+#' Read a censor file without truncating malformed fractional values
+#' @param file Text file with one binary numeric value per line.
+#' @return Integer vector of validated zeros and ones; errors on invalid values.
+#' @noRd
+read_censor_file <- function(file) {
+  checkmate::assert_file_exists(file)
+  values <- readLines(file, warn = FALSE)
+  checked <- pp_validate_censor(values, length(values))
+  if (!length(values) || !checked$valid) {
+    stop("Censor file must contain only 0 and 1 values (nonempty binary vector): ",
+      file, call. = FALSE)
+  }
+  checked$censor
+}
+
 #' Validate a binary censor vector against a BOLD time dimension
 #' @keywords internal
 #' @noRd

@@ -8,6 +8,10 @@
 #' This signal-validity mask is not an anatomical brain segmentation. Supply
 #' `mask_file` to restrict extraction to a chosen spatial mask.
 #'
+#' Associated censor files must contain one numeric zero or one per line.
+#' Fractional, missing, nonfinite, and nonnumeric values are rejected before
+#' conversion to integers, so malformed values cannot silently remove volumes.
+#'
 #' @param bold_file Path to a 4D NIfTI file containing postprocessed BOLD data.
 #' @param atlas_files Character vector of atlas NIfTI files with integer ROI labels.
 #' @param out_dir Existing writable directory where output files should be
@@ -338,11 +342,7 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
 
         censor_file <- get_censor_file(bids_info)
         if (file.exists(censor_file)) {
-          censor <- as.integer(readLines(censor_file))
-          if (anyNA(censor) || any(!censor %in% c(0L, 1L))) {
-            stop("Censor file must contain only 0 and 1 values: ", censor_file,
-                 call. = FALSE)
-          }
+          censor <- read_censor_file(censor_file)
           n_kept <- sum(censor == 1L)
           if (length(censor) == n_time) {
             to_drop <- which(censor == 0L)

@@ -90,7 +90,7 @@ scrub_interpolate <- function(in_file, censor_file, out_file,
   to_log(lg, "debug", "in_file: {in_file}")
   to_log(lg, "debug", "censor_file: {censor_file}")
 
-  censor <- as.integer(readLines(censor_file))
+  censor <- read_censor_file(censor_file)
   t_interpolate <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
   
   if (!any(t_interpolate)) {
@@ -175,7 +175,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
     to_log(lg, "fatal", msg)
   }
 
-  censor <- as.integer(readLines(censor_file))
+  censor <- read_censor_file(censor_file)
   t_scrub <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
 
   if (!any(t_scrub)) {
@@ -912,7 +912,7 @@ intensity_reference_frames <- function(in_file, confounds_file = NULL,
   }
 
   if (checkmate::test_file_exists(censor_file)) {
-    censor <- suppressWarnings(as.numeric(readLines(censor_file, warn = FALSE)))
+    censor <- read_censor_file(censor_file)
     if (length(censor) == n_volumes && all(is.finite(censor))) {
       include <- include & censor > 0
     } else if (!is.null(lg)) {
@@ -1614,7 +1614,7 @@ confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file 
     Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE)
     good_vols <- rep(TRUE, nrow(Xmat))
     if (checkmate::test_file_exists(censor_file)) {
-      good_vols <- as.logical(as.integer(readLines(censor_file))) # bad timepoints are 0 in the censor file
+      good_vols <- as.logical(read_censor_file(censor_file)) # bad timepoints are 0 in the censor file
       if (sum(good_vols) < length(good_vols)) {
         to_log(
           lg,
