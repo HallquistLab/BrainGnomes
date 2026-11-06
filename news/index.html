@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,11 +41,28 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0-1/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0-2/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.0-2" id="braingnomes-10-2-2026-11-05">BrainGnomes 1.0-2 (2026-11-05)<a class="anchor" aria-label="anchor" href="#braingnomes-10-2-2026-11-05"></a></h2>
+<ul><li><p>Isolate native postprocessing scratch files by invocation so concurrent streams and retries cannot reuse or delete one another’s staged files.</p></li>
+<li><p>Remove obsolete stream-specific censor, scrub, confound, and regressor files when recomputing an output without those companions. Disabling scrubbing on a rerun no longer leaves an old censor file active during ROI extraction.</p></li>
+<li><p>Reject ROI masks with mismatched spatial grids, including affine transforms, voxel sizes, spatial units, and qform/sform codes, before writing outputs.</p></li>
+<li><p>Clarify postprocessing messages when reusing existing fMRIPrep inputs. Missing legacy completion markers alone are informational; database failures, failed upstream jobs, and invalid output manifests retain accurate diagnostics. Only skipped work is described as skipped, without contradictory exit messages.</p></li>
+<li><p>Wait for concurrent SQLite writers before querying completion or prefetch state and before configuring durable submission connections. Avoid premature synchronous-mode warnings and close connections when initialization fails.</p></li>
+<li><p>Stop atlas resampling when its cache lock times out, before reusing or publishing a resampled atlas.</p></li>
+<li><p>Validate censor files as binary numbers before integer conversion throughout ROI extraction, postprocessing, and provenance. Fractional values now raise an error instead of silently changing which volumes are retained.</p></li>
+<li><p>Forward the CIFTI-defaults option during PBS TemplateFlow prefetch, matching Slurm so offline CIFTI runs receive their required cached resources.</p></li>
+<li><p>Respect stream input selectors in acquisition coverage. Keep deliberately excluded scans visible without missing-work flags, and inherit the union of input selections for ROI streams. Preserve genuine gaps and uncertain selection when upstream evidence or saved selector metadata is unavailable.</p></li>
+<li><p>Move Python dependency installation locks from shared subject logs/atlas caches to the current user’s BrainGnomes cache so reruns by another lab member do not fail on a previous user’s lock-file permissions. Coordinate that user’s jobs across subjects/projects, retain lock files safely after unlocking, and stop on lock timeouts before attempting installation. Use a ten-minute default wait and distinguish file-access errors from contention (timeouts are milliseconds).</p></li>
+<li><p>Make QC coverage and execution uncertainty visible instead of treating an empty output denominator as completion. Add raw-acquisition/stage/stream coverage, unresolved-work and submission review items, prominent saved-run scope/acknowledgements, and exact retry scope for AROMA as well as native stages. Preserve uncertain legacy stream labels for diagnosis without guessing their attribution or filling the main selector with acquisition filenames.</p></li>
+<li><p>Retain upstream FD when filtering downstream outputs, keep participant evidence beside the chart, restore cohort navigation, and put participant identity first in source review. Explain disabled validation/ROI stages and mask-derived retention, including scrubbing application/interpolation settings. Clarify local evidence access and report privacy. Read only the FD column and reuse source summaries within collection; show phase/count progress (<code>quiet = TRUE</code> suppresses it). Cache manifest file metadata and bound the embedded exception preview while preserving complete TSV/RDS history and explicit preview labels.</p></li>
+<li><p>Redesign offline study QC around cohort distributions, a metric-first source review list, and participant/acquisition drill-down with original report links. Add histogram/ECDF views and observed/unavailable source denominators; retain compatible comparison groups and deduplicate shared FD sources after filtering. Synchronize shared scope across pages, applicable counters, plots, and tables; explicitly label table grain and whole-snapshot context. Group attention by acquisition/context/reason, distinguish scheduler-not-queried empty states, and export all matching table rows separately from full-snapshot downloads. Build indexed evidence details only on demand, avoid per-row nested widgets, improve mobile controls, and eliminate dashboard/table ID collisions. Keep unused serialized job manifests and unrelated file associations out of embedded detail indexes; retain complete tracking/manifest downloads.</p></li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0-1" id="braingnomes-10-1-2026-10-23">BrainGnomes 1.0-1 (2026-10-23)<a class="anchor" aria-label="anchor" href="#braingnomes-10-1-2026-10-23"></a></h2>
+<p>Previously labeled <code>1.01</code> on GitHub; renamed before any CRAN release. The corrected source package differs only in its version and changelog heading.</p>
 <div class="section level3">
 <h3 id="job-submission-tracking-and-recovery-1-0-1">Job submission, tracking, and recovery<a class="anchor" aria-label="anchor" href="#job-submission-tracking-and-recovery-1-0-1"></a></h3>
 <ul><li><p>Audit recovery and tracking races with real SQLite/process regressions and executable scheduler stand-ins. Guard unknown legacy scope/states, missing or inconsistent accepted bindings, and outstanding allocations from older runs. Preserve active and terminal descendants during dependency failure cascades; bound cyclic traversal and reject late progress that resurrects terminal rows. Cancellation now returns <code>cancellation_requested</code> without declaring jobs stopped; dependency-blocked allocations remain guarded/cancellable until scheduler termination is confirmed. Preserve their logical blocked status on recovery. Query shared Slurm job IDs without an implicit current-user filter, and reject stale TORQUE exit codes after requeue. Add an opt-in interactive Slurm recovery test; see <code>tests/RECOVERY_TESTING.md</code> for coverage and execution. Add scalar covering indexes on write/migration paths so pending checks avoid scanning completed job-object history; previews remain non-mutating. Preserve UTC/offset semantics when ranking mixed legacy/local timestamps so an older success cannot hide a newer failed run. Match log allocation IDs rather than participant numbers or numeric prefixes from unrelated jobs. Write new submission/start/end tracking timestamps with explicit UTC offsets.</p></li>

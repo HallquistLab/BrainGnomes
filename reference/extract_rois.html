@@ -11,7 +11,7 @@ optionally computes ROI-to-ROI correlation matrices."><meta property="og:image" 
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,7 +45,7 @@ optionally computes ROI-to-ROI correlation matrices."><meta property="og:image" 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Extract ROI timeseries and connectivity matrices</h1>
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0-1/R/extract_rois.R" class="external-link"><code>R/extract_rois.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0-2/R/extract_rois.R" class="external-link"><code>R/extract_rois.R</code></a></small>
       <div class="d-none name"><code>extract_rois.Rd</code></div>
     </div>
 
@@ -114,6 +114,9 @@ ROI. Options are "mean" (default), "median", "pca", or "huber".</p></dd>
 <dd><p>Optional path to a mask NIfTI file. Voxels outside of this mask
 are excluded from ROI extraction and connectivity calculation. Note that
 constant and zero voxels are always automatically removed by extract_rois.
+The mask must match the BOLD spatial grid, including voxel sizes, spatial
+units, and qform/sform transforms and codes. Mismatched masks are rejected;
+<code>allow_atlas_resampling</code> applies only to atlases, not to this mask.
 All positive atlas labels remain in the outputs; fully masked ROIs have
 all-<code>NA</code> time series and connectivity rows and columns.</p></dd>
 
@@ -184,6 +187,9 @@ methods/bibliography companions. Their paths are returned in <code>provenance</c
     <p>Voxels with missing, all-zero, or constant BOLD time series are excluded.
 This signal-validity mask is not an anatomical brain segmentation. Supply
 <code>mask_file</code> to restrict extraction to a chosen spatial mask.</p>
+<p>Associated censor files must contain one numeric zero or one per line.
+Fractional, missing, nonfinite, and nonnumeric values are rejected before
+conversion to integers, so malformed values cannot silently remove volumes.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

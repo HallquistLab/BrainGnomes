@@ -1,6 +1,97 @@
 # Changelog
 
+## BrainGnomes 1.0-2 (2026-11-05)
+
+- Isolate native postprocessing scratch files by invocation so
+  concurrent streams and retries cannot reuse or delete one another’s
+  staged files.
+
+- Remove obsolete stream-specific censor, scrub, confound, and regressor
+  files when recomputing an output without those companions. Disabling
+  scrubbing on a rerun no longer leaves an old censor file active during
+  ROI extraction.
+
+- Reject ROI masks with mismatched spatial grids, including affine
+  transforms, voxel sizes, spatial units, and qform/sform codes, before
+  writing outputs.
+
+- Clarify postprocessing messages when reusing existing fMRIPrep inputs.
+  Missing legacy completion markers alone are informational; database
+  failures, failed upstream jobs, and invalid output manifests retain
+  accurate diagnostics. Only skipped work is described as skipped,
+  without contradictory exit messages.
+
+- Wait for concurrent SQLite writers before querying completion or
+  prefetch state and before configuring durable submission connections.
+  Avoid premature synchronous-mode warnings and close connections when
+  initialization fails.
+
+- Stop atlas resampling when its cache lock times out, before reusing or
+  publishing a resampled atlas.
+
+- Validate censor files as binary numbers before integer conversion
+  throughout ROI extraction, postprocessing, and provenance. Fractional
+  values now raise an error instead of silently changing which volumes
+  are retained.
+
+- Forward the CIFTI-defaults option during PBS TemplateFlow prefetch,
+  matching Slurm so offline CIFTI runs receive their required cached
+  resources.
+
+- Respect stream input selectors in acquisition coverage. Keep
+  deliberately excluded scans visible without missing-work flags, and
+  inherit the union of input selections for ROI streams. Preserve
+  genuine gaps and uncertain selection when upstream evidence or saved
+  selector metadata is unavailable.
+
+- Move Python dependency installation locks from shared subject
+  logs/atlas caches to the current user’s BrainGnomes cache so reruns by
+  another lab member do not fail on a previous user’s lock-file
+  permissions. Coordinate that user’s jobs across subjects/projects,
+  retain lock files safely after unlocking, and stop on lock timeouts
+  before attempting installation. Use a ten-minute default wait and
+  distinguish file-access errors from contention (timeouts are
+  milliseconds).
+
+- Make QC coverage and execution uncertainty visible instead of treating
+  an empty output denominator as completion. Add
+  raw-acquisition/stage/stream coverage, unresolved-work and submission
+  review items, prominent saved-run scope/acknowledgements, and exact
+  retry scope for AROMA as well as native stages. Preserve uncertain
+  legacy stream labels for diagnosis without guessing their attribution
+  or filling the main selector with acquisition filenames.
+
+- Retain upstream FD when filtering downstream outputs, keep participant
+  evidence beside the chart, restore cohort navigation, and put
+  participant identity first in source review. Explain disabled
+  validation/ROI stages and mask-derived retention, including scrubbing
+  application/interpolation settings. Clarify local evidence access and
+  report privacy. Read only the FD column and reuse source summaries
+  within collection; show phase/count progress (`quiet = TRUE`
+  suppresses it). Cache manifest file metadata and bound the embedded
+  exception preview while preserving complete TSV/RDS history and
+  explicit preview labels.
+
+- Redesign offline study QC around cohort distributions, a metric-first
+  source review list, and participant/acquisition drill-down with
+  original report links. Add histogram/ECDF views and
+  observed/unavailable source denominators; retain compatible comparison
+  groups and deduplicate shared FD sources after filtering. Synchronize
+  shared scope across pages, applicable counters, plots, and tables;
+  explicitly label table grain and whole-snapshot context. Group
+  attention by acquisition/context/reason, distinguish
+  scheduler-not-queried empty states, and export all matching table rows
+  separately from full-snapshot downloads. Build indexed evidence
+  details only on demand, avoid per-row nested widgets, improve mobile
+  controls, and eliminate dashboard/table ID collisions. Keep unused
+  serialized job manifests and unrelated file associations out of
+  embedded detail indexes; retain complete tracking/manifest downloads.
+
 ## BrainGnomes 1.0-1 (2026-10-23)
+
+Previously labeled `1.01` on GitHub; renamed before any CRAN release.
+The corrected source package differs only in its version and changelog
+heading.
 
 ### Job submission, tracking, and recovery
 

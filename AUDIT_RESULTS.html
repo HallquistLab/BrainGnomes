@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,7 +41,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="logo.png" class="logo" alt=""><h1>Audit Remediation Results</h1>
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0-1/AUDIT_RESULTS.md" class="external-link"><code>AUDIT_RESULTS.md</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0-2/AUDIT_RESULTS.md" class="external-link"><code>AUDIT_RESULTS.md</code></a></small>
     </div>
 
 <div id="audit-remediation-results" class="section level1">
@@ -805,6 +805,69 @@ Status: OK
 <li>Resolve environment-dependent package-check warnings and notes before claiming a clean release check. The verification results distinguish them from package defects.</li>
 <li>Review the 1.0 changelog’s API removals and changed return types against downstream scripts before tagging and publishing the release. Version and release-date metadata are set to 1.0 and 09 Oct 2026.</li>
 </ol><p>The audit report is excluded from the source package by the existing <code>.Rbuildignore</code> rule.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="id_10-2-release-audit--05-nov-2026">1.0-2 release audit — 05 Nov 2026<a class="anchor" aria-label="anchor" href="#id_10-2-release-audit--05-nov-2026"></a></h2>
+<p>This section supersedes the release-readiness conclusions of earlier dated sections for the current release; their historical evidence remains intact.</p>
+<div class="section level3">
+<h3 id="scope-and-release-identity">Scope and release identity<a class="anchor" aria-label="anchor" href="#scope-and-release-identity"></a></h3>
+<p>Reviewed the merged changes from <code>1.0</code> (<code>29b2f5b</code>) through main <code>81a0746</code>, including PRs #100–#106. The changes cover submission/recovery and tracking, postprocessing integrity, contention and dependency locks, PBS prefetch, study QC collection/coverage and offline reporting, documentation, and artwork. No C++ scientific kernels changed in this interval. The release preparation changes metadata and installation guidance; it introduces no runtime changes.</p>
+<p>The former <code>1.01</code> release (<code>fa2df7e</code>, 23 Oct 2026) becomes <code>1.0-1</code>. Branch <code>codex/relabel-1.0-1</code>, commit <code>4b57a8156e075c1c79f01a4af36abaf63cf9555d</code>, is its corrected source target. Only DESCRIPTION’s version and the corresponding NEWS heading differ from <code>1.01</code>; executable source, tests, and other documentation are identical. The original release date is retained. Verify the full commit ID against the branch before tagging. The next release is <code>1.0-2</code>, dated 05 Nov 2026, containing all merged changes through <code>81a0746</code>. No GitHub release or tag was changed by this preparation; the maintainer will make those changes after review.</p>
+<p>R normalizes <code>1.0-1</code> and <code>1.0-2</code> to <code>1.0.1</code> and <code>1.0.2</code>, respectively. Both compare lower than the old <code>1.01</code> (equivalent to <code>1.1</code>). README includes an explicit installation with <code>force = TRUE</code> for users replacing that old version. No release has been submitted to CRAN.</p>
+</div>
+<div class="section level3">
+<h3 id="code-review-findings">Code review findings<a class="anchor" aria-label="anchor" href="#code-review-findings"></a></h3>
+<table class="table"><colgroup><col width="50%"><col width="50%"></colgroup><thead><tr><th>Area</th>
+<th>Checks and conclusion</th>
+</tr></thead><tbody><tr><td>Submission and recovery</td>
+<td>Reviewed uncertain-acceptance guards, accepted allocation bindings, scope filtering, Flywheel’s deferred scope, explicit recovery, scheduler timeouts, and compare-and-set repairs. Unknown acceptance and scheduler completion alone do not authorize duplicate launches.</td>
+</tr><tr><td>Tracking and cancellation</td>
+<td>Reviewed pending predicates/indexes, legacy rows, UTC timestamps, failure cascades, worker progress transitions, and cancellation races. Cancellation requests do not prematurely declare allocations stopped; started/terminal descendants retain their evidence.</td>
+</tr><tr><td>SQLite and locks</td>
+<td>Reviewed busy-handler installation before SQL/synchronous configuration, durable write connections, failed initialization cleanup, persistent per-user Python locks, atlas lock timeout handling, and shared-worker bootstrap inclusion.</td>
+</tr><tr><td>Native processing and ROI</td>
+<td>Reviewed invocation-owned scratch cleanup, removal of obsolete stream companions, binary censor validation before integer conversion across consumers, and spatial-grid checks before mask use.</td>
+</tr><tr><td>PBS resources</td>
+<td>Confirmed the CIFTI prefetch option matches the Slurm path; Bash syntax validation passes. Actual PBS/container execution is outside this local audit.</td>
+</tr><tr><td>QC collection and coverage</td>
+<td>Reviewed saved-run configuration/scope, retry work units, acquisition matching, selector exclusions, inherited ROI input unions, and conservative handling of missing upstream evidence/legacy snapshots. Available files remain distinct from execution completion and scientific quality.</td>
+</tr><tr><td>Offline report</td>
+<td>Reviewed scoped summaries, compatible metric groups and source deduplication, upstream FD selection, indexed details, escaped saved text, complete versus preview exports, and retained snapshots/logs after render failure. Real rendering/browser validation is recorded below.</td>
+</tr><tr><td>Release/documentation</td>
+<td>Regenerated roxygen documentation without additional generated changes. Verified all ten vignette literal dates against their last content-change commits. JavaScript syntax and release version ordering pass.</td>
+</tr></tbody></table><p>No additional release-blocking defect was identified by this review. This is a bounded code and regression audit, not a guarantee that no defect exists.</p>
+</div>
+<div class="section level3">
+<h3 id="validation">Validation<a class="anchor" aria-label="anchor" href="#validation"></a></h3>
+<ul><li>
+<code>devtools::document()</code> completes without generated changes.</li>
+<li>Full <code>devtools::test()</code> on Linux/R 4.5.1: <strong>6,618 passing assertions across 770 tests; zero failures, errors, or warnings; six explicit opt-in skips</strong>.</li>
+<li>Opt-in QC run with Quarto 1.9.37 and Chromium 155.0.8059.84: <strong>249 passing assertions, zero failures/errors/warnings/skips</strong>, including actual rendering and the 500-participant desktop/mobile offline browser walkthrough. These assertions overlap the regular suite; they are not an additional cohort.</li>
+<li>Historical <code>1.0-1</code> branding/metadata tests: <strong>18 passing assertions</strong>, with no failures, errors, warnings, or skips; source build including vignettes succeeds.</li>
+<li>Current release installed-package tests: <strong>6,599 passing assertions, zero failures or test warnings, nine explicit skips</strong> (including source/website tests that cannot run from an installed package).</li>
+<li>Full <code>devtools::check()</code> completes with <strong>zero errors, one environment warning (<code>qpdf</code> unavailable for PDF compression checks), and one environment note (unable to verify current time)</strong>. Examples, compiled-code checks, installed tests, and vignette checking/rebuilding pass. This is not a warning-free check.</li>
+<li>The exact merged runtime revision <code>81a0746</code> passes Windows, macOS, Ubuntu release, and Ubuntu oldrel CI. Its R-devel job was still running at handoff; pkgdown passes. The release PR triggers the matrix again for the new metadata.</li>
+<li>All ten vignette dates match their last content-change commit in each release. <code>node --check inst/qc_dashboard/dashboard.js</code>, <code>bash -n inst/hpc_scripts/prefetch_templates.pbs</code>, and <code>git diff --check</code> pass.</li>
+<li>Release ordering was verified with R’s version parser. Both package archives have the intended version/date and byte-identical source files (apart from R’s normal DESCRIPTION normalization/build fields). The current build uses a clean, byte-verified snapshot of 447 source files, excluding ignored local datasets and compiled artifacts. <code>R_MAKEVARS_USER=/dev/null</code> removes only local user compiler flags; package Makevars remain effective.</li>
+</ul><p>Source archives are prepared locally, not committed or uploaded to a release:</p>
+<table class="table"><colgroup><col width="30%"><col width="40%"><col width="30%"></colgroup><thead><tr><th>Archive</th>
+<th align="right">Bytes</th>
+<th>SHA-256</th>
+</tr></thead><tbody><tr><td><code>BrainGnomes_1.0-1.tar.gz</code></td>
+<td align="right">6,191,160</td>
+<td><code>2086569c87001bb186a89c07aafa1bf1ea397e77dd675adc180fc93b1e728191</code></td>
+</tr><tr><td><code>BrainGnomes_1.0-2.tar.gz</code></td>
+<td align="right">6,247,526</td>
+<td><code>996b33252fa599979c9c75f623fc798f20c2c3822d08e319c8488e1a9d651853</code></td>
+</tr></tbody></table><p>The archive inspections byte-verify 415 and 424 packaged source files, respectively, in addition to checking their built DESCRIPTION metadata. Generated vignette outputs are produced by the source build; audit reports, ignored data, Git metadata, and compiled objects are excluded. Local validation logs are <code>/tmp/bg-release-document.log</code>, <code>/tmp/bg-release-tests.log</code>, <code>/tmp/bg-release-browser.log</code>, <code>/tmp/bg-release-historical.log</code>, and <code>/tmp/bg-release-check.log</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="maintainer-publication-steps">Maintainer publication steps<a class="anchor" aria-label="anchor" href="#maintainer-publication-steps"></a></h3>
+<ol style="list-style-type: decimal"><li>Point the corrected <code>1.0-1</code> tag/release at <code>codex/relabel-1.0-1</code>’s metadata-only correction commit, preserving the historical release date. Rename/replace the old <code>1.01</code> release assets so source package versions agree with the tag.</li>
+<li>Merge the <code>codex/release-1.0-2</code> preparation PR, then tag its resulting merge commit <code>1.0-2</code>. Do not point <code>1.0-1</code> at current main: that would include later processing fixes and the redesigned report.</li>
+<li>Publish the matching source tarballs and use NEWS for release notes. Tell existing <code>1.01</code> users to explicitly reinstall the corrected desired version.</li>
+</ol><p>Fresh live Slurm/PBS allocations and production imaging containers were not run in this audit. Scheduler regressions use executable stand-ins and contention regressions use real SQLite/processes; these are not container smoke tests. The declared R 4.1 minimum is not exercised by the current release/oldrel/devel CI matrix, and this local run uses R 4.5.1. Those limits remain explicit.</p>
 </div>
 </div>
 </div>
