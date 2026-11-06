@@ -1,6 +1,6 @@
 # Changelog
 
-## BrainGnomes (development version)
+## BrainGnomes 1.0-2 (2026-11-05)
 
 - Isolate native postprocessing scratch files by invocation so
   concurrent streams and retries cannot reuse or delete one another’s
@@ -87,7 +87,11 @@
   serialized job manifests and unrelated file associations out of
   embedded detail indexes; retain complete tracking/manifest downloads.
 
-## BrainGnomes 1.01 (2026-10-23)
+## BrainGnomes 1.0-1 (2026-10-23)
+
+Previously labeled `1.01` on GitHub; renamed before any CRAN release.
+The corrected source package differs only in its version and changelog
+heading.
 
 ### Job submission, tracking, and recovery
 

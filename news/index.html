@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.01</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,7 +45,7 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="braingnomes-development-version">BrainGnomes (development version)<a class="anchor" aria-label="anchor" href="#braingnomes-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="1.0-2" id="braingnomes-10-2-2026-11-05">BrainGnomes 1.0-2 (2026-11-05)<a class="anchor" aria-label="anchor" href="#braingnomes-10-2-2026-11-05"></a></h2>
 <ul><li><p>Isolate native postprocessing scratch files by invocation so concurrent streams and retries cannot reuse or delete one another’s staged files.</p></li>
 <li><p>Remove obsolete stream-specific censor, scrub, confound, and regressor files when recomputing an output without those companions. Disabling scrubbing on a rerun no longer leaves an old censor file active during ROI extraction.</p></li>
 <li><p>Reject ROI masks with mismatched spatial grids, including affine transforms, voxel sizes, spatial units, and qform/sform codes, before writing outputs.</p></li>
@@ -61,9 +61,10 @@
 <li><p>Redesign offline study QC around cohort distributions, a metric-first source review list, and participant/acquisition drill-down with original report links. Add histogram/ECDF views and observed/unavailable source denominators; retain compatible comparison groups and deduplicate shared FD sources after filtering. Synchronize shared scope across pages, applicable counters, plots, and tables; explicitly label table grain and whole-snapshot context. Group attention by acquisition/context/reason, distinguish scheduler-not-queried empty states, and export all matching table rows separately from full-snapshot downloads. Build indexed evidence details only on demand, avoid per-row nested widgets, improve mobile controls, and eliminate dashboard/table ID collisions. Keep unused serialized job manifests and unrelated file associations out of embedded detail indexes; retain complete tracking/manifest downloads.</p></li>
 </ul></div>
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="1.01" id="braingnomes-101-2026-10-23">BrainGnomes 1.01 (2026-10-23)<a class="anchor" aria-label="anchor" href="#braingnomes-101-2026-10-23"></a></h2>
+<h2 class="pkg-version" data-toc-text="1.0-1" id="braingnomes-10-1-2026-10-23">BrainGnomes 1.0-1 (2026-10-23)<a class="anchor" aria-label="anchor" href="#braingnomes-10-1-2026-10-23"></a></h2>
+<p>Previously labeled <code>1.01</code> on GitHub; renamed before any CRAN release. The corrected source package differs only in its version and changelog heading.</p>
 <div class="section level3">
-<h3 id="job-submission-tracking-and-recovery-1-01">Job submission, tracking, and recovery<a class="anchor" aria-label="anchor" href="#job-submission-tracking-and-recovery-1-01"></a></h3>
+<h3 id="job-submission-tracking-and-recovery-1-0-1">Job submission, tracking, and recovery<a class="anchor" aria-label="anchor" href="#job-submission-tracking-and-recovery-1-0-1"></a></h3>
 <ul><li><p>Audit recovery and tracking races with real SQLite/process regressions and executable scheduler stand-ins. Guard unknown legacy scope/states, missing or inconsistent accepted bindings, and outstanding allocations from older runs. Preserve active and terminal descendants during dependency failure cascades; bound cyclic traversal and reject late progress that resurrects terminal rows. Cancellation now returns <code>cancellation_requested</code> without declaring jobs stopped; dependency-blocked allocations remain guarded/cancellable until scheduler termination is confirmed. Preserve their logical blocked status on recovery. Query shared Slurm job IDs without an implicit current-user filter, and reject stale TORQUE exit codes after requeue. Add an opt-in interactive Slurm recovery test; see <code>tests/RECOVERY_TESTING.md</code> for coverage and execution. Add scalar covering indexes on write/migration paths so pending checks avoid scanning completed job-object history; previews remain non-mutating. Preserve UTC/offset semantics when ranking mixed legacy/local timestamps so an older success cannot hide a newer failed run. Match log allocation IDs rather than participant numbers or numeric prefixes from unrelated jobs. Write new submission/start/end tracking timestamps with explicit UTC offsets.</p></li>
 <li><p>Document automatic submission preflight and evidence-based recovery in the quickstart, local onboarding, diagnosis vignette, and public function help. Distinguish previews from live readiness, current issues from saved reports, and known-allocation reconciliation from uncertain-acceptance resolution.</p></li>
 <li><p>Separate submission assessment, tracking repairs, report persistence, console summaries, and blocker enforcement. Keep the exported recovery API stable; integrate unresolved submission outcomes into structured and guided diagnosis. Expose the controller’s final preflight through inspection and run provenance, retaining its recorded scope and time independently of current recovery needs.</p></li>
@@ -72,7 +73,7 @@
 <li><p>Improve study QC reports with participant summaries, explicit attention reasons, shared identity filters, selected-output and upstream-input counts, saved processing settings, and compact manifest summaries with full exports. Show participant, raw BOLD, attention, and issue totals individually; reserve “X of Y” notation for output availability and audit completion. Fix single-field shared filters interrupting initialization of later tables and plots in downloaded reports. Combine mean FD across tasks and output spaces, showing each confounds source once, and reset metric plot categories when switching views to avoid gaps. Distinguish disabled checks from missing required evidence, preserve audit warnings/timing/structured measurements, and support saved-run scopes via <code>collect_qc_inventory(run_id = "latest")</code>. Preserve diagnostics after failed rendering and retry directly from exported snapshots with an isolated writable Quarto cache. Keep version 1.0 snapshots renderable, including empty exports, without inventing audit requirements that were not recorded.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="package-branding-1-01">Package branding<a class="anchor" aria-label="anchor" href="#package-branding-1-01"></a></h3>
+<h3 id="package-branding-1-0-1">Package branding<a class="anchor" aria-label="anchor" href="#package-branding-1-0-1"></a></h3>
 <ul><li>Add the official assembly-line hex logo and matching header to the README and package overview help, with browser icons and a social-preview image on the package website. Use the hex as a small package badge and the rectangular artwork as the header.</li>
 </ul></div>
 </div>
