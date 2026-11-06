@@ -9,7 +9,7 @@ to match the resolution and spatial dimensions of an fMRIPrep BOLD image."><meta
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0-1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,7 +43,7 @@ to match the resolution and spatial dimensions of an fMRIPrep BOLD image."><meta
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Resample TemplateFlow Mask to fMRIPrep Image Using Python</h1>
-      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/R/postprocess_functions.R" class="external-link"><code>R/postprocess_functions.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/1.0-1/R/postprocess_functions.R" class="external-link"><code>R/postprocess_functions.R</code></a></small>
       <div class="d-none name"><code>resample_template_to_img.Rd</code></div>
     </div>
 
@@ -131,18 +131,6 @@ For example, an input such as:
 will lead to selection of the MNI152NLin2009cAsym template.</p>
 <p>This function depends on a companion Python script (<code>fetch_matched_template_image.py</code>)
 that is bundled with the BrainGnomes package and sourced at runtime.</p>
-<p>Automatic Python dependency checks/installations are serialized across the
-current user's jobs using <code>brain_gnomes_python_dependencies.lock</code> in the
-<code>locks</code> subdirectory of <code>tools::R_user_dir("BrainGnomes", "cache")</code>, rather
-than a shared subject log directory. The default lock wait is ten minutes;
-<code>options(BrainGnomes.py_install_lock_timeout = 600000)</code> sets it in milliseconds.
-The lock is released after dependency setup, including on errors, but the
-empty lock file is retained to allow waiting jobs to coordinate safely.
-Its presence alone does not indicate a running installation. Do not delete
-it while jobs may be using it. Set <code>options(BrainGnomes.install_py_deps = FALSE)</code>
-to skip automatic installation and its lock when dependencies are already
-installed in the selected Python environment. For an environment shared
-across user accounts, preinstall dependencies and disable automatic installation.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
