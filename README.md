@@ -59,11 +59,23 @@ To install a particular tagged release rather than the latest development
 version, supply its tag with `ref`. For example:
 
 ```r
-remotes::install_github("HallquistLab/BrainGnomes", ref = "0.9-2")
+remotes::install_github("HallquistLab/BrainGnomes", ref = "1.0-2")
 ```
 
 See the [available tags](https://github.com/HallquistLab/BrainGnomes/tags)
 to choose an available tag.
+
+### Upgrading from the former 1.01 release
+
+The GitHub release formerly labeled `1.01` is now `1.0-1`; the next release
+is `1.0-2`. R compares version components numerically, so it considers the old
+`1.01` version newer than either corrected version. To replace an installation
+that still reports `1.01`, explicitly install the desired published tag:
+
+```r
+remotes::install_github("HallquistLab/BrainGnomes", ref = "1.0-2", force = TRUE)
+packageVersion("BrainGnomes")  # 1.0.2 (R normalizes hyphens to dots)
+```
 
 ### Use the command-line interface
 
