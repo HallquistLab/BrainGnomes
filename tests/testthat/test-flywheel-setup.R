@@ -93,7 +93,7 @@ test_that("setup_compute_environment prompts for Flywheel path when CLI is absen
 
 test_that("Flywheel setup prefers flyw and preserves the name of a symlink", {
   skip_on_os("windows")
-  root <- withr::local_tempdir()
+  root <- normalizePath(withr::local_tempdir(), mustWork = TRUE)
   withr::local_envvar(c(PATH = root))
   cli <- file.path(root, "cli-v23")
   writeLines(c("#!/bin/sh", "exit 0"), cli)
