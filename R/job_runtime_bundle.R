@@ -78,7 +78,7 @@ prepare_job_runtime_bundle <- function(contract, env_variables) {
     helper_root <- configured_helpers
   }
   helpers <- list.files(helper_root, recursive = TRUE, full.names = FALSE)
-  helpers <- helpers[grepl("([.](R|py|sbatch|pbs)$|(^|/)shell_functions$)", helpers)]
+  helpers <- helpers[helpers == "extdata/flywheel_dicom.yaml" | grepl("([.](R|py|sbatch|pbs)$|(^|/)shell_functions$)", helpers)]
   originals <- c(file.path(package_path, files), file.path(helper_root, helpers))
   fingerprints <- unname(tools::md5sum(originals))
   # Read/execute permissions affect safe reuse; write bits are deliberately

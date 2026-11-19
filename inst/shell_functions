@@ -114,6 +114,21 @@ function rel() {
   return $cmdExit  #exit status of command
 }
 
+# Run the submitted Flywheel argv and return its exit status. rel_flag selects
+# comment-only execution for debug jobs. The default rule ships with the worker.
+run_flywheel_transfer() {
+  local arg
+  local -a args=()
+  while IFS= read -r -d '' arg; do
+    args+=("$arg")
+  done < <(printf '%s' "$flywheel_argv" | base64 -d)
+  [[ ${#args[@]} -gt 0 ]] || return 1
+  if [[ "$flywheel_builtin_rules" == TRUE ]]; then
+    args+=(--rule-set "$pkg_dir/extdata/flywheel_dicom.yaml")
+  fi
+  rel ${rel_flag:+"$rel_flag"} "$flywheel_cmd" "${args[@]}"
+}
+
 run_bg_and_wait() {
   local pid="$1"
   local out_var="$2"

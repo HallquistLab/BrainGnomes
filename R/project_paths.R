@@ -94,8 +94,17 @@ map_project_config_paths <- function(scfg, transform) {
     if (checkmate::test_string(value)) scfg$metadata[[field]] <- transform(value)
   }
 
+  # The invoked executable name selects the CLI syntax. Resolve its directory
+  # while preserving a flyw symlink to a versioned binary.
+  flywheel <- scfg$compute_environment$flywheel
+  if (checkmate::test_string(flywheel) && basename(flywheel) %in% c("flyw", "fw", "fw-beta")) {
+    scfg$compute_environment$flywheel <- file.path(transform(dirname(flywheel)), basename(flywheel))
+  } else if (checkmate::test_string(flywheel)) {
+    scfg$compute_environment$flywheel <- transform(flywheel)
+  }
+
   compute_fields <- c(
-    "flywheel", "heudiconv_container", "bids_validator",
+    "heudiconv_container", "bids_validator",
     "mriqc_container", "fmriprep_container", "aroma_container",
     "fsl_container"
   )

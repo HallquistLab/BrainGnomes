@@ -23,7 +23,7 @@ stage-specific:
 |---|---|
 | Configuration inspection, BIDS filename helpers, status tables, and native image helpers | R 4.1 or later and the R dependencies installed with BrainGnomes; no scheduler or container |
 | Any scheduled pipeline stage | SLURM or TORQUE/PBS, Bash, shared readable/writable project storage, and site-specific scheduler settings |
-| Flywheel synchronization | Flywheel `fw` CLI and account access |
+| Flywheel synchronization | Flywheel CLI (`flyw` or legacy `fw`) and account access |
 | DICOM-to-BIDS conversion | Singularity-compatible HeuDiConv image, source DICOMs, and a study-specific Python heuristic |
 | BIDS validation | BIDS validator executable; configured with the project but submitted separately through `run_bids_validation()` |
 | MRIQC | Singularity-compatible MRIQC image |

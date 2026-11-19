@@ -292,8 +292,8 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
       gaps <- c(gaps, "flywheel_sync/source_url")
     }
 
-    if (is.null(scfg$flywheel_sync$save_audit_logs)) {
-      message("Config file is missing valid setting for flywheel save_audi_logs.")
+    if (!uses_flywheel_export(scfg) && is.null(scfg$flywheel_sync$save_audit_logs)) {
+      message("Config file is missing valid setting for flywheel save_audit_logs.")
       gaps <- c(gaps, "flywheel_sync/save_audit_logs")
     }
 
@@ -302,7 +302,7 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
       gaps <- c(gaps, "metadata/flywheel_sync_directory")
     }
 
-    if (!project_validation_directory(scfg, "metadata/flywheel_temp_directory", selection)) {
+    if (!uses_flywheel_export(scfg) && !project_validation_directory(scfg, "metadata/flywheel_temp_directory", selection)) {
       message("Config file is missing valid directory for metadata/flywheel_temp_directory.")
       gaps <- c(gaps, "metadata/flywheel_temp_directory")
     }

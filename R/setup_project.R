@@ -810,11 +810,20 @@ setup_mriqc <- function(scfg, fields = NULL) {
   return(scfg)
 }
 
+#' Identify the Flywheel CLI command family for a configured project
+#' @param scfg Project configuration with a Flywheel executable path.
+#' @return TRUE for the modern CLI, FALSE for legacy executables and wrappers.
+#' @noRd
+uses_flywheel_export <- function(scfg) {
+  cmd <- scfg$compute_environment$flywheel
+  checkmate::test_string(cmd) && basename(cmd) %in% c("flyw", "fw-beta")
+}
+
 #' Configure flywheel sync settings
 #'
 #' Sets up synchronization from a Flywheel instance prior to BIDS conversion.
 #' Prompts for the Flywheel project URL, drop-off directory for downloaded DICOMs,
-#' and a temporary directory used during transfer. Standard job settings are also
+#' and, for the legacy CLI, a temporary directory used during transfer. Standard job settings are also
 #' collected through `setup_job`.
 #'
 #' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
@@ -833,9 +842,8 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
   if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields))) || ("flywheel_sync/enable" %in% fields)) {
     scfg$flywheel_sync$enable <- prompt_input(
       instruct = glue("
-      Flywheel sync will download DICOM files from a Flywheel project using the
-      'fw sync' command-line interface. This step should be run prior to BIDS
-      conversion to ensure all data are available locally."),
+      Download DICOM files before BIDS conversion using 'flyw export run'
+      or the legacy 'fw sync' command."),
       heading = "Flywheel sync",
       prompt = "Run Flywheel sync?",
       type = "flag",
@@ -853,13 +861,14 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$flywheel_sync$source_url) || "flywheel_sync/source_url" %in% fields) {
     scfg$flywheel_sync$source_url <- prompt_input(
-      instruct = "Use the Flywheel project URL format: fw://server/group/project.",
+      instruct = "Use the Flywheel project URL format: fw://group/project.",
       prompt = "Flywheel project URL:",
       type = "character"
     )
   }
 
-  if (is.null(scfg$flywheel_sync$save_audit_logs) || "flywheel_sync/save_audit_logs" %in% fields) {
+  if (!uses_flywheel_export(scfg) &&
+      (is.null(scfg$flywheel_sync$save_audit_logs) || "flywheel_sync/save_audit_logs" %in% fields)) {
     scfg$flywheel_sync$save_audit_logs <- prompt_input(
       instruct = glue("\n\n
         Flywheel can save an audit log (CSV) that includes the result of
@@ -877,7 +886,7 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
   }
 
   # prompt for temp directory
-  if (is.null(scfg$metadata$flywheel_temp_directory)) {
+  if (!uses_flywheel_export(scfg) && is.null(scfg$metadata$flywheel_temp_directory)) {
     scfg <- setup_project_metadata(scfg, fields = "metadata/flywheel_temp_directory")
   }
 
@@ -1198,7 +1207,9 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   }
 
   if ("compute_environment/flywheel" %in% fields) {
-    fw_path <- discover_cli_path("fw")
+    fw_path <- discover_cli_path("flyw")
+    if (!nzchar(fw_path)) fw_path <- discover_cli_path("fw")
+    use_fw <- FALSE
     if (nzchar(fw_path)) {
       use_fw <- prompt_input(
         instruct = glue("Found Flywheel CLI at {fw_path}"),
@@ -1208,23 +1219,26 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       )
       if (isTRUE(use_fw)) scfg$compute_environment$flywheel <- fw_path
     }
-    if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) {
+    if (!isTRUE(use_fw)) {
       default_fw <- scfg$compute_environment$flywheel
       if (!checkmate::test_file_exists(default_fw)) default_fw <- NULL
 
-      scfg$compute_environment$flywheel <- prompt_input(
+      selected_fw <- prompt_input(
         instruct = if (nzchar(fw_path)) {
-          "Specify the location of the Flywheel CLI (fw):"
+          "Specify the location of the Flywheel CLI (flyw or fw):"
         } else {
           paste(
-            "Flywheel CLI (fw) was not found on your PATH.",
+            "Flywheel CLI (flyw or fw) was not found on your PATH.",
             "Install it or provide the full path to the executable."
           )
         },
         prompt = "Location of Flywheel CLI:",
         type = "file",
-        default = default_fw
-      ) |> normalizePath(mustWork = TRUE)
+        default = default_fw, split = NULL
+      )
+      scfg$compute_environment$flywheel <- file.path(
+        normalizePath(dirname(path.expand(selected_fw)), mustWork = TRUE), basename(selected_fw)
+      )
     }
   }
 
