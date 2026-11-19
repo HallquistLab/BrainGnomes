@@ -31,7 +31,7 @@ setup_project_directories <- function(scfg, check_cache = NULL) {
     scfg$metadata$mriqc_directory,
     scfg$metadata$scratch_directory,
     scfg$metadata$templateflow_home,
-    scfg$metadata$flywheel_temp_directory,
+    if (!uses_flywheel_export(scfg)) scfg$metadata$flywheel_temp_directory,
     scfg$metadata$flywheel_sync_directory
   )
 

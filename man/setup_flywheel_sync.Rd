@@ -17,7 +17,7 @@ A modified version of \code{scfg} with the \verb{$flywheel_sync} entry populated
 \description{
 Sets up synchronization from a Flywheel instance prior to BIDS conversion.
 Prompts for the Flywheel project URL, drop-off directory for downloaded DICOMs,
-and a temporary directory used during transfer. Standard job settings are also
+and, for the legacy CLI, a temporary directory used during transfer. Standard job settings are also
 collected through \code{setup_job}.
 }
 \keyword{internal}

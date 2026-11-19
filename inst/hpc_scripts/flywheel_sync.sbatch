@@ -21,10 +21,8 @@ trap 'traperror flywheel_sync $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(pri
 ####
 #verify required arguments
 [ -z "$flywheel_cmd" ] && echo "flywheel_cmd not set. Exiting" && exit 1
-[ ! -f "$flywheel_cmd" ] && echo "flywheel_cmd $flywheel_cmd not found. Exiting" && exit 1
-[ ! -r "$flywheel_cmd" ] && echo "flywheel_cmd $flywheel_cmd not readable. Exiting" && exit 1
-[ -z "$flywheel_source_url" ] && echo "flywheel_source_url not set. Exiting." && exit 1
-[ -z "$flywheel_sync_directory" ] && echo "flywheel_sync_directory not set. Exiting." && exit 1
+[ ! -x "$flywheel_cmd" ] && echo "flywheel_cmd $flywheel_cmd not executable. Exiting." && exit 1
+[ -z "$flywheel_argv" ] && echo "Missing Flywheel command arguments. Exiting." && exit 1
 
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
@@ -47,12 +45,7 @@ log_message INFO Starting flywheel_sync with mem: $mem and cpus: $SLURM_JOB_CPUS
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
 
-# to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-flywheel_cmd_args="sync"
-[ -n "$flywheel_cli_options" ] && flywheel_cmd_args="$flywheel_cmd_args $flywheel_cli_options"
-flywheel_cmd_args="$flywheel_cmd_args $flywheel_source_url $flywheel_sync_directory"
-
-rel $rel_flag "$flywheel_cmd" $flywheel_cmd_args &
+run_flywheel_transfer &
 cmd_pid=$!
 
 run_bg_and_wait "$cmd_pid" cmd_status

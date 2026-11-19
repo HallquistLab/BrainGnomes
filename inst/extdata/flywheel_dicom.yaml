@@ -1,0 +1,6 @@
+- level: acquisition
+  include:
+    - 'file.type=dicom'
+  path: '{subject.label}/{session.label}/{acquisition.label}/{file.name}'
+  unzip: true
+  unzip_path: original

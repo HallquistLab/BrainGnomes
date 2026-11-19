@@ -705,17 +705,26 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
     stderr_log = stderr_log
   )
 
-  audit_str <- if (test_true(scfg$flywheel_sync$save_audit_logs)) {
-    glue("--save-audit-logs {scfg$metadata$log_directory}/flywheel_sync_audit_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.csv")
+  checkmate::assert_string(scfg$flywheel_sync$source_url, min.chars = 1L)
+  assert_absolute_scheduler_paths(c(flywheel_sync_directory = scfg$metadata$flywheel_sync_directory))
+  export <- uses_flywheel_export(scfg)
+  options <- scfg$flywheel_sync$cli_options
+  if (!export) options <- set_cli_options(options, c("--include dicom", "-y"))
+  # Parse optional flags once. Keep generated paths and project labels as individual arguments.
+  options <- scan(text = paste(options[!is.na(options)], collapse = " "),
+                  what = character(), quiet = TRUE)
+  if (export) {
+    args <- c("--no-interactive", "export", "run", options, "--wait",
+              "-p", sub("/+$", "", scfg$flywheel_sync$source_url),
+              "-s", scfg$metadata$flywheel_sync_directory)
   } else {
-    NULL
+    audit <- if (test_true(scfg$flywheel_sync$save_audit_logs)) {
+      c("--save-audit-logs", file.path(scfg$metadata$log_directory,
+        format(Sys.time(), "flywheel_sync_audit_%d%b%Y_%H.%M.%S.csv")))
+    }
+    args <- c("sync", options, "--tmp-path", scfg$metadata$flywheel_temp_directory,
+              audit, scfg$flywheel_sync$source_url, scfg$metadata$flywheel_sync_directory)
   }
-
-  cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(
-    "--include dicom", "-y",
-    glue("--tmp-path {scfg$metadata$flywheel_temp_directory}"),
-    audit_str
-  ), collapse = TRUE)
 
   sched_script <- get_job_script(scfg, "flywheel_sync", subject_suffix = FALSE)
   log_file <- if ("flywheel" %in% names(lg$appenders)) lg$appenders$flywheel$destination else NULL
@@ -729,9 +738,10 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
     stderr_log = stderr_log,
     upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
     flywheel_cmd = scfg$compute_environment$flywheel,
-    flywheel_cli_options = cli_options,
-    flywheel_source_url = scfg$flywheel_sync$source_url,
-    flywheel_sync_directory = scfg$metadata$flywheel_sync_directory
+    # The scheduler separates environment entries with commas. Encode the NUL-delimited
+    # argv so commas, spaces and shell metacharacters survive the trip to Bash.
+    flywheel_argv = gsub("\n", "", jsonlite::base64_enc(writeBin(enc2utf8(args), raw())), fixed = TRUE),
+    flywheel_builtin_rules = export && !any(grepl("^--rule-set(=|$)", options))
   )
 
   tracking_args <- list(
@@ -754,7 +764,7 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
   pf_issues <- c(
     check_write_target(scfg$metadata$log_directory, "log directory"),
     check_write_target(scfg$metadata$flywheel_sync_directory, "flywheel sync directory"),
-    check_write_target(scfg$metadata$flywheel_temp_directory, "flywheel temp directory")
+    if (!export) check_write_target(scfg$metadata$flywheel_temp_directory, "flywheel temp directory")
   )
   if (length(pf_issues) > 0L) {
     stop("Preflight permission check failed for flywheel_sync:\n",
