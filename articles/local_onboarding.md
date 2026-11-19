@@ -179,7 +179,7 @@ for the decision guide and safe recovery examples.
 
 | Stage | External runtime and inputs |
 |----|----|
-| Flywheel synchronization | Flywheel `fw` CLI and account access |
+| Flywheel synchronization | Flywheel CLI (`flyw` or legacy `fw`) and account access |
 | DICOM-to-BIDS conversion | HeuDiConv container, DICOM inputs, and Python heuristic |
 | BIDS validation | BIDS validator; configured with the project and submitted separately through [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
 | MRIQC | MRIQC container |

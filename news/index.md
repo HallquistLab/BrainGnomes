@@ -1,5 +1,11 @@
 # Changelog
 
+## BrainGnomes (development version)
+
+- Download DICOMs with the new Flywheel CLI (`flyw export run`) on Slurm
+  and PBS. Projects configured with legacy `fw`, including 23.0.0,
+  continue to use `fw sync`.
+
 ## BrainGnomes 1.0-2 (2026-11-05)
 
 - Isolate native postprocessing scratch files by invocation so

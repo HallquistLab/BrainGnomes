@@ -2,8 +2,9 @@
 
 Sets up synchronization from a Flywheel instance prior to BIDS
 conversion. Prompts for the Flywheel project URL, drop-off directory for
-downloaded DICOMs, and a temporary directory used during transfer.
-Standard job settings are also collected through `setup_job`.
+downloaded DICOMs, and, for the legacy CLI, a temporary directory used
+during transfer. Standard job settings are also collected through
+`setup_job`.
 
 ## Usage
 

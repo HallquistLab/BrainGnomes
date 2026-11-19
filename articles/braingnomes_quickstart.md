@@ -123,7 +123,7 @@ plan to enable:
 |----|----|
 | Local configuration/BIDS/image helpers | None; no scheduler or container is needed |
 | Any scheduled stage | SLURM or TORQUE/PBS, Bash, and accessible project, scratch, and log storage |
-| Flywheel synchronization | Flywheel `fw` CLI and account access |
+| Flywheel synchronization | Flywheel CLI (`flyw` or legacy `fw`) and account access |
 | DICOM-to-BIDS conversion | HeuDiConv container, DICOM inputs, and a study heuristic |
 | BIDS validation | BIDS validator; submitted separately through [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md) |
 | MRIQC | MRIQC container |
@@ -287,72 +287,39 @@ asked to specify these HPC scheduler settings:
 
 ### Flywheel sync setup
 
-If your DICOM data live in a Flywheel project, BrainGnomes can
-optionally run a Flywheel-to-filesystem synchronization step before any
-downstream processing. This uses the Flywheel CLI (`fw sync`) to
-download DICOMs to your project so that BIDS conversion (and later
-steps) operate on a complete, current dataset.
+Choose the Flywheel starting point in setup to download DICOMs before
+BIDS conversion. Existing projects can use
+[`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
+to change the Flywheel executable in the compute environment settings.
+BrainGnomes uses `compute_environment/flywheel` for every job. When
+configuring a new project, setup looks for `flyw` first, then `fw`.
 
-- Enable in setup: Choose the Flywheel starting point (or answer “Run
-  Flywheel sync?” with yes in custom setup; existing projects can use
-  [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
-  → “Flywheel Sync”). You will be prompted for:
-  - Flywheel project URL (`source_url`), for example:
-    `fw://hallquistm/momentum/`. Watch out for the trailing slash!
-    Flywheel sync operates a lot like rsync, so having the trailing
-    slash here means, “synchronize files within momentum.”
-  - Drop-off directory for downloaded DICOMs
-    (`metadata/flywheel_sync_directory`). This is typically your project
-    DICOM folder.
-  - Temporary directory for transfers
-    (`metadata/flywheel_temp_directory`). Defaults under your scratch
-    directory.
-  - Whether to save audit logs (`flywheel_sync/save_audit_logs`). When
-    enabled, a CSV is written under your project `logs/`.
-  - Location of the Flywheel CLI binary
-    (`compute_environment/flywheel`), i.e., the path to the `fw`
-    executable.
-- Get an API token: The Flywheel CLI requires an API key associated with
-  your user. Generate one in the Flywheel web UI:
-  - Navigate to your Flywheel site (for example,
-    `https://flywheel.example.edu`).
-  - Open your user profile → API Keys and create a key. A direct route
-    in many deployments is `https://<your-flywheel-host>/#/profile` then
-    the API Keys tab.
-  - Copy the generated token and keep it secure.
-- Log in with the Flywheel CLI before syncing: BrainGnomes does not
-  perform `fw login` for you. You must complete CLI login once on the
-  machine/account that will run the jobs, e.g.:
+| Configured executable | Sign in once as the account that runs jobs | Transfer |
+|----|----|----|
+| `flyw` (also `fw-beta`) | `flyw auth login` | `flyw --no-interactive export run --wait -p "fw://group/project" -s "/path/to/dicoms" --rule-set <rules>` |
+| `fw` (including 23.0.0) | `fw login` | `fw sync --include dicom -y --tmp-path <scratch> "fw://group/project/" "/path/to/dicoms"` |
 
-&nbsp;
+Generate an API key in your Flywheel web profile and enter it at the CLI
+login prompt. The project YAML stores the executable path, source URL
+(`flywheel_sync/source_url`) and local destination
+(`metadata/flywheel_sync_directory`).
 
-    fw login <YOUR_API_TOKEN>
+With `flyw`, the supplied rule exports acquisition files of type `dicom`
+under `subject/session/acquisition` and extracts archives. Set
+`metadata/dicom_directory` to the transfer destination for this layout.
+For a different layout, pass `--rule-set <ID>` or
+`--rule-set "/absolute/path/to/rules.yaml"` in
+`flywheel_sync/cli_options` and set the DICOM directory to the resulting
+subject root. When migrating a project, review any existing CLI options
+for compatibility with `flyw export run`. [Flywheel bulk export
+guide](https://docs.flywheel.io/data_transfer/outbound/bulk_export/bulk-export-how-to-cli/)
 
-After successful login, the CLI stores credentials locally so subsequent
-runs can use `fw sync` non-interactively. If `fw login` is not complete,
-the Flywheel sync step will fail.
-
-What BrainGnomes runs: The sync job uses `fw sync` with sensible
-defaults (includes DICOMs, non-interactive `-y`, your specified temp
-path, and optional audit log). Data are written to your
-`flywheel_sync_directory`. Typically the call will look something like
-this:
-
-    /path/to/fw sync --include dicom -y --tmp_path <scfg$metadata$flywheel_temp_directory> \
-      --save-audit-logs <logs/flywheel_sync_audit.csv> \
-      fw://hallquistm/momentum/ \
-      /proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync
-
-#### A note about trailing slashes in the fw:// string
-
-Flywheel sync operates a lot like rsync, so having the trailing slash in
-the `fw://` project string like `fw://hallquistm/momentum/` indicates
-that folders within that project are synchronized to the top level of
-the flywheel_sync_directory (in the example,
-`/proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync`).
-Thus, you typically want a trailing slash after your project name in the
-`fw://` string so that the top-level folder itself isn’t copied to the
-sync folder.
+With legacy `fw`, a trailing slash on the source URL syncs the contents
+of the project into the destination. The legacy CLI uses
+`metadata/flywheel_temp_directory` for transfers and writes a CSV under
+the project logs when `flywheel_sync/save_audit_logs` is enabled. To use
+a newer legacy installation, set `compute_environment/flywheel` to its
+full `fw` path.
 
 #### Deferred queueing of subject processing when flywheel comes first
 
